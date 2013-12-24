@@ -1,0 +1,14 @@
+* for parsing custom function (including types) have the ability to defer parsing until you know what the variable is
+	* This might require asking the programmer where the custom function ends
+* for decalring variables use an object variable defined at the beginning of each scope to store the varibles created in that scope
+	* I thikn this would require that the object store the parent scope so that it can check if variables are declared there - so that it can properly disallow shadowing of variables
+
+* Parser ideas:
+	* need some way of passing state, so that you can know for example, what variables the parser has already found
+		* on second thought, this probably isn't the right way to go about things - instead you might need a second pass anyways, so might as well do everything in the second pass
+	* Need some way to make parameterized parsers
+	* need some way to specify error messages and detect known common mistakes so you can either correct them or have more helpful error messages
+	* need some way to use regular control flow (like loops) to specify parser expressions
+	* need some way to access the parser in normal flow (I guess this is probably obvious)
+	* Have a universal optimization phase intended to run all the static parts of the program (ie all the parts known at compile time) so that that work doesn't have to be done at runtime.
+		* You might want the interface to optimize these sorts of things to be a abstract syntax tree object rather than string source code. Not only would this be faster, but it'd be easier.
