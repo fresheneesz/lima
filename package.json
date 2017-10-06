@@ -1,0 +1,17 @@
+{"name":"lima-language",
+ "description": "A parser for the Lima programming language.",
+ "version":"0.0.3",
+ "license": {
+   "name": "MIT",
+   "url": "http://www.opensource.org/licenses/mit-license.php"
+ },
+ "dependencies":{
+     "pegjs": "*",
+     "jsDump":"*",
+     "js-beautify":"*"
+ },
+ "devDependencies": {
+    "deadunit":"*",
+    "colors":"*"
+ }
+}

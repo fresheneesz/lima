@@ -1,5 +1,6 @@
-{ 	load('lib/jsDump.js')	
-	load('utilFunctions.js')	
+{ 	var jsDump = require('jsDump')
+    console.log(options.baseDir)
+	var utils = require('./utilFunctions')
 
 	var charListToString = function (list) {
 		return list.join('')
@@ -30,7 +31,7 @@ expression = a:unaryExpression terms:(term)* {
 	
 	var expressionParts = [a]
 	for(var n in terms) { var term = terms[n];
-		var opPart = rawString(term.op);
+		var opPart = utils.rawString(term.op);
 	
 		expressionParts.push(opPart)
 		expressionParts.push(/*"function(){return "+*/term.exp/*+";}"*/); // deferred execution - maybe?
@@ -99,7 +100,7 @@ var = "var" whitespace* "[" whitespace* variables:(variable whitespace*)* "]" {
 		return targets.map(function(v){ return v[0]; });	
 	}
 		
-		target = "browser" / "rhino"
+		target = "browser" / "rhino" / "nodejs"
 
 // values
 
@@ -144,10 +145,10 @@ literal = v:(string / object) {return {v:v};}
 	
 	// strings
 	string = preQuotes:"#"* '"' s:([^"]*) '"' postQuotes:"#"* {
-		return ["stringObj",charMult('"',preQuotes.length) + charListToString(s) + charMult('"',postQuotes.length)];
+		return ["stringObj",utils.charMult('"',preQuotes.length) + charListToString(s) + utils.charMult('"',postQuotes.length)];
 	}
 	/ preQuotes:"#"* "'" s:([^']*) "'" postQuotes:"#"* {
-		return ["stringObj",charMult("'",preQuotes.length) + charListToString(s) + charMult("'",postQuotes.length)];
+		return ["stringObj",utils.charMult("'",preQuotes.length) + charListToString(s) + utils.charMult("'",postQuotes.length)];
 	}
 			
 	// numbers		
@@ -156,7 +157,7 @@ literal = v:(string / object) {return {v:v};}
 
 // other
 
-whitespace = " " / "\n" / "\t" / comment
+whitespace = " " / "\n" / "\t" / "\r" / comment
 	
 	comment = multilineComment / singlelineComment
 		singlelineComment =  ";;" x:[^\n]* "\n"

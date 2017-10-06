@@ -1,4 +1,4 @@
-target[browser rhino]
+target[browser nodejs]
     1
 	12345
 

@@ -1,3 +1,5 @@
+var jsDump = require("jsdump")
+
 load("lib/essentials20121211.rhino.js")
 load('lib/peg-0.7.0.wuuuut.js')
 load('lib/jsDump.js')
@@ -17,7 +19,7 @@ var output = file('lima parser output.js')
 print("\n\n");
 
 try {
-	var parser = PEG.buildParser(def.getAll())	
+	var parser = PEG.buildParser(def.getAll())
 	print("done building parser\n")
 	
 	//print("Here's the parser!:\n"+parser.toSource())

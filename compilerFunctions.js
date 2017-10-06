@@ -16,7 +16,7 @@ function generateProgram(abstractRepresentation) {
 		body: 	"var program = "+buildStatement("scope", {v:['objectObj', abstractRepresentation.members]}).v+";\n"
 				+"if(lima.helpers.obj.getMember(program.members['public'].privileged, lima.stringObj('main')) === undefined) throw 'There is no main function!'\n"
 				+"dot(program,lima.stringObj('main')).primitiveValue();\n"
-	};
+	}
 }
 	var scopeNumber = 0; // global variable to keep track of how many scopes have been created
 	var newScope = function() {
