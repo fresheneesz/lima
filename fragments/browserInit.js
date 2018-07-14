@@ -1,1 +1,0 @@
-printFunction = console.log;
