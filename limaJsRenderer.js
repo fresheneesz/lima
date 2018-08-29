@@ -3,99 +3,59 @@ var proto = require("proto")
 var limaParser = require("./limaParser3")
 
 // takes a lima object ast and turns it into a javascript program that can be run
-module.exports = function(ast) {
+exports.renderEntrypointJavascript = function(ast) {
     if(ast[0] !== 'obj' || ast.length !== 3) {
         throw new Error("The root of the passed AST isn't an object node.")
     }
 
-    return  'var limaRuntime = require(./limaRuntime)\n\n'+
+    return  'var limaJsRenderer = require(./limaJsRenderer)\n\n'+
 
-            'var program = '+JSON.stringify(ast)+'\n\n'+
+            'var moduleAst = '+JSON.stringify(ast)+'\n\n'+
 
-            'var moduleScope = limaRuntime.makeScope(coreScope, limaRuntime.moduleScope({\n'+
+            'var moduleScope = limaJsRenderer.Scope(coreScope, limaJsRenderer.moduleScope({\n'+
             '  argv: process.argv.slice(0,2)\n'+
             '}))\n'+
-            'var execution = limaRuntime.ObjectExecutionState(program, moduleScope)\n'+
-            'execution.execute()\n'+
-            'if(!execution.done) {\n'+
-            "  throw new Error('Couldn't move passed index: '+execution.index)\n"+
-            '}\n'+
-            'if(execution.result.public.main === undefined)\n'+
+            'var object = limaJsRenderer.Object(moduleScope, moduleAst)\n'+
+            'if(object.public.main === undefined)\n'+
             '  throw new Error("No main method to run.")\n'+
 
-            'var mainScope = limaRuntime.makeScope(moduleScope, {\n'+
+            'var mainScope = limaJsRenderer.Scope(moduleScope, {\n'+
             '  args: process.argv.slice(2)\n'+
             '  _this: object\n'+
             '})\n'+
             'execution.result.public.main(mainScope)'
 }
 
-
-
 var ExecutionState = proto(function() {
-    this.init = function(node, scope) {
-        this.node = node
+    this.init = function(scope, astNode) {
         this.scope = scope
+        this.node = astNode
 
         this.parserState = limaParser.withState({index:0, scope: scope})
-        this.curExecutionState; // set to the current ExecutionState object for the current index (or undefined if irrelevant)
-        this.done = false // will be set to true when done
     }
-
-
-    // executes from the last execution index left off at
-    // returns whether or not execution has moved forward
-    this.execute = function() {
-        // 1. parse first unexecuted superexpression into an AST slice
-        // 2. run as much of superexpression AST as possible
-        // 3. if the entire superexpression was run, repeat from step 1 with the next superexpression
-        // SKIP STEPS 4 AND 5 FOR NOW
-        // 4. otherwise, parse through the rest of the superexpressions and execute any hoistable const variable initializations
-        // 5. repeat from step 1
-        // 6. If the execution hasn't been moved forward at all and the program isn't complete, throw an error
-
-        var anyMovedForward = false
-        while(true) {
-            var movedForward = this.executeNextStatement()
-            if(this.done)
-                return movedForward
-
-            anyMovedForward = anyMovedForward || movedForward
-            if(!movedForward) {
-                var anyConstMovedForward = false
-                while(true) {
-                    var constMovedForward = this.executeNextConstStatement()
-                    anyConstMovedForward = anyConstMovedForward || constMovedForward
-                    if(!constMovedForward) {
-                        break
-                    }
-                }
-
-                anyMovedForward = anyMovedForward || anyConstMovedForward
-                if(anyConstMovedForward) {
-                    return true
-                } else if(!anyMovedForward) {
-                    return false
-                }
-            }
-        }
-    }
-
-    // abstract
-    //this.executeNextStatement         // parses and renders the next statement
-    //this.executeNextConstStatement    // finds the next resolvable const statement and executes it
 })
 
-
-var ObjectExecutionState = proto(ExecutionState,function(superclass) {
+var Object = exports.Object = proto(ExecutionState,function(superclass) {
     this.init = function(node, scope) {
         superclass.init.call(this,node,scope)
 
-        //this.curExecutionState = undefined
         this.index = 0
-        this.constIndexesExecuted = {}
         this.propertyFound = false
-        this.result = limaObject()
+
+        this.meta = {
+            type: 'any',
+            constant: false,
+            //name: undefined,
+            interfaces: [],
+            operators: {},
+            // macro: undefined,
+            //inherit: undefined,
+            privileged: [],
+            properties: {},
+            elements: [],
+            destructors: []
+        }
+
     }
 
     this.executeNextStatement = function() {
@@ -159,6 +119,8 @@ var ObjectExecutionState = proto(ExecutionState,function(superclass) {
     this.executeNextConstStatement = function() {
         return 0 // ignore const hoisting for now
     }
+
+    // private
 
     this.addPrivilegedProperty = function(keyData, valueData) {
         if(keyData.value.key === undefined) {
@@ -306,7 +268,7 @@ var ElementOrPropertyExecutionState = proto(ExecutionState,function(superclass) 
         node[0] in {postfixOperator:1, bracketOperator:1}
     }
 
-    function getNext
+//    function getNext
 
     function resolveParensOrValue(node, index) {
         var item = resolveNode(node, index) // can be a rawExpression, superExpression (for parens), or value
@@ -398,28 +360,6 @@ var opOrders = {
 	assignment: 9
 }
 
-var limaObject = function(inherits, overrides) {
-    if(arguments.length === 1) {
-        overrides = inherits
-        inherits = undefined
-    }
-
-    var result = {
-        type: 'any',
-        constant: false,
-        //key: undefined,
-        interfaces: [],
-        operators: {},
-        // macro: undefined,
-        //inherit: undefined,
-        privileged: [],
-        //private: ? - does the scope cover this?
-        properties: {},
-        elements: [],
-        destructors: [],
-        //initializer ?
-    }
-}
 
 var limaObjectA = function(inherits, overrides) {
     if(arguments.length === 1) {

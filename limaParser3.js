@@ -9,11 +9,11 @@ class Language {
 
         const func = val.bind(this)
         func.original = val // debug info
-        if (val.length === 0) {
+        if (val.length === 0) {   // if the parser function doesn't have parameters
             const parser = P.lazy(func);
             this[key] = function() {return parser}
         } else {
-            this[key] = func
+            this[key] = func      // if the parser function does have parameters, you'll need to use `chain` if the parser is recursive
         }
     }
   }
@@ -69,112 +69,203 @@ none = function(chars) {
     return noneOf(chars+'\t')
 }
 
-var L = P.createLanguage({indent:0, scope:{}}, {
-	// operators and expressions
+var L = P.createLanguage({scope:{}}, {
 
-    aModule: function() {
-        return seq(
-            this.objectMembers(),
-            this.ws()
-        ).map(function(v) {
-            return v[0]
-        })
-    },
+	// expressions
 
-    // the result of this might contain multiple expressions, and
-        // where one begins and another ends is determined later
+    // the returned superExpression can contain multiple logical expressions, and
+        // where one begins and another ends is determined later (in the interpreter)
     superExpression: function() {
-        return seq(index, this.macroInput().chain(function(v) {
-            if(v.length > 0) {
-                return succeed(v)
-            } else {
-                return fail("Empty expression")
-            }
-        })).map(function(v) {
-            return ['rawExpression', {index:v[0]}, v[1]]
-        })
-
-        // return alt(
-        //     seq(this.expressionAtom(),                     // just an atom (no operator)
-        //         this.macroInput()
-        //     ).map(function(v){
-        //         return [v[0], v[1]]
-        //     }),
-        //     seq(this.basicOperator().atMost(1),            // prefix
-        //         this.expressionAtom(),
-        //         this.macroInput()
-        //     ).map(function(v) {
-        //         v[0].forEach(function(x){
-        //             x[0] = 'prefixOperator'
-        //         })
-        //
-        //         return v[0].concat([v[1], v[2]])
-        //     })
-        // ).map(function(v) {
-        //     var result = ['customExpression'].concat(v)
-        //     // if(result.length === 2) {
-        //     //     return result[1]
-        //     // } else {
-        //         return result
-        //     // }
-        // })
-    },
-
-    expressionAtom: function() {
-        return alt(
-            this.value(),
-            seq('(',this.ws(),this.superExpression(),this.ws(),')').map(function(v) {
-                return v[2]
-            })
-        )
-    },
-
-    // the input string to a macro
-    macroInput: function() {
-        return seq(
-            none('\n').many(),
-            seq(str('\n').skip(str(' ').times(this.state.indent+1)),
-                none('\n').many()
-            ).many(),
-            seq(str('\n').skip(str(' ').times(this.state.indent)), alt(']', ']]')).atMost(1) // allow ending bracket to end on same line as the starting expression
-        ).tie()
-    },
-
-    postfixOperator: function() {
-        return alt(
-            this.basicOperator()
-                .map(function(v){
-                    v[0] = 'postfixOperator?'
-                    return [v]
-                }),
-            seq(this.ws(),this.bracketOperator()).map(function(v) {
-                return v[1]
-            }).many()
-        )
-    },
-
-    bracketOperator: function() {
-        return alt(this.bracketExpressionInternal('[',']'), this.bracketExpressionInternal('[[',']]'))
-    },
-        bracketExpressionInternal: function(openBracket, closeBracket) {
+        return this.indent(function() {
             return seq(
-                openBracket,
-                this.basicOperator().atMost(1).tie(),
-                this.ws(),
-                seq(this.superExpression(), this.ws()).many(),
-                str(closeBracket).desc('end bracket ('+closeBracket+')')
-            ).map(function(values) {
-                var result = ['bracketOperator', openBracket+values[1], values[2]]
-                
+                this.binaryOperand().map(function(v){
+                    return v
+                }),
+                this.binaryOperatorAndOperand().many()
+            )
+        }).map(function(v) {
+            if(v[0].length === 1 && v[1].length === 0) {
+                return v[0][0]
+            } else {
+                return ['superExpression',v[0].concat(flatten(v[1])), false]
+            }
+        })
+    },
+        // returns an array of superexpression parts
+        binaryOperatorAndOperand: function(){
+            return seq(
+                alt(this.indentedWs().many(),
+                    this.expressionEndLine()),
+                alt(this.basicOperator(),
+                    this.equalsOperator(),
+                    this.colonOperator(),
+                    this.braceOperator()
+                ).map(function(v) {
+                    v[1] = 'binary'
+                    return v
+                }),
+                alt(this.indentedWs().many(),
+                    this.expressionEndLine()),
+                this.binaryOperand().map(function(v) {
+                    return v
+                })
+            ).map(function(v){
+                return [v[1]].concat(v[3])
+            })
+        },
+
+        // parses the last possible line of an expression block, that must start with an end paren of some kind
+        // note: theoretically, we could allow the same semantics for any operator that an expression can't
+            // start with (but for now at least, we're just allowing the paren types)
+        // returns any consumed whitespace
+        expressionEndLine: function(){
+            return seq(
+                this.indentedWs(this.state.indent-1).map(function(v) {
+                    return v.ws
+                }),
+                lookahead(alt(']','}',')'))
+            ).map(function(v) {
+                return v[0]
+            })
+        },
+
+        // parses a value with potential unary operators
+        // returns an array of superExpression parts
+        binaryOperand: function() {
+            return seq(
+                this.basicOperator().atMost(1),
+                this.expressionAtom().chain(function(v) {
+                    if(v[0] === 'variable' || v[0] === 'superExpression') {
+                        return this.macroInput().atMost(1).map(function(macroInput) {
+                            if(macroInput.length === 1) {
+                                return [v, ['rawExpression', macroInput[0]]]
+                            } else {
+                                return [v]
+                            }
+                        })
+                    } else {
+                        return succeed([v])
+                    }
+                }.bind(this)),
+                seq(this.basicOperator(),
+                    notFollowedBy(this.expressionAtom()) // to prevent capturing a binary operator
+                ).map(function(v){
+                    return v[0]
+                }).atMost(1)
+            ).map(function(v) {
+                var result = []
+                if(v[0].length === 1) {
+                    v[0][0][1] = 'prefix'
+                    result.push(v[0][0])
+                }
+                result = result.concat(v[1])
+                if(v[2].length === 1) {
+                    if(v[2][0][2] in {':':1,'=':1})
+                        v[2][0][1] = 'binary'
+                    else
+                        v[2][0][1] = 'postfix'
+                    result.push(v[2][0])
+                }
+
                 return result
             })
         },
 
-    basicOperator: function() {
-        return notFollowedBy(alt(this.number(),this.rawString())).then(one('!@#$%^&*-=+/|\\/<>.,?!')).atLeast(1).desc("an operator").tie()
-            .map(function(v) {
-                return ['basicOperator', v]
+    expressionAtom: function() {
+        return alt(
+            this.value(),
+            seq('(',
+                this.superExpression(),
+                seq(this.indentedWs(this.state.indent-1).many(),
+                    str(')')
+                ).atMost(1)
+            ).map(function(v) {
+                if(v[2].length !== 1) {// if the end paren hasn't been found
+                    v[1][2] = true  // set superExpression's 'needEndParen" to true
+                }
+
+                if(
+                    v[1] instanceof Array  // todo: remove this once you replace primitives with ast nodes
+                    && v[1][1].length === 1 && !v[1][2]
+                ) {
+                    return v[1][1][0] // return the lone part of the superExpression
+                } else {
+                    return v[1]
+                }
             })
+        )
+    },
+
+    // operators and macros
+
+    // the input string to a macro
+    macroInput: function() {
+        return seq(
+            none('\n').many().map(function(v){
+                return v
+            }),
+            alt(
+                seq(
+                    this.indentedNewline(this.state.indent-1),
+                    lookahead(this.whitespace(false)),
+                    none('\n').many()
+                ),
+                seq(this.expressionEndLine(),
+                    none('\n').many()
+                )
+            ).many()
+        ).tie()
+    },
+
+    colonOperator: function() {
+        return str(":").map(function(v) {
+            return ['operator', null, v] // null will be replaced by 'prefix', 'postfix', or 'binary'
+        })
+    },
+
+    // an operator that ends in equals
+    equalsOperator: function() {
+        return seq(
+            this.basicOperatorWithoutEquals().many(),
+            '='
+        ).tie()
+        .desc("an equals operator (eg = or +=) ")
+        .map(function(v) {
+            return ['operator', null, v] // null will be replaced by 'prefix', 'postfix', or 'binary'
+        })
+    },
+
+    // any operator excluding ones that end in equals and brackets
+    basicOperator: function() {
+        return alt(
+            this.basicOperatorWithoutEquals(),
+            seq('=',this.basicOperatorWithoutEquals()).atLeast(1)
+        ).tie()
+        .desc("an operator")
+        .map(function(v) {
+            return ['operator', null, v] // null will be replaced by 'prefix', 'postfix', or 'binary'
+        })
+    },
+        basicOperatorWithoutEquals: function() {
+            return alt(
+                alt(
+                    one('!$%^&*-+/|\\/<>.,?!'),
+                    seq(one("@#"),
+                        notFollowedBy(this.rawString()) // since strings are modified by the @ and # symbols
+                    ).map(function(v){
+                        return v[0]
+                    })
+                ).atLeast(1)
+            )
+        },
+
+    braceOperator: function() {
+        return alt(
+            str('[').atLeast(1),
+            str(']').atLeast(1)
+        ).tie().map(function(v) {
+            return ['operator', 'binary', v]
+        })
     },
     
     // values
@@ -184,7 +275,7 @@ var L = P.createLanguage({indent:0, scope:{}}, {
     },
         variable: function() {
             return seq(regex(/[_a-zA-Z]/), regex(/[_a-zA-Z0-9]/).many()).tie().map(function(v) {
-                return ['var', v]
+                return ['variable', v]
             })
         },
 
@@ -197,41 +288,18 @@ var L = P.createLanguage({indent:0, scope:{}}, {
     // objects
 
     object: function() {
-        return seq('{',this.objectMembers(),this.ws(),'}').map(function(v) {
-            return v[1]
+        return seq(
+            '{',
+            this.objectDefinitionSpace(),
+            seq(this.indentedWs(this.state.indent-1).many(), str('}')).atMost(1)
+        ).map(function(v) {
+            return ['object', v[1], v[2].length !== 1]
         })
     },
-        objectMembers: function() {
-            return seq(
-                this.indent(function() {
-                    return alt(
-                        this.superExpression(),
-                        seq(notFollowedBy(this.objectAssociation()), this.superExpression()).map(function(v) {
-                            return v[1]
-                        })
-                    )
-                }).many(),
-                this.indent(function() {
-                    return alt(
-                        this.superExpression(),
-                        this.objectAssociation()
-                    )
-                }).many()
-            ).map(function(v) {
-                return ['obj', v[0], v[1]]
-            })
-        },
 
-        objectAssociation: function() {
-            return alt(
-                seq(this.variable(),this.ws(),'=',this.ws(),this.superExpression(), notFollowedBy(':'))
-                    .map(function(v) {
-                        return ['privileged',v[0],v[4]]//,true] // true for privileged
-                    }),
-                seq(this.superExpression(),this.ws(),str(':'),this.ws(),this.superExpression(), notFollowedBy(':')).map(function(v) {
-                    return ['property',v[0],v[4]]//[v[0]/*.v*/, v[4], false]; // false for not privileged
-                })
-            )
+        // returns a list of value nodes representing expressions
+        objectDefinitionSpace: function() {
+            return this.superExpression().many()
         },
 
 	// strings
@@ -242,13 +310,13 @@ var L = P.createLanguage({indent:0, scope:{}}, {
     },
         generalString: function(delimiter, allowTrailing) {
             var sequence = [
-                ['preChars',this.specialStringPfix(delimiter).many().tie()],
+                ['preChars',this.specialStringPrefix(delimiter).many().tie()],
                 str(delimiter),
                 ['mainBody',
                     seq(
                         notFollowedBy(str(delimiter)).then(none('\n')).many(),
                         seq(str('\n'),
-                            str(' ').times(this.state.indent+1),
+                            str(' ').times(this.state.indent),
                             notFollowedBy(str(delimiter)).then(none('\n')).many().tie()
                         )
                             .map(function(v) {
@@ -276,7 +344,7 @@ var L = P.createLanguage({indent:0, scope:{}}, {
                         str(delimiter)
                     )
                 ),
-                ['postChars', this.specialStringPfix(delimiter).many().tie()]
+                ['postChars', this.specialStringPrefix(delimiter).many().tie()]
             )
 
             return seqObj.apply(seqObj, sequence).map(function(v) {
@@ -286,19 +354,15 @@ var L = P.createLanguage({indent:0, scope:{}}, {
             })
         },
 
-        specialStringPfix: function(quoteChar) {
+        specialStringPrefix: function(quoteChar) {
             return alt(
                 str('@').map(function(){return '\n'}),
                 str('#').map(function(){return quoteChar})
             )
         },
 
-        // // a parser that parses a string line and fails if the exact amount of whitespace isn't present
-        // stringLine: function(startColumn) {
-        //     return seq(whitespace.atLeast(startColumn), any.many())
-        // },
-
     // numbers
+
     number: function() {
         return alt(this.baseX(), this.float(10), this.integer(10))
     },
@@ -322,25 +386,27 @@ var L = P.createLanguage({indent:0, scope:{}}, {
         },
 
         integer: function(base) {
-            return this.validNumeral(base).atLeast(1).tie().map(function(x) {
+            return this.validNumerals(base).tie().map(function(x) {
                 return stringToNumber(base,x)//["numberObj",parseInt(x)]
             })
         },
         float: function(base) {
-            var whole = this.validNumeral(base).atLeast(1)
-            var frac = seq('.', this.validNumeral(base).atLeast(1))
+            var whole = this.validNumerals(base)
+            var frac = seq('.', this.validNumerals(base))
 
-            return alt(seq(whole,frac), whole, frac).tie()
-            .map(function(x) {
+            return alt(seq(whole,frac), whole, frac).tie().map(function(x) {
                 return stringToNumber(base,x)//["numberObj",parseFloat(x)]
             })
         },
 
         validNumerals: function(base) {
             return seq(this.validNumeral(base),
-                       alt(this.validNumeral(base),
-                           seq(str("'"), notFollowedBy(this.validNumeral(base)))
-                       ).many()
+                       seq(
+                           str("'").atMost(1),
+                           this.validNumeral(base)
+                       ).map(function(v) {
+                           return v[1]
+                       }).many()
             )
         },
 
@@ -363,33 +429,94 @@ var L = P.createLanguage({indent:0, scope:{}}, {
 
     // whitespace and comments
 
+    // starts a block with a particular indent (determined by how much whitespace there is before a token)
+    // cb should return a parser
     indent: function(cb) {
-        return this.ws().chain(function(v) {
-            var state = this.withState({indent: this.state.indent+v[1]})
-            return cb.call(state)
-        }.bind(this))
+        if(this.state.indent === undefined) {
+            var firstLine = true
+            var parserState = this.withState({indent:0})
+        } else {
+            var parserState = this
+        }
+
+        return parserState.indentedWs().atMost(1).chain(function(v) {
+            var newIndent = this.state.indent
+            if(v.length > 0) {
+                if(v[0].type === 'indent') {
+                    newIndent += 1 + v[0].indent
+                } else { // ws
+                    if(firstLine) {
+                        newIndent += 1 + v[0].ws.length    // treat the first line as if there was a newline right before it
+                    }
+                }
+            } else if(firstLine) {
+                newIndent++ // the construct is the first thing in the file, so treat it like it started after a newline
+            }
+
+            var state = this.withState({indent: newIndent})
+            return cb.call(state, v.ws)
+        }.bind(parserState))
     },
 
-    // a block of whitespace
-    ws: function() {
-        return this.whitespace().many().tie().map(renderIndent)
+    // a block of at least one whitespace character, where any newline consumes
+        // at least the passed in indentation
+    indentedWs: function(indent) {
+        if(indent === undefined)
+            indent = this.state.indent
+
+        return alt(this.newlineFreeWs(), this.indentedNewline(indent)).atLeast(1).expected(['whitespace']) // squelch expectation
+               .tie().map(function(v) {
+                    var lines = v.split('\n')
+                    if(lines.length === 1) {
+                        return {type: 'ws', ws: v}
+                    } else {
+                        return {type: 'indent', ws: v, indent: lines[lines.length-1].length}
+                    }
+                })
+
     },
-    whitespace: function() { // a single whitespace
-        return alt(one(' \n\r'), this.comment()).expected([])  // squelch expectation
+    // a newline with indentation consumed and stripped away
+    indentedNewline: function(indent) {
+        return str('\n').skip(str(' ').times(indent))
     },
-    comment: function() {
-        return alt(this.spanComment(), this.singlelineComment())
+    newlineFreeWs: function() {
+        return this.ws(false)
+    },
+    // a block of whitespace (or no whitespace)
+    // returns ['indent', indentChars]
+    ws: function(allowNewlines) {
+        return this.whitespace(allowNewlines).atLeast(1).tie()
+    },
+    whitespace: function(allowNewlines/*=true*/) { // a single unit of whitespace
+        var chars = ' \r'
+        if(allowNewlines !== false)
+            chars += '\n'
+        return alt(one(chars), this.comment(allowNewlines)).expected([])  // squelch expectation
+    },
+    comment: function(allowNewlines) {
+        return alt(this.spanComment(allowNewlines), this.singlelineComment()).tie()
     },
         singlelineComment: function() {
-            return seq(";;", none("\n").many(), "\n")
+            return seq(";;", none("\n").many(), alt("\n", eof)).map(function(v) {
+                if(v[2] === null)
+                    v[2] = ''
+
+                return v
+            })
         },
-        spanComment: function() {
+        spanComment: function(allowNewlines) {
             var open = str(";;["), close = str(";;]")
+            var anyChar = any
+            if(allowNewlines !== false)
+                anyChar = seq(notFollowedBy('\n'),any)
+
             return seq(
                 open,
                 alt(
-                    notFollowedBy(alt(open,close)).then(any),
-                    this.spanComment()
+                    notFollowedBy(alt(open,close)).then(anyChar),
+                    succeed().chain(function() {
+                        return this.spanComment(allowNewlines)
+                    }.bind(this))
                 ).many(),
                 close
             )
@@ -399,12 +526,11 @@ var L = P.createLanguage({indent:0, scope:{}}, {
 
 // util methods
 
-// flatten and squelch whitespace
-// returns an array that flattens then filters out ['ws'] elements
-function flats(list) {
-    return flatten(list).filter(function(x) {
-        return x[0] !== 'ws'
-    })
+// finds the indentation of the last line of a string of whitespace
+function findIndent(whitespaceString) {
+    var lines = whitespaceString.split('\n')
+    var lastLine = lines[lines.length-1]
+    return lastLine.length
 }
 
 // flattens a 2D array into a 1D array of 2nd level parts in order
@@ -415,19 +541,6 @@ function flatten(list) {
     })
 
     return result
-}
-
-// returns an object like ['indent',5]
-function renderIndent(whitespaceString) {
-    var lines = whitespaceString.split('\n')
-    var lastLine = lines[lines.length-1]
-
-    if(lines.length > 1) {
-        return ['indent', lastLine.length]
-    } else {
-        return ['ws', lastLine.length]
-    }
-
 }
 
 // transforms a numerical string with a given base into a number
@@ -444,6 +557,7 @@ function stringToNumber(base, numericalString) {
         exponent = 1
         for(var n=0; n< parts[1].length; n++) {
             result += charToNumber(parts[1][n])/Math.pow(base,exponent)
+            exponent++
         }
     }
 
@@ -474,5 +588,5 @@ function strMult(str, multiplier) {
 
 module.exports = L
 module.exports.tryParse = function(content) {
-        return  L.aModule().tryParse(content)
+        return  L.objectDefinitionSpace().tryParse(content)
 }

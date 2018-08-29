@@ -7,11 +7,11 @@ var limaParser = require("./limaParser3")
 var tests = [
     'whitespaceAndComments',
     'numbers',
-    // 'strings',
-    // 'objects',
-    // 'operators',
-    // 'moduleSpace',
-    // 'customFunctions',
+//    'strings',
+//    'objects',
+//    'operators',
+//    'moduleSpace',
+//    'customFunctions',
     // 'fuck'
 ].map(function(testName) {
     return {

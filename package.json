@@ -1,17 +1,19 @@
-{"name":"limaCompiler",
- "version":"0.0.1",
- "main":"buildAndPrint.js",
+{
+ "name": "limaCompiler",
+ "version": "0.0.2",
+ "main": "buildAndPrint.js",
  "description": "",
- "keywords": [
- ],
- "dependencies":{
-   "proto":"*",
-    "parsimmon": "https://github.com/fresheneesz/parsimmon/archive/1522c3b9cac2ced1fa894001f04c0d36f4c13dc0.tar.gz"
+ "keywords": [],
+ "dependencies": {
+  "color": "^3.0.0",
+  "colors": "^1.3.2",
+  "deep-equal": "^1.0.1",
+  "parsimmon": "https://github.com/fresheneesz/parsimmon/archive/1522c3b9cac2ced1fa894001f04c0d36f4c13dc0.tar.gz",
+  "proto": "*"
  },
- "devDependencies": {
- },
+ "devDependencies": {},
  "repository": {
-   "type": "git",
-   "url": "git://github.com/Tixit/odiff"
+  "type": "git",
+  "url": "git://github.com/Tixit/odiff"
  }
 }
