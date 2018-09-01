@@ -1,0 +1,121 @@
+;;[ requires a subset of lima to run:
+    * nil with:
+        * operators ~> = ~ ??
+        *
+    * object literals with:
+        * operator overloading constructs
+        * mix
+        * macro
+        * all core attributes
+        * operators ~> [] .
+        *
+    * fn
+    * meta
+;;]
+
+var false = 0
+var true = 1
+
+var private = rawMacro chars:
+    ;; ...
+
+var access = rawMacro chars:
+    ;; ...
+
+var macro = rawMacro chars:
+    ;; ...
+
+var while = macro charsBefore charsInside:
+    ;; ...
+
+private:
+ var augmentedNil = { mix[nil]
+
+    postOperator[~] = fn:
+        var originalObj ~> this
+        var originalEquals = meta[originalObj].operators[=]
+        return {
+            mix[this[! operator[~] operator[~>]]] ;; remove these operators
+            operator[>] = fn this x:
+                ret meta[originalObj].operators[~>].withCallingScope[callingScope][originalObj x]
+            operator[=] = fn: // copy operator
+                return originalObj
+             this x:
+                originalObj = x
+        }
+
+    postOperator[?] = fn:
+        ret {
+            operator[.] = fn:
+                ret nil
+            operator[=] = fn:
+                ret {}
+        }
+
+    operator[|] = fn this x:
+        if this==nil:
+            ret this~
+         else:
+            ret x~
+
+    operator[!??] = fn x:
+        ret !(this??x)
+    operator[!=] = fn x:
+        ret !(this==x)
+
+    str = fn:
+        ret 'nil'
+ }
+
+ var augmentedNumber = { mix[0]
+
+ }
+
+ var augmentedString = { mix[""]
+    hashcode = access[get=fn: ret ]
+ }
+
+ var augmentedObject = {
+    hashcode = access[get=fn: ret this.str]
+
+    override operator[==] = fn x:
+        if meta[x].properties.len != meta[this].properties.len:
+            ret false
+        df meta[this].properties value key:
+            if meta[x].properties[key] != value:
+                ret false
+        ;; else
+        ret true
+
+    override operator[|] = fn this x:
+        ret this
+
+    override str = fn:
+        var resultList = {}
+        df this value key:
+            resultList.=ins[key.str':'value.str]
+        return '{'.cat[resultList.join['' a.cat[','b]] '}']
+
+    ins = fn
+     value:
+        thisfn[meta[this].elements value]
+     key sequence...:
+        ;; todo:
+        ;;var props ~> meta[this].properties
+        ;;props[meta[this].elements] = value
+
+
+    len = fn:
+        ret meta[this].elements
+ }
+
+nil = augmentedNil
+0 = augmentedNumber
+"" = augmentedString
+{} = augmentedObject
+
+;; lock in the core objects
+var itemsToLock = reflist[nil 0 "" {} true false]
+df itemsToLock item:
+    meta[item].const = true
+
