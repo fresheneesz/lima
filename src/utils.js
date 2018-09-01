@@ -1,25 +1,63 @@
-var coreConstructs = require("./coreConstructs")
+var coreLevel1 = require("./coreLevel1")
 
 
+// Creates a new scope by mixing two other scope objects together.
+// For each object:
+    // the keys are the names of variables in the scope, and
+    // the values are lima objects.
 var Scope = exports.Scope = function(upperScope, innerScope) {
     var newScope = {}
     for(var k in upperScope) {
         newScope[k] = upperScope[k]
     }
-    for(var k in innerScope) {
-        newScope[k] = innerScope[k]
+    if(innerScope) {
+        for(var k in innerScope) {
+            newScope[k] = innerScope[k]
+        }
     }
     return newScope
+}
+
+// returns a context scope - the same type of value `evaluate.superExpression` takes as its `scope` parameter
+// options:
+    // getScope - The scope to get from
+    // setScope - The scope to set on
+    // canReset - (default: false) Whether or not a value already in scope can be overwritten
+    // setCallback(name, value, isPrivate) - (Optional) Called at the end of setInScope (for things that want
+        // other things to happen when a value is set in the scope (like objects)
+var ContextScope = exports.ContextScope = function(options, scope, canReset, setCallback) {
+    var setInScope = function(name, value, isPrivate) {
+        if(!options.canReset && name in options.setScope)
+            throw new Error("Can't re-declare property "+name)
+
+        setScope[name] = value
+        if(options.setCallback) {
+            options.setCallback(name, value, isPrivate)
+        }
+    }
+    var getFromScope = function(name) {
+        return options.getScope[name]
+    }
+    return {get:getFromScope, set:setInScope}
+}
+
+var blockCallingScope = exports.blockCallingScope = {
+    get: function() {
+        throw new Error("Calling scope not accessible.")
+    },
+    set: function() {
+        throw new Error("Calling scope not accessible.")
+    }
 }
 
 // Utils for interacting with lima objects
 
 // calls an operator on its operands (ie operandArgs)
 // Note that for non-macro bracket operators, the first operand should be the main object,
-    // and the second operand should be a list of arguments to it
-// callingScopeInfo - {scope:_, declareInScope:_}
-    // scope is the direct scope object containing variables in scope to the expression. This shouldn't be mutated directly.
-    // setInScope(name, value, private) is a function used to declare and/or set a variable in the scope
+    // and the second operand should be a list of arguments to it.
+// callingScope - An object representing the calling scope. It has the properties:
+    // get(name) - Gets a value from the scope.
+    // set(name, value, private) - Declares and/or sets a variable in the scope.
 // operator - A string representing the operator.
 // operands - Will have one element for unary operations, and two for binary operations. Each element is a lima object.
 // operatorType - Either 'prefix', 'postfix', or undefined (for binary)
@@ -36,9 +74,9 @@ var callOperator = exports.callOperator = function(callingScope, operator, opera
         if(operatorInfo1 === undefined)
             throw new Error("Object doesn't have a '"+operator+"' "+operatorType+" operator")
         if(typeof(operands[1]) === 'string') {
-            var args = [coreConstructs.StringObj(['string',operands[1]]), callingScope.get(operands[1])]
+            var args = [coreLevel1.StringObj(['string',operands[1]]), callingScope.get(operands[1])]
         } else {
-            var args = [coreConstructs.nil,operands[1]]
+            var args = [coreLevel1.nil,operands[1]]
         }
 
         var fn = operatorInfo1.dispatch[0].fn
@@ -132,7 +170,7 @@ var copyValue = exports.copyValue = function(value) {
     function overwriteValue(destination, source) {
         //destination.interfaces = value.interfaces
         destination.elements = source.elements
-        destination.desctructors = source.desctructors.slice(0)
+        destination.destructors = source.destructors.slice(0)
         for(var k in {operators:1,privileged:1,properties:1,scope:1}) {
             destination[k] = {}
             for(var j in source[k]) {
@@ -145,39 +183,76 @@ var copyValue = exports.copyValue = function(value) {
     }
 
 var setProperty = exports.setProperty = function(obj, key, value) {
-    var items = obj.properties[getHashCode(key)]
-    if(isNil(value))
-        delete obj.properties[key]
-    else
-        obj.properties[key] = value
+    var hashcode = getHashCode(key)
+    var items = obj.properties[hashcode]
+    if(isNil(value)) {
+        if(items !== undefined) {
+            delete items[key]
+        }
+    } else {
+        if(items === undefined) {
+            items = obj.properties[hashcode] = []
+        }
+
+        items.push({key:key, value:value})
+    }
 }
-var getProperty = exports.getProperty = function(obj, key) {
+
+// returns the value at the passed key in the obj or undefined if no value exists at that key
+var getProperty = exports.getProperty = function(context, obj, key) {
     var items = obj.properties[getHashCode(key)]
+    if(items === undefined)
+        return undefined
+
     for(var n=0; n<items.length; n++) {
-        var itemKey = items[0]
-        if(callOperator()itemKey === awefawefwaewfe) {
-
+        var itemKey = items[n].key
+        var equalsComparisonResult = callOperator(context.scope, '==', [key,itemKey])
+        if(equalsComparisonResult === coreLevel1.one
+           || callOperator(context.scope, '==', [equalsComparisonResult,coreLevel1.one]) === coreLevel1.one
+        ) {
+            return items[n].value
         }
     }
 }
-    function getHashCode(obj) {
-        while(!Number.isInteger(obj)) {
-            obj = getPrivilegedMember(obj, 'hashcode')
-        }
-        return obj // now an integer hash
 
+var getHashCode = exports.getHashCode = function(obj) {
+    return basePrimitiveMember(obj, 'hashcode')
+}
+
+// gets the primitive string representation of an object
+var getPrimitiveStr = exports.getPrimitiveStr = function(context, obj) {
+    return basePrimitiveMember(obj, 'str')
+}
+
+    // returns a base member like for str or hashcode
+    // right now str and hashcode are functions, but they will change into accessors in a future version
+    // obj - a lima object
+    // member - a primitive string name
+    function basePrimitiveMember(val, member) {
+        while(Number.isInteger(val.scope[0].primitive)) {
+            var hashcodeFunction = getThisPrivilegedMember(blockCallingScope, val, coreLevel1.StringObj(['string',member]))
+            val = callOperator(blockCallingScope, '[', [hashcodeFunction])
+        }
+
+        return val.scope[0].primitive // now a primitive
     }
+
+// gets a privileged member as if it was accessed like this.member
+// thisObj and memberName must both be lima objects
+var getThisPrivilegedMember = exports.getThisPrivilegedMember = function(callingScope, thisObj, memberName) {
+    return callOperator(callingScope, '.', [thisObj, memberName])
+}
 
 var isNil = exports.isNil = function(x) {
     if(Object.keys(x.privileged).length !== 0
        || Object.keys(x.properties).length !== 0
-       || Object.keys(x.operators) !== Object.keys(coreConstructs.nil.operators).length
+       || Object.keys(x.operators) !== Object.keys(coreLevel1.nil.operators).length
     ) {
         return false
     }
 
     for(var k in x.operators) {
-        if(x.operators[k] !== coreConstructs.nil.operators[k])
+        if(x.operators[k] !== coreLevel1.nil.operators[k])
             return false
     }
 
@@ -194,9 +269,10 @@ exports.hasProperties = function(obj) {
 }
 
 exports.appendElement = function(obj, value) {
-    setProperty(obj, obj.elements, value)
+    setProperty(obj, coreLevel1.NumberObj(['number', obj.elements]), value)
     obj.elements++
 }
+
 
 // General Utils
 

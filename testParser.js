@@ -5,9 +5,7 @@ var colors = require("colors/safe")
 
 var tests = require("./tests/parserTests")
 
-//global.a = 5 ;; why was this here?
-
-var limaParser = require("./limaParser3")
+var limaParser = require("./src/limaParser3")
 
 var tests = {
     indentedWs: tests.indentedWsTests,
@@ -16,32 +14,31 @@ var tests = {
     validNumerals: tests.validNumeralsTests,
     float: tests.floatTests,
     number: tests.numberTests,
+    rawString: tests.stringTests,
     binaryOperand: tests.binaryOperandTests,
-    macroInput: tests.macroInputTests,
+    rawExpression: tests.rawExpressionTests,
     superExpression: tests.superExpressionTests,
-    objectDefinitionSpace: [
-        tests.objectDefinitionSpaceTests,
-        {files:[
-           // 'whitespaceAndComments',
-           // 'numbers',
-           // 'strings',
-           // 'objectDefinitionSpace',
-           // 'objects',
-           // 'operators',
-           // 'moduleSpace',
-           // 'customFunctions',
-           // 'fuck'
-        ]},
+    nonMacroExpressionContinuation: tests.nonMacroExpressionContinuationTests,
+    objectDefinitionSpace: tests.objectDefinitionSpaceTests,
+    object: tests.objectTests,
+    module: [
+       //  {files:[
+       //     'whitespaceAndComments',
+       //     'numbers',
+       //     'strings',
+       //     'objectDefinitionSpace',
+       //     'objects',
+       //     'operators',
+       //     'moduleSpace',
+       //     'customFunctions',
+       //     // 'fuck'
+       //  ]},
        // {content:{
-       //     // emptyFile: '',
-       //     // unaryAmbiguity1: '3!2',
-       //     // statementError: '3\n*\n5',
-       //     // unterminatedString: '"',
-       //     // unterminatedBracketOperator1: '{}[',
-       //     // unterminatedBracketOperator2: '{}[3'
+       //     emptyFile: '',
+       //     unaryAmbiguity1: '3!2',
+       //     unterminatedBracketOperator2: '{}[3'
        // }}
-   ],
-   object: tests.objectTests
+    ]
 }
 
 var normalizedTests = []
@@ -85,18 +82,17 @@ for(var method in tests) {
                 normalizedTests.push({
                     method: method,
                     args: subtest.args,
-                    content:fs.readFileSync(__dirname+'/tests/'+file+'.test.lima', {encoding: 'utf8'}).toString()
+                    content:fs.readFileSync(__dirname+'/tests/testModules/'+file+'.test.lima', {encoding: 'utf8'}).toString()
                         .replace(/\t/g, "    ") // lima doesn't accept tabs
                 })
 
             })
         } else if(subtest.content) {
-            subtest.content.forEach(function(item) {
-                for(var title in item) {
-                    normalizedTests.push({title:title+note})
-                    normalizedTests.push({method: method,args: subtest.args,content:item[title]})
-                }
-            })
+            for(var title in subtest.content) {
+                var item = subtest.content[title]
+                normalizedTests.push({title:title})
+                normalizedTests.push({method: method,args: subtest.args,content:item})
+            }
         } else {
             throw new Error("womp womp")
         }
@@ -122,9 +118,10 @@ normalizedTests.forEach(function(testItem) {
                     if(deepEqual(result,testItem.expectedResult)) {
                         console.log('./ - '+util.inspect(result, {depth:null}))
                     } else {
-                        console.log(colors.red("X - Got unexpected result for "+JSON.stringify(testItem.content)+"\"!!!"))
+                        console.log(colors.red("X - Got unexpected result for "+JSON.stringify(testItem.content)+"!!!"))
                         console.log("Expected: "+util.inspect(testItem.expectedResult, {depth:null}))
-                        console.log(colors.red("Got: "+util.inspect(result, {depth:null})))
+                        console.log(colors.red("Got: "))
+                        console.log(colors.red(util.inspect(result, {depth:null})))
                     }
                 } else {
                     console.log(util.inspect(result, {depth: null}))

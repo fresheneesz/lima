@@ -1,5 +1,5 @@
 
-var coreConstructs = require("./coreConstructs")
+var evaluate = require("./evaluate")
 var utils = require("./utils")
 
 var nil = exports.nil = {
@@ -12,19 +12,19 @@ var nil = exports.nil = {
         '=':{
             type:'binary', order:9, backward:true, scope: 0, dispatch: [
                 {parameters: [{name:'rvalue',type:'var'}], fn: function(rvalue) { // assignment operator
-                    if(this.context.const)
+                    if(this.context.this.const)
                         throw new Error("Can't assign a const variable")
                     overwriteValue(this.context, rvalue)
                 }},
                 {parameters: [], fn: function() { // copy operator
-                    return utils.copyValue(this.context)
+                    return utils.copyValue(this.context.this)
                 }}
             ]
         },
         '~>': {
             type:'binary', order:9, scope: 0, dispatch: [
                 {parameters:[{name:'rvalue',type:'var'}], fn: function(rvalue) {
-                    //return utils.callOperator(this.context.operators['>'], this.context, this.callingScopeInfo, [rvalue])
+                    //return utils.callOperator(this.context.this, this.context.this.operators['>'], this.callingScopeInfo, [rvalue])
                 }}
             ]
         },
@@ -43,7 +43,7 @@ var nil = exports.nil = {
             ]
         }
 
-//        done in the core library:
+//        done in coreLevel2.lima
 
 //        '~': {
 //            type:'postfix', dispatch: [
@@ -126,14 +126,14 @@ var nil = exports.nil = {
 }
 
 var emptyObj = exports.emptyObj = utils.copyValue(nil)
-emptyObj.type = utils.hasInterface(emptyObj)
+// emptyObj.type = utils.hasInterface(emptyObj)     // what was this?
 emptyObj.operators['.'] = {
     type:'binary', order:0, scope: 0, dispatch: [
         {parameters: [{name:'name',type:'string'},{name:'value',type:'var?'}], fn: function(name) {
-            var result = this.context.privileged[name]
+            var result = this.context.this.privileged[name]
             if(result !== undefined)
                 return result
-            result = utils.getProperty(this.context, name)
+            result = utils.getProperty(this.context, this.context.this, name)
             if(result !== undefined)
                 return result
             // else
@@ -142,12 +142,24 @@ emptyObj.operators['.'] = {
     ]
 }
 
+var FunctionObj = function(bracketOperatorDispatch) {
+    var obj = utils.copyValue(emptyObj)
+    obj.operators['['] = {
+        type:'binary', order:0, scope: 0, dispatch: bracketOperatorDispatch
+    }
+    return obj
+}
+
 var emptyString = exports.emptyString = utils.copyValue(emptyObj)
 
 var zero = exports.zero = utils.copyValue(nil)
-zero.privileged.hashcode = FunctionObj(function() {
-    return getJsStringKeyHash('n'+this.context.primitive.num+'/'+this.context.primitive.denom)
-})
+zero.scope[0].primitive = {num:0, denom: 1}
+// define hashcode as a function for now (when I figure out how to make accessors, we'll use that instead)
+zero.privileged.hashcode = FunctionObj({parameters: [], fn: function() {
+    var primitiveHash = getJsStringKeyHash('n'+this.context.this.primitive.num+'/'+this.context.this.primitive.denom)
+    return NumberObj(['number', primitiveHash, 1])
+}})
+    // returns a primitive integer hash
     function getJsStringKeyHash(string) {
       var hash = 0, i, chr
       if (string.length === 0) return hash
@@ -160,53 +172,90 @@ zero.privileged.hashcode = FunctionObj(function() {
     }
 
 
+// contains the private variable `primitive` (in scope[0]) that holds the primitive string
 var StringObj = exports.StringObj = function(stringAstNode) {
     var result = utils.copyValue(emptyString)
-    result.scope[0].primitive = stringAstNode[1]
+    result.scope[0].primitive = stringAstNode.string
     return result
 }
 
+// contains the private variable `primitive` (in scope[0]) that holds the primitive string that holds the numerator and denominator of the number
 var NumberObj = exports.NumberObj = function(numberAstNode) {
     var result = utils.copyValue(zero)
-    result.scope[0].primitive = {num:numberAstNode[1], denom: numberAstNode[2]}
+    result.scope[0].primitive = {numerator:numberAstNode.numerator, denominator: numberAstNode.denominator}
     return result
 }
 
+var one = exports.one = NumberObj(['number', 1, 1])
+
+// returns the lima object the variable holds
 var Variable = exports.Variable = function(scope, variableAstNode) {
-    var name = variableAstNode[1]
-    return scope[name]
+    return scope.get(variableAstNode.name)
 }
 
 var Object = exports.Object = function(scope, objAstNode) {
     var objectValue = utils.copyValue(emptyObj)
 
-    var scope = Scope(scope, {})
-    var setInScope = function(name, value, isPrivate) {
-        if(name in scope)
-            throw new Error("Can't re-declare property "+name)
+    var scope = utils.Scope(scope, {})
+    var callingScopeInfo = utils.ContextScope({
+        getScope:scope, setScope:scope,
+        setCallback: function(name, value, isPrivate) {
+            if(!isPrivate)
+                objectValue.privileged[name] = value
+        }
+    })
 
-        scope[name] = value
-        if(!isPrivate)
-            objectValue.privileged[name] = value
-    }
-    var callingScopeInfo = {scope:scope, setInScope:setInScope}
-    objAstNode.forEach(function(node) {
-        if(node[0] === 'superExpression') {
-            var nextParts = node[1]
+    objAstNode.expressions.forEach(function(node) {
+        if(node.type === 'superExpression') {
+            var nextParts = node.parts
             while(nextParts.length !== 0) {
-                var superExpressionResult = coreConstructs.evaluateSuperExpression(objectValue, callingScopeInfo, nextParts, true)
+                var context = {this: objectValue, scope:callingScopeInfo}
+                var superExpressionResult = evaluate.superExpression(context, nextParts, true)
                 nextParts = superExpressionResult.remainingParts
                 if(!isNil(superExpressionResult.value)) {
                     utils.appendElement(objectValue, superExpressionResult.value)
                 }
             }
         } else { // element
-            if(hasProperties(objectValue))
+            if(utils.hasProperties(objectValue))
                 throw new Error("All elements must come before any keyed properties")
 
-            utils.appendElement(objectValue, coreConstructs.basicValue(this.scope[0], node))
+            utils.appendElement(objectValue, basicValue(objectValue.scope[0], node))
         }
     }.bind(this))
 
     return objectValue
+}
+
+
+var wout = utils.copyValue(emptyObj)
+wout.operators['['] = {
+    type:'binary', order:0, scope: 0, dispatch: [
+        {parameters: [{name:'s',type:'var?'}], fn: function(s) {
+            console.log(utils.getPrimitiveStr(this.context, s))
+        }}
+    ]
+}
+
+// Takes in an ast node and returns either a basic lima object or undefined
+// basic lima objects: string, number, variable, object
+var basicValue = exports.basicValue = function(scope, node) {
+    if(evaluate.isNodeType(node, 'string')) {
+        return StringObj(node)
+    } else if(evaluate.isNodeType(node, 'number')) {
+        return NumberObj(node)
+    } else if(evaluate.isNodeType(node, 'variable')) {
+        return Variable(scope, node)
+    } else if(evaluate.isNodeType(node, 'object')) {
+        return Object(scope, node)
+    }
+}
+
+// makes the minimal core scope where some core constructs are missing operators and members that are derivable using
+    // the core level 1 constructs
+exports.makeCoreLevel1Scope = function() {
+    return utils.Scope({
+        nil: nil,
+        wout: wout
+    })
 }
