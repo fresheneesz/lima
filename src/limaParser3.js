@@ -48,7 +48,8 @@ P.createLanguage = function(state, parsers) {
 // put Parsimmon functions in scope (so you don't have to do `Parsimmon.` everywhere)
 for(var k in P) {
     try {
-        eval('var '+k+' = P["'+k+'"]')
+        if(!k.match(/-/)) // avoid errors by not parsing names with dashes in them
+            eval('var '+k+' = P["'+k+'"]')
     } catch(e) {
         // ignore errors
     }
@@ -103,7 +104,8 @@ var L = P.createLanguage({scope:{}}, {
                     this.openingBrace(),
                     this.closingBraces()
                 ).map(function(v) {
-                    v.opType = 'binary'
+                    if(v.opType === undefined)
+                        v.opType = 'binary'
                     return v
                 })],
                 alt(this.indentedWs().many(),
@@ -315,7 +317,7 @@ var L = P.createLanguage({scope:{}}, {
 
     braceOperator(braceParser) {
         return braceParser.map(function(v) {
-            return {type:'operator', operator:v, opType:'binary'}
+            return {type:'operator', operator:v, opType:'postfix'}
         })
     },
     

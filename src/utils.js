@@ -1,4 +1,5 @@
 var coreLevel1 = require("./coreLevel1")
+var basicUtils = require("./basicUtils")
 
 
 // Creates a new scope by mixing two other scope objects together.
@@ -7,37 +8,22 @@ var coreLevel1 = require("./coreLevel1")
     // the values are lima objects.
 var Scope = exports.Scope = function(upperScope, innerScope) {
     var newScope = {}
-    for(var k in upperScope) {
-        newScope[k] = upperScope[k]
-    }
+    mergeIntoScope(newScope, upperScope)
     if(innerScope) {
-        for(var k in innerScope) {
-            newScope[k] = innerScope[k]
-        }
+        mergeIntoScope(newScope, innerScope)
     }
+    
     return newScope
 }
-
-// returns a context scope - the same type of value `evaluate.superExpression` takes as its `scope` parameter
-// options:
-    // getScope - The scope to get from
-    // setScope - The scope to set on
-    // canReset - (default: false) Whether or not a value already in scope can be overwritten
-    // setCallback(name, value, isPrivate) - (Optional) Called at the end of setInScope (for things that want
-        // other things to happen when a value is set in the scope (like objects)
-var ContextScope = exports.ContextScope = function(options, scope, canReset, setCallback) {
-    var setInScope = function(name, value, isPrivate) {
-        if(!options.canReset && name in options.setScope)
-            throw new Error("Can't re-declare property "+name)
-
-        setScope[name] = value
-        if(options.setCallback) {
-            options.setCallback(name, value, isPrivate)
+    // merges the items from the `source` scope into the `dest` scope
+    function mergeIntoScope(dest, source) {
+        for(var k in source) {
+            dest[k] = source[k]
         }
     }
-    var getFromScope = function(name) {
-        return options.getScope[name]
-    }
+
+// returns a context scope - the same type of value `evaluate.superExpression` takes as its `scope` parameter
+var ContextScope = exports.ContextScope = function(getFromScope, setInScope) {
     return {get:getFromScope, set:setInScope}
 }
 
@@ -53,13 +39,13 @@ var blockCallingScope = exports.blockCallingScope = {
 // Utils for interacting with lima objects
 
 // calls an operator on its operands (ie operandArgs)
-// Note that for non-macro bracket operators, the first operand should be the main object,
-    // and the second operand should be a list of arguments to it.
 // callingScope - An object representing the calling scope. It has the properties:
     // get(name) - Gets a value from the scope.
     // set(name, value, private) - Declares and/or sets a variable in the scope.
 // operator - A string representing the operator.
-// operands - Will have one element for unary operations, and two for binary operations. Each element is a lima object.
+// operands - Will have one element for unary operations, and two for binary operations. Each element is a lima object,
+           // except that for non-macro bracket operators, the first operand should be the main object,
+           // and the second operand should be an `arguments` object of the same type `getOperatorDispatch` takes.
 // operatorType - Either 'prefix', 'postfix', or undefined (for binary)
 var callOperator = exports.callOperator = function(callingScope, operator, operands, operatorType) {
     // todo: implement chaining and multiple dispatch
@@ -72,13 +58,10 @@ var callOperator = exports.callOperator = function(callingScope, operator, opera
         var thisContext = operands[0]
     } else if(operator === '.') {            // dot operator
         if(operatorInfo1 === undefined)
-            throw new Error("Object doesn't have a '"+operator+"' "+operatorType+" operator")
-        if(typeof(operands[1]) === 'string') {
-            var args = [coreLevel1.StringObj(['string',operands[1]]), callingScope.get(operands[1])]
-        } else {
-            var args = [coreLevel1.nil,operands[1]]
-        }
+            throw new Error("Object "+operands[0].name+" doesn't have a '"+operator+"' operator")
 
+        var name = coreLevel1.StringObj(getPrimitiveStr(blockCallingScope, operands[1]))
+        var args = [name]
         var fn = operatorInfo1.dispatch[0].fn
         var thisContext = operands[0]
     } else {
@@ -99,13 +82,16 @@ var callOperator = exports.callOperator = function(callingScope, operator, opera
     }
 
     var context = {this:thisContext, callingScope: callingScope}
-    return fn.apply(context, args)
+    var returnValue = fn.apply(context, args)
+    if(returnValue === undefined) {
+        return coreLevel1.nil
+    }
 }
 
 // Returns info (see below) about the first dispatch element who's parameters match the args
 // args is an object with the following properties:
-    // unnamed - a list of unnamed properties (that come before the named args in the argument list)
-    // named - a map from argument name to the value of the named argument
+    // args - An object where each key is a primitive string name and each value is a lima object.
+    // unnamedCount - The number of unnamed arguments in `args.args`
 // returns an object with the following properties:
     // dispatchItem - the matching dispatch item
     // normalizedArgs - the args normalized into an argument list without only unnamed parameters, resolving any defaults.
@@ -125,15 +111,15 @@ var getOperatorDispatch = exports.getOperatorDispatch = function(object, operato
 }
     // returns a normalized argument list if the args match the dispatchItem, or undefined if they don't match
     function getNormalizedArgs(dispatchItem, args) {
-        var argsToUse = [], paramIndex=0, namedParamsUsed = 0
+        var argsToUse = [], paramIndex=0
         for(var n=0; n<dispatchItem.parameters.length; n++) {
           var param = dispatchItem.parameters[n]
-          if(args.unnamed.length < paramIndex) {
-            var arg = args.unnamed[paramIndex]
+          if(paramIndex < args.unnamedCount) {
+            var mappedParamIndex = getPrimitiveStr(blockCallingScope, coreLevel1.NumberObj(paramIndex,1))
+            var arg = args.args[mappedParamIndex]
             paramIndex++
           } else {  // into named parameters
-            var arg = args.named[param.name]
-            namedParamsUsed++
+            var arg = args.args[param.name]
           }
 
           if(arg === undefined) {
@@ -150,37 +136,32 @@ var getOperatorDispatch = exports.getOperatorDispatch = function(object, operato
           }
         }
 
-        if(namedParamsUsed < Object.keys(args.named).length)
+        if(dispatchItem.parameters.length < Object.keys(args.args).length)
           return // doesn't match the dispatch list
         // else
         return argsToUse
     }
+
+// Returns an `arguments` object of the same type `utils.getOperatorDispatch` takes.
+// contextObject - A lima object containing the arguments in its properties.
+exports.getArgsFromObject = function(contextObject) {
+    var args = {}
+    for(var hashcode in contextObject.properties) {
+        var items = contextObject.properties[hashcode]
+        items.forEach(function(item) {
+            var key = getPrimitiveStr(blockCallingScope, item.key)
+            args[key] = item.value
+        })
+    }
+
+    return {args: args, unnamedCount: contextObject.elements}
+}
 
 // callingScopeInfo - the same type of argument as is passed to callOperator
 var callMacro = exports.callMacro = function(obj, context, args) {
     return obj.macro.apply(context, args)
 }
 
-var copyValue = exports.copyValue = function(value) {
-    var metaCopy = {type:'any',const:false}
-    overwriteValue(metaCopy, value)
-
-    return metaCopy
-}
-    function overwriteValue(destination, source) {
-        //destination.interfaces = value.interfaces
-        destination.elements = source.elements
-        destination.destructors = source.destructors.slice(0)
-        for(var k in {operators:1,privileged:1,properties:1,scope:1}) {
-            destination[k] = {}
-            for(var j in source[k]) {
-                var newValue = source[k][j]
-                if(k in {privileged:1,properties:1})
-                    newValue = copyValue(newValue)
-                destination[k][j] = newValue
-            }
-        }
-    }
 
 var setProperty = exports.setProperty = function(obj, key, value) {
     var hashcode = getHashCode(key)
@@ -215,27 +196,52 @@ var getProperty = exports.getProperty = function(context, obj, key) {
     }
 }
 
+// gets the primitive hashcode for an object
 var getHashCode = exports.getHashCode = function(obj) {
-    return basePrimitiveMember(obj, 'hashcode')
+    while(true) {
+        if(obj.primitive !== undefined) {
+            if(obj.primitive.denominator === 1) {
+                return obj.primitive.numerator
+            } else if(typeof(obj.primitive) === 'string') {
+                return getJsStringKeyHash(obj.primitive)
+            }
+        }
+
+        var hashcodeFunction = getThisPrivilegedMember(blockCallingScope, obj, coreLevel1.StringObj('hashcode'))
+        obj = callOperator(blockCallingScope, '[', [hashcodeFunction])
+    }
+
+    return obj.primitive.numerator // now a primitive
 }
+
+
+
+    // returns a primitive integer hash
+    function getJsStringKeyHash(string) {
+      var hash = 0, i, chr
+      if (string.length === 0) return hash
+      for (i = 0; i < string.length; i++) {
+        chr   = string.charCodeAt(i)
+        hash  = ((hash << 5) - hash) + chr
+        hash |= 0 // Convert to 32bit integer
+      }
+      return hash
+    }
 
 // gets the primitive string representation of an object
 var getPrimitiveStr = exports.getPrimitiveStr = function(context, obj) {
-    return basePrimitiveMember(obj, 'str')
-}
-
-    // returns a base member like for str or hashcode
-    // right now str and hashcode are functions, but they will change into accessors in a future version
-    // obj - a lima object
-    // member - a primitive string name
-    function basePrimitiveMember(val, member) {
-        while(Number.isInteger(val.scope[0].primitive)) {
-            var hashcodeFunction = getThisPrivilegedMember(blockCallingScope, val, coreLevel1.StringObj(['string',member]))
-            val = callOperator(blockCallingScope, '[', [hashcodeFunction])
+    while(true) {
+        if(obj.primitive !== undefined) {
+            if(typeof(obj.primitive) === 'string')
+                return obj.primitive
+            else if(obj.primitive.denominator !== undefined)
+                return 'n'+obj.primitive.numerator+'/'+obj.primitive.denominator
         }
 
-        return val.scope[0].primitive // now a primitive
+        var hashcodeFunction = getThisPrivilegedMember(blockCallingScope, obj, coreLevel1.StringObj('str'))
+        obj = callOperator(blockCallingScope, '[', [hashcodeFunction])
     }
+}
 
 // gets a privileged member as if it was accessed like this.member
 // thisObj and memberName must both be lima objects
@@ -269,7 +275,7 @@ exports.hasProperties = function(obj) {
 }
 
 exports.appendElement = function(obj, value) {
-    setProperty(obj, coreLevel1.NumberObj(['number', obj.elements]), value)
+    setProperty(obj, coreLevel1.NumberObj(obj.elements, 1), value)
     obj.elements++
 }
 

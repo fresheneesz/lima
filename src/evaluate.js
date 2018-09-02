@@ -7,17 +7,22 @@ var coreLevel1 = require("./coreLevel1")
     // all functions beginning with 'resolve' take in the current state and the current index and
         // mutate curState (resolving some nodes into lima objects or fewer nodes). Some of these
         // also return some additional info (eg the new index to continue resolving from).
+    // For any function that takes in a variable called `context`, that variable will have the structure
+        // of the context passed into superExpression
 
-// context - an object with the properties:
-    // this - the object the expression is being called for (either in an object literal or setProperty
-    // scope - a utils.Scope object that has the properties
-        // get - gets a variable from the scope
-        // set - sets a variable onto the scope
+
+// Executes the first expression within a superExpression, returning information about the resulting
+    // value and information about potential additional expressions.
+// context - An object with the properties:
+    // this - The object the expression is being called for (a lima object).
+    // scope - A utils.Scope object that has the properties:
+        // get - Gets a variable from the scope.
+        // set - Sets a variable onto the scope.
 // parts - An array of lima AST nodes
 // allowProperties - If true, colon assignments can create properties
 // returns an object with the properties:
     // value - the resulting value of the expression
-    // remainingParts - The parts of additional expressions in this superExpression
+    // remainingParts - The parts of any additional expressions in this superExpression
 var superExpression = exports.superExpression = function(context, parts, allowProperties) {
     // curState can contain AST node parts *and* lima object values
     var curState = parts.map(function(x) { // shallow copy of the parts
@@ -37,6 +42,14 @@ var superExpression = exports.superExpression = function(context, parts, allowPr
         value: curState[0],
         remainingParts: curState.slice(1)
     }
+}
+
+// Executes a set of expressions in the context of an object.
+// returns an object with the properties:
+    // value - the resulting lima object
+    // remainingParts - The parts of any additional expressions in this superExpression
+var object = exports.object = function(context, expressions, needsEndBrace) {
+
 }
 
 function resolveBinaryOperations(context, curState, allowProperties) {
@@ -68,7 +81,7 @@ function resolveBinaryOperations(context, curState, allowProperties) {
             return
         }
 
-        if(curState.length == 1 || !isNode(operator1) || operator1[1] === 'prefix')
+        if(curState.length === 1 || !isNode(operator1) || operator1[1] === 'prefix')
             break;
 
         if(curIndex > curState.length) {
@@ -197,9 +210,9 @@ function resolveBinaryOperandFrom(context, curState, index) {
                 }
                 curState.splice(valueItemIndex+1, 1) // remove the closing bracket operator
             } else {
-                var numValues = resolveBrackets(context, curState, valueItemIndex+1, closeBracketOperator(operator))
-                var operands = curState.slice(valueItemIndex+1, valueItemIndex+1+numValues)
-                var returnValue = utils.callOperator(context.scope, operator, [valueItem, operands])
+                var argumentContext = resolveBracketArguments(context, curState, valueItemIndex+2, closeBracketOperator(operator))
+                var args = utils.getArgsFromObject(argumentContext.this)
+                var returnValue = utils.callOperator(context.scope, operator, [valueItem, args])
                 curState.splice(valueItemIndex, 2, returnValue)
             }
         }
@@ -241,15 +254,51 @@ function resolveBinaryOperandFrom(context, curState, index) {
     // resolves the node curState[n] into a single lima value
     function resolveValue(context, curState, n) {
         var item = curState[n]
-        var value = coreLevel1.basicValue(context.scope, item)
-        if(value === undefined) { // if its not a basic value, it must be a superExpression
-            var result = superExpression(context, item[1], false)
+        var value = basicValue(context.scope, item)
+        if(value !== undefined) {
+            curState[n] = value
+        } else if(isNodeType(item, 'object')) {
+            var objectNode = curState[n]
+            var limaObjectContext = coreLevel1.limaObjectContext(context.scope)
+            resolveObjectSpace(limaObjectContext, objectNode.expressions, 0, '}')
+            if(objectNode.needsEndBrace && !isSpecificOperator(objectNode.expressions[0], "}")) {
+                throw new Error("Missing '}' in object literal.")
+            }
+        } else { // if its not a basic value and not an object, it must be a paren superExpression
+            var result = superExpression(context, item.parts, false)
             if(result.remainingParts.length !== 0)
-                throw new Error("Inner superExpressions must not have multiple expressions inside them")
-            value = result.value
+                throw new Error("Parentheses must contain only one expression.")
+            curState[n] = result.value
         }
+    }
 
-        curState[n] = value
+    // Resolves an object or object-like node. Removes items from curState entirely when they've
+        // been executed (and probably put into context.scope or context.this).
+    // Is also used to resolve function arguments and function parameters, in which
+        // case objectEndOperator might be ']' or ':'
+    // context
+        // this - The object to resolve onto.
+        // scope - The object definition scope.
+    // objectEndOperator - The marker that the object definition space has ended before the
+        // objectNode's expressions are done.
+    // curState - Holds the list of ast nodes in the object expressions
+    var resolveObjectSpace = exports.resolveObjectSpace = function(context, curState, n, objectEndOperator) {
+        while(curState.length > 0) {
+            var node = curState[n]
+            if(objectEndOperator && isSpecificOperator(node, objectEndOperator)) {
+                return // found the end of the object space
+            } else {
+                resolveValue(context, curState, n)
+                if(!utils.isNil(curState[n])) {
+                    if(utils.hasProperties(context.this))
+                        throw new Error("All elements must come before any keyed properties")
+
+                    utils.appendElement(context.this, curState[n])
+                }
+
+                curState.splice(n,1) // remove the item from the state
+            }
+        }
     }
 
     // Gets info needed to resolve parens or brackets. Returns an object with the properties:
@@ -272,27 +321,26 @@ function resolveBinaryOperandFrom(context, curState, index) {
         }
     }
 
-    // after resolution, curState will contain an open bracket (presumably - this function actually
-        // doesn't control that), a number of arguments, and then a close bracket operator
-    // returns the number of values between the brackets
-    function resolveBrackets(context, curState, index, closeOperator) {
-        var parameterObject = utils.Scope({}) // object representing the (possibly named) parameters
-        var newContextScope = utils.ContextScope({
-            getScope:scope, setScope:scope,
-            setCallback: function(name, value, isPrivate) {
-                if(!isPrivate)
-                    objectValue.privileged[name] = value
+
+    // After resolution, curState will contain an open bracket (presumably - this function actually
+        // doesn't control that) and any remaining nodes in the expression.
+    // index - This should be the index right after the open bracket.
+    // closeOperator - Either ']' or ']]'
+    // Returns an object context representing the arguments.
+    function resolveBracketArguments(context, curState, index, closeOperator) {
+        var bracketArgumentObject = coreLevel1.limaArgumentContext(context.scope)
+        resolveObjectSpace(bracketArgumentObject, curState, index, closeOperator)
+        if(isEndBracketOperator(curState[index])) {
+            if(curState[index].operator === closeOperator) {
+                curState.splice(index,1) // remove end bracket
+            } else {
+                curState[index] = curState.slice(closeOperator.length) // remove the number of brackets consumed
             }
-        })
-        var newContext = {this:context.this, scope: newContextScope}
+        } else {
+            throw new Error("Missing '"+closeOperator+"' for bracket operation.")
+        }
 
-        var info = getParenOrBracketResolutionInfo(newContext, curState, index, closeOperator)
-        // curState[index+info.consumed+1] should be the closeOperator at this point
-
-        curState.splice(index+1, info.consumed) // remove the 2 parens and all the nodes between them
-        curState.splice(index, 0, info.values)  // insert the resolved values
-
-        return info.values.length
+        return bracketArgumentObject
     }
 
     function resolveParens(context, curState, index) {
@@ -307,6 +355,21 @@ function resolveBinaryOperandFrom(context, curState, index) {
     }
 
 
+// Takes in an ast node and returns either a basic lima object or undefined
+// basic lima objects: string, number, variable, object
+var basicValue = exports.basicValue = function(scope, node) {
+    if(isNodeType(node, 'string')) {
+        return coreLevel1.StringObj(node.string)
+    } else if(isNodeType(node, 'number')) {
+        return coreLevel1.NumberObj(node.numerator, node.denominator)
+    } else if(isNodeType(node, 'variable')) {
+        return coreLevel1.Variable(scope, node.name)
+    }
+    // else if(evaluate.isNodeType(node, 'object')) {
+    //     return LimaObject(scope, node)
+    // }
+}
+
 // functions for testing propositions about ast nodes
 
 // Returns true if the passed `operator` has the operator type `opType` for `valueObject`
@@ -320,6 +383,11 @@ function isOperatorOfType(valueObject, operator, opType) {
 }
 function isDereferenceOperator(x) {
     return isNodeType(x, 'operator') && (x.operator in {'.':1,'[':1})
+}
+// returns true if the operator consists only of end brackets, eg ']]]]]]'
+function isEndBracketOperator(x) {
+    return isNodeType(x, 'operator')
+           && x.operator.match(/]*/)[0].length === x.operator.length
 }
 function isSpecificOperator(x, operator) {
     return isNodeType(x, 'operator') && x.operator === operator

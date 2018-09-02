@@ -1,43 +1,66 @@
-
-var evaluate = require("./evaluate")
+var basicUtils = require("./basicUtils")
 var utils = require("./utils")
 
+// Conventions:
+    // For any function that takes in a `scope`, that has the same structure as the
+        // `context.scope` from evaluate.superExpression
+
+var anyType = function() {
+    return true // everything's a var
+}
+
 var nil = exports.nil = {
-    type: utils.isNil,
-    const: false,  // will be set to true in core.lima
-    scope: [{}],   // an object will have multiple scopes when it inherits from multiple objects
-    //name: undefined,
-    //interfaces: [], // each inherited object will be listed here to be used for interface dispatch (see the spec)
+    //type: undefined,      // will be filled in later
+    name: 'nil',
+    const: false,           // Will be set to true in coreLevel2.lima
+    scopes: [{}],           // Each scope has the structure:
+                                // keys are primitive string names
+                                // values are lima objects
+                            // An object will have multiple scopes when it inherits from multiple objects.
+                            // All privileged members will also be in at least one of the private scopes.
+                            // A privileged member will appear in multiple private scopes when it has been inherited
+                                // under an alias.
+    privileged: {},         // keys are primitive string names and values are lima objects
+    properties: {},         // keys are hashcodes and values are arrays where each member looks like
+                                // {key:keyObj,value:valueObj} where both `keyObj` and `valueObj` are lima objects
+    elements: 0,
+    //primitive: undefined,
+
+    //interfaces: [],       // each inherited object will be listed here to be used for interface dispatch (see the spec)
+    // // macro: undefined,
+    // //inherit: undefined,
+    destructors: [],
+
     operators: {
         '=':{
             type:'binary', order:9, backward:true, scope: 0, dispatch: [
-                {parameters: [{name:'rvalue',type:'var'}], fn: function(rvalue) { // assignment operator
-                    if(this.context.this.const)
+                {parameters: [{name:'rvalue',type:anyType}], fn: function(rvalue) { // assignment operator
+                    if(this.this.const)
                         throw new Error("Can't assign a const variable")
-                    overwriteValue(this.context, rvalue)
+                    basicUtils.overwriteValue(this.this, rvalue)
                 }},
                 {parameters: [], fn: function() { // copy operator
-                    return utils.copyValue(this.context.this)
+                    return basicUtils.copyValue(this.this)
                 }}
             ]
         },
         '~>': {
             type:'binary', order:9, scope: 0, dispatch: [
-                {parameters:[{name:'rvalue',type:'var'}], fn: function(rvalue) {
-                    //return utils.callOperator(this.context.this, this.context.this.operators['>'], this.callingScopeInfo, [rvalue])
+                {parameters:[{name:'rvalue',type:anyType}], fn: function(rvalue) {
+                    //return utils.callOperator(this.this, this.this.operators['>'], this.callingScope, [rvalue])
                 }}
             ]
         },
         '??': {
             type:'binary', order:6, scope: 0, dispatch: [
-                {parameters:[{name:'a',type:'var'},{name:'b',type:'var'}], fn: function(a,b) {
+                {parameters:[{name:'a',type:anyType},{name:'b',type:anyType}], fn: function(a,b) {
                     return a === b // todo: support references
                 }}
             ]
         },
         '==': {
             type:'binary', order:6, scope: 0, dispatch: [
-                {parameters:[{name:'other',type:'var'}], fn: function(other) {
+                {parameters:[{name:'other',type:anyType}], fn: function(other) {
                     return utils.isNil(other)
                 }}
             ]
@@ -104,36 +127,30 @@ var nil = exports.nil = {
 //        '!??': {
 //            type:'binary', order:6, dispatch: [
 //                {parameters:[{name:'a',type:'var'},{name:'b',type:'var'}], fn: function(a,b) {
-//                    return callFunction(this.meta.operators['??'], this.callingScope, [a,b])
+//                    return callFunction(this.operators['??'], this.callingScope, [a,b])
 //                }}
 //            ]
 //        },
 //        '!=': {
 //            type:'binary', order:6, dispatch: [
 //                {parameters:[{name:'a',type:'var'},{name:'b',type:'var'}], fn: function(a,b) {
-//                    return callFunction(this.meta.operators['=='], this.callingScope, [a,b])
+//                    return callFunction(this.operators['=='], this.callingScope, [a,b])
 //                }}
 //            ]
 //        }
-    },
-    // macro: undefined,
-    //inherit: undefined,
-    //primitive: undefined,
-    privileged: {},
-    properties: {}, // keys are hashcodes and values are arrays where each member looks like [key,value]
-    elements: 0,
-    destructors: []
+    }
 }
 
-var emptyObj = exports.emptyObj = utils.copyValue(nil)
+var emptyObj = exports.emptyObj = basicUtils.copyValue(nil)
+emptyObj.name = '{}'
 // emptyObj.type = utils.hasInterface(emptyObj)     // what was this?
 emptyObj.operators['.'] = {
     type:'binary', order:0, scope: 0, dispatch: [
-        {parameters: [{name:'name',type:'string'},{name:'value',type:'var?'}], fn: function(name) {
-            var result = this.context.this.privileged[name]
+        {parameters: [{name:'name',type:anyType},{name:'value',type:anyType}], fn: function(name) {
+            var result = this.this.privileged[name.primitive]
             if(result !== undefined)
                 return result
-            result = utils.getProperty(this.context, this.context.this, name)
+            result = utils.getProperty(this, this.this, name)
             if(result !== undefined)
                 return result
             // else
@@ -143,119 +160,115 @@ emptyObj.operators['.'] = {
 }
 
 var FunctionObj = function(bracketOperatorDispatch) {
-    var obj = utils.copyValue(emptyObj)
+    var obj = basicUtils.copyValue(emptyObj)
     obj.operators['['] = {
         type:'binary', order:0, scope: 0, dispatch: bracketOperatorDispatch
     }
     return obj
 }
 
-var emptyString = exports.emptyString = utils.copyValue(emptyObj)
+var emptyString = exports.emptyString = basicUtils.copyValue(emptyObj)
+emptyString.name = '""'
 
-var zero = exports.zero = utils.copyValue(nil)
-zero.scope[0].primitive = {num:0, denom: 1}
+var zero = exports.zero = basicUtils.copyValue(emptyObj)
+emptyString.name = '0'
+zero.primitive = {numerator:0, denominator: 1}
 // define hashcode as a function for now (when I figure out how to make accessors, we'll use that instead)
 zero.privileged.hashcode = FunctionObj({parameters: [], fn: function() {
-    var primitiveHash = getJsStringKeyHash('n'+this.context.this.primitive.num+'/'+this.context.this.primitive.denom)
-    return NumberObj(['number', primitiveHash, 1])
+    var primitiveHash = getHashCode(this, this.this)
+    return NumberObj(primitiveHash,1)
 }})
-    // returns a primitive integer hash
-    function getJsStringKeyHash(string) {
-      var hash = 0, i, chr
-      if (string.length === 0) return hash
-      for (i = 0; i < string.length; i++) {
-        chr   = string.charCodeAt(i)
-        hash  = ((hash << 5) - hash) + chr
-        hash |= 0 // Convert to 32bit integer
-      }
-      return hash
-    }
+
 
 
 // contains the private variable `primitive` (in scope[0]) that holds the primitive string
-var StringObj = exports.StringObj = function(stringAstNode) {
-    var result = utils.copyValue(emptyString)
-    result.scope[0].primitive = stringAstNode.string
+var StringObj = exports.StringObj = function(primitiveString) {
+    var result = basicUtils.copyValue(emptyString)
+    result.primitive = primitiveString
     return result
 }
 
 // contains the private variable `primitive` (in scope[0]) that holds the primitive string that holds the numerator and denominator of the number
-var NumberObj = exports.NumberObj = function(numberAstNode) {
-    var result = utils.copyValue(zero)
-    result.scope[0].primitive = {numerator:numberAstNode.numerator, denominator: numberAstNode.denominator}
+var NumberObj = exports.NumberObj = function(primitiveNumerator, primitiveDenominator) {
+    var result = basicUtils.copyValue(zero)
+    result.name = primitiveNumerator+""
+    if(primitiveDenominator !== 1)
+        result.name += '/'+primitiveDenominator
+    
+    result.primitive = {numerator:primitiveNumerator, denominator: primitiveDenominator}
     return result
 }
 
-var one = exports.one = NumberObj(['number', 1, 1])
+var one = exports.one = NumberObj(1,1)
 
 // returns the lima object the variable holds
-var Variable = exports.Variable = function(scope, variableAstNode) {
-    return scope.get(variableAstNode.name)
+var Variable = exports.Variable = function(scope, primitiveStringName) {
+    return scope.get(primitiveStringName)
 }
 
-var Object = exports.Object = function(scope, objAstNode) {
-    var objectValue = utils.copyValue(emptyObj)
-
-    var scope = utils.Scope(scope, {})
-    var callingScopeInfo = utils.ContextScope({
-        getScope:scope, setScope:scope,
-        setCallback: function(name, value, isPrivate) {
-            if(!isPrivate)
-                objectValue.privileged[name] = value
-        }
-    })
-
-    objAstNode.expressions.forEach(function(node) {
-        if(node.type === 'superExpression') {
-            var nextParts = node.parts
-            while(nextParts.length !== 0) {
-                var context = {this: objectValue, scope:callingScopeInfo}
-                var superExpressionResult = evaluate.superExpression(context, nextParts, true)
-                nextParts = superExpressionResult.remainingParts
-                if(!isNil(superExpressionResult.value)) {
-                    utils.appendElement(objectValue, superExpressionResult.value)
+// Returns a context with a new empty object value as `this` and a ContextScope for the object's definition space
+// Those parts will be used by evaluate.resolveObjectSpace to complete the object
+var limaObjectContext = exports.limaObjectContext = function(upperScope) {
+    var object = basicUtils.copyValue(emptyObj)
+    return {
+        this: object,
+        scope: utils.ContextScope(
+            function get(name) {
+                if(name in object.scopes[0]) {
+                    return object.scopes[0][name]
+                } else {
+                    return upperScope.get(name)
                 }
+            },
+            function set(name, value, isPrivate) {
+                if(name in object.scopes[0])
+                    throw new Error("Can't re-declare property "+name)
+                // todo: add support for overriding and error for overriding without the override keyword/macro/attribute
+
+                object.scopes[0][name] = value
+                if(!isPrivate) // todo: change isPrivate into an attribute
+                    object.privileged[name] = value
             }
-        } else { // element
-            if(utils.hasProperties(objectValue))
-                throw new Error("All elements must come before any keyed properties")
+        )
+    }
+}
 
-            utils.appendElement(objectValue, basicValue(objectValue.scope[0], node))
-        }
-    }.bind(this))
-
-    return objectValue
+// Returns a context with a new empty object value as `this` and a ContextScope for the argument definition space
+// Those parts will be used by evaluate.resolveObjectSpace to fill the object with (potentially named) arguments.
+var limaArgumentContext = exports.limaArgumentContext = function(upperScope) {
+    var object = basicUtils.copyValue(emptyObj)
+    return {
+        this: object,
+        scope: upperScope
+    }
 }
 
 
-var wout = utils.copyValue(emptyObj)
+var wout = basicUtils.copyValue(emptyObj)
 wout.operators['['] = {
     type:'binary', order:0, scope: 0, dispatch: [
-        {parameters: [{name:'s',type:'var?'}], fn: function(s) {
-            console.log(utils.getPrimitiveStr(this.context, s))
+        {parameters: [{name:'s',type:anyType}], fn: function(s) {
+            console.log(utils.getPrimitiveStr(this, s))
         }}
     ]
-}
-
-// Takes in an ast node and returns either a basic lima object or undefined
-// basic lima objects: string, number, variable, object
-var basicValue = exports.basicValue = function(scope, node) {
-    if(evaluate.isNodeType(node, 'string')) {
-        return StringObj(node)
-    } else if(evaluate.isNodeType(node, 'number')) {
-        return NumberObj(node)
-    } else if(evaluate.isNodeType(node, 'variable')) {
-        return Variable(scope, node)
-    } else if(evaluate.isNodeType(node, 'object')) {
-        return Object(scope, node)
-    }
 }
 
 // makes the minimal core scope where some core constructs are missing operators and members that are derivable using
     // the core level 1 constructs
 exports.makeCoreLevel1Scope = function() {
-    return utils.Scope({
+    var scope = utils.Scope({
         nil: nil,
         wout: wout
     })
+
+    return utils.ContextScope(
+        function get(name) {
+            return scope[name]
+        },
+        function set(name, value) {
+            if(name in scope)
+                throw new Error("Can't re-declare property "+name)
+            scope[name] = value
+        }
+    )
 }

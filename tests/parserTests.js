@@ -630,9 +630,9 @@ function getNonMacroExpressionContinuationTests() {
 
     randomTests.inputs = {
         '["hello world"]':
-            [ { type: 'operator', operator: '[', opType: 'binary' },
+            [ { type: 'operator', operator: '[', opType: 'postfix' },
               { type: 'string', string: 'hello world' },
-              { type: 'operator', operator: ']', opType: 'binary' } ]
+              { type: 'operator', operator: ']', opType: 'postfix' } ]
     }
 
     tests.push(randomTests)
