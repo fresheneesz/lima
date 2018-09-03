@@ -3,7 +3,7 @@ var fs = require("fs")
 var limaInterpreter = require("./src/interpreter")
 
 var tests = [
-    {name: 'hello', content: 'wout["hello world"]'}
+    {name: 'hello', content: 'wout[3]'}
 ].concat([
         // 'whitespaceAndComments'
     ].map(function(testName) {

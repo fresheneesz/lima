@@ -5,9 +5,40 @@ var utils = require("./utils")
     // For any function that takes in a `scope`, that has the same structure as the
         // `context.scope` from evaluate.superExpression
 
+// constructs and functions used by multiple literals
+
 var anyType = function() {
     return true // everything's a var
 }
+
+var dotOperator = {
+    type:'binary', order:0, scope: 0, dispatch: [
+        {parameters: [{name:'name',type:anyType},{name:'value',type:anyType}], fn: function(name) {
+            var result = this.this.privileged[name.primitive]
+            if(result !== undefined)
+                return result
+            result = utils.getProperty(this, this.this, name)
+            if(result !== undefined)
+                return result
+            // else
+            return nil
+        }}
+    ]
+}
+
+// returns a primitive integer hash from a string
+function getJsStringKeyHash(string) {
+  var hash = 0, i, chr
+  if (string.length === 0) return hash
+  for (i = 0; i < string.length; i++) {
+    chr   = string.charCodeAt(i)
+    hash  = ((hash << 5) - hash) + chr
+    hash |= 0 // Convert to 32bit integer
+  }
+  return hash
+}
+
+// literals
 
 var nil = exports.nil = {
     //type: undefined,      // will be filled in later
@@ -31,6 +62,17 @@ var nil = exports.nil = {
     // //inherit: undefined,
     destructors: [],
 
+    // operators is an object where each key is an operator and value has the properties:
+        // type - 'binary', 'prefix', or 'postfix'
+        // order
+        // scope - The index of the scope (within `scopes`) to look for variables in
+        // backward - (Optional) If true, the operator is right-to-left associative
+        // boundObject - (Optional) The object the function is bound to (because it was defined inside that object)
+        // dispatch - An array of objects each with the properties:
+            // parameters - Defines the parameters for this dispatch item. Is a list of objects where each object has the properties:
+                // name
+                // type
+            // fn - The raw function to call if the parameters match.
     operators: {
         '=':{
             type:'binary', order:9, backward:true, scope: 0, dispatch: [
@@ -65,121 +107,70 @@ var nil = exports.nil = {
                 }}
             ]
         }
-
-//        done in coreLevel2.lima
-
-//        '~': {
-//            type:'postfix', dispatch: [
-//                {fn: function() {
-//                    var value = this.copy()
-//                    // remove these operators:
-//                    delete value.meta.operators['~']
-//                    delete value.meta.operators['~>']
-//                    value.meta.operators['>'] = {
-//                        type:'binary', order:9, dispatch: [
-//                            {parameters:[{name:'rvalue',type:'var'}], fn: function(rvalue) {
-//                                this.meta.operators = refOperators(rvalue)
-//                            }}
-//                        ]
-//                    }
-//                    value.meta.operators['='] = newEqualsOperator()
-//                    value.meta.operators['='][1].fn = function() {
-//                        return this.copy() // copy operator returns the original value (with the ~ and ~> operators in place)
-//                    }
-//                    return value
-//                }}
-//            ]
-//        },
-//        '?': {
-//            type:'postfix', order:9, dispatch: [
-//                {parameters:[],
-//                 fn: function() {
-//                    var value = Object()
-//                    value.meta.operators['.'] = {
-//                        type:'binary', dispatch: [{
-//                            parameters:[], fn: function(name, value) {
-//                                 return Nil()
-//                            }
-//                        }]
-//                    }
-//                    value.meta.operators['='] = {
-//                        type:'binary', dispatch: [{
-//                            parameters:[], fn: function() { // copy operator
-//                                 return Object()   // return normal empty object
-//                            }
-//                        }]
-//                    }
-//
-//                    return value
-//                }}
-//            ]
-//        },
-//        '|': {
-//            type:'binary', order:9, dispatch: [
-//                {parameters:[{name:'a',type:'var'},{name:'b',type:'var'}], fn: function(a,b) {
-//                    if(!isNil(a))
-//                        return a
-//                    else
-//                        return b
-//                }}
-//            ]
-//        },
-//        '!??': {
-//            type:'binary', order:6, dispatch: [
-//                {parameters:[{name:'a',type:'var'},{name:'b',type:'var'}], fn: function(a,b) {
-//                    return callFunction(this.operators['??'], this.callingScope, [a,b])
-//                }}
-//            ]
-//        },
-//        '!=': {
-//            type:'binary', order:6, dispatch: [
-//                {parameters:[{name:'a',type:'var'},{name:'b',type:'var'}], fn: function(a,b) {
-//                    return callFunction(this.operators['=='], this.callingScope, [a,b])
-//                }}
-//            ]
-//        }
     }
 }
+
+
+var zero = exports.zero = basicUtils.copyValue(nil)
+zero.name = '0'
+zero.primitive = {numerator:0, denominator: 1}
+zero.operators['.'] = dotOperator
+
+
+var emptyString = exports.emptyString = basicUtils.copyValue(nil)
+emptyString.name = '""'
+emptyString.operators['.'] = dotOperator
+
 
 var emptyObj = exports.emptyObj = basicUtils.copyValue(nil)
 emptyObj.name = '{}'
 // emptyObj.type = utils.hasInterface(emptyObj)     // what was this?
-emptyObj.operators['.'] = {
-    type:'binary', order:0, scope: 0, dispatch: [
-        {parameters: [{name:'name',type:anyType},{name:'value',type:anyType}], fn: function(name) {
-            var result = this.this.privileged[name.primitive]
-            if(result !== undefined)
-                return result
-            result = utils.getProperty(this, this.this, name)
-            if(result !== undefined)
-                return result
-            // else
-            return nil
-        }}
-    ]
-}
+emptyObj.operators['.'] = dotOperator
 
-var FunctionObj = function(bracketOperatorDispatch) {
-    var obj = basicUtils.copyValue(emptyObj)
+
+// functions used to create privileged members
+
+// Returns a lima object that has a bracket operator with the passed in dispatch rules.
+// boundObject - The boundObject property of an operator
+function FunctionObj(boundObject, bracketOperatorDispatch) {
+    var obj = basicUtils.copyValue(nil)
     obj.operators['['] = {
-        type:'binary', order:0, scope: 0, dispatch: bracketOperatorDispatch
+        type:'binary', order:0, scope: 0, boundObject:boundObject, dispatch: [bracketOperatorDispatch]
     }
     return obj
 }
 
-var emptyString = exports.emptyString = basicUtils.copyValue(emptyObj)
-emptyString.name = '""'
 
-var zero = exports.zero = basicUtils.copyValue(emptyObj)
-emptyString.name = '0'
-zero.primitive = {numerator:0, denominator: 1}
-// define hashcode as a function for now (when I figure out how to make accessors, we'll use that instead)
-zero.privileged.hashcode = FunctionObj({parameters: [], fn: function() {
-    var primitiveHash = getHashCode(this, this.this)
-    return NumberObj(primitiveHash,1)
+// privileged members
+
+// define hashcode and str as a function for now (when I figure out how to make accessors, we'll use that instead)
+zero.privileged.hashcode = FunctionObj(zero, {parameters: [], fn: function() {
+    if(this.this.primitive.denominator === 1) {
+        return this.this
+    } else {
+        var primitiveHashcode = getJsStringKeyHash(this.this.primitive.numerator+'/'+this.this.primitive.denominator)
+        return NumberObj(primitiveHashcode,1)
+    }
+}})
+zero.privileged.str = FunctionObj(zero, {parameters: [], fn: function() {
+    if(this.this.primitive.denominator === 1) {
+        return StringObj(''+this.this.primitive.numerator)
+    } else {
+        return StringObj(this.this.primitive.numerator+'/'+this.this.primitive.denominator)
+    }
+}})
+
+// define hashcode and str as a function for now (when I figure out how to make accessors, we'll use that instead)
+emptyString.privileged.hashcode = FunctionObj(emptyString, {parameters: [], fn: function() {
+    var primitiveHashcode = getJsStringKeyHash('s'+this.this.primitive) // the 's' is for string - to distinguish it from the hashcode for numbers
+    return NumberObj(primitiveHashcode,1)
+}})
+emptyString.privileged.str = FunctionObj(emptyString, {parameters: [], fn: function() {
+    return this.this
 }})
 
 
+// object creation functions
 
 // contains the private variable `primitive` (in scope[0]) that holds the primitive string
 var StringObj = exports.StringObj = function(primitiveString) {
@@ -194,17 +185,30 @@ var NumberObj = exports.NumberObj = function(primitiveNumerator, primitiveDenomi
     result.name = primitiveNumerator+""
     if(primitiveDenominator !== 1)
         result.name += '/'+primitiveDenominator
-    
+
     result.primitive = {numerator:primitiveNumerator, denominator: primitiveDenominator}
     return result
 }
-
-var one = exports.one = NumberObj(1,1)
 
 // returns the lima object the variable holds
 var Variable = exports.Variable = function(scope, primitiveStringName) {
     return scope.get(primitiveStringName)
 }
+
+// variable definitions that depend on the above
+
+var one = exports.one = NumberObj(1,1)
+
+var wout = basicUtils.copyValue(emptyObj)
+wout.operators['['] = {
+    type:'binary', order:0, scope: 0, dispatch: [
+        {parameters: [{name:'s',type:anyType}], fn: function(s) {
+            console.log(utils.getPrimitiveStr(this, s))
+        }}
+    ]
+}
+
+// context functions
 
 // Returns a context with a new empty object value as `this` and a ContextScope for the object's definition space
 // Those parts will be used by evaluate.resolveObjectSpace to complete the object
@@ -241,16 +245,6 @@ var limaArgumentContext = exports.limaArgumentContext = function(upperScope) {
         this: object,
         scope: upperScope
     }
-}
-
-
-var wout = basicUtils.copyValue(emptyObj)
-wout.operators['['] = {
-    type:'binary', order:0, scope: 0, dispatch: [
-        {parameters: [{name:'s',type:anyType}], fn: function(s) {
-            console.log(utils.getPrimitiveStr(this, s))
-        }}
-    ]
 }
 
 // makes the minimal core scope where some core constructs are missing operators and members that are derivable using

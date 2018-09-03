@@ -119,3 +119,77 @@ var itemsToLock = reflist[nil 0 "" {} true false]
 df itemsToLock item:
     meta[item].const = true
 
+
+
+// OPERATORS FOR NIL:
+//
+//        '~': {
+//            type:'postfix', dispatch: [
+//                {fn: function() {
+//                    var value = this.copy()
+//                    // remove these operators:
+//                    delete value.meta.operators['~']
+//                    delete value.meta.operators['~>']
+//                    value.meta.operators['>'] = {
+//                        type:'binary', order:9, dispatch: [
+//                            {parameters:[{name:'rvalue',type:'var'}], fn: function(rvalue) {
+//                                this.meta.operators = refOperators(rvalue)
+//                            }}
+//                        ]
+//                    }
+//                    value.meta.operators['='] = newEqualsOperator()
+//                    value.meta.operators['='][1].fn = function() {
+//                        return this.copy() // copy operator returns the original value (with the ~ and ~> operators in place)
+//                    }
+//                    return value
+//                }}
+//            ]
+//        },
+//        '?': {
+//            type:'postfix', order:9, dispatch: [
+//                {parameters:[],
+//                 fn: function() {
+//                    var value = Object()
+//                    value.meta.operators['.'] = {
+//                        type:'binary', dispatch: [{
+//                            parameters:[], fn: function(name, value) {
+//                                 return Nil()
+//                            }
+//                        }]
+//                    }
+//                    value.meta.operators['='] = {
+//                        type:'binary', dispatch: [{
+//                            parameters:[], fn: function() { // copy operator
+//                                 return Object()   // return normal empty object
+//                            }
+//                        }]
+//                    }
+//
+//                    return value
+//                }}
+//            ]
+//        },
+//        '|': {
+//            type:'binary', order:9, dispatch: [
+//                {parameters:[{name:'a',type:'var'},{name:'b',type:'var'}], fn: function(a,b) {
+//                    if(!isNil(a))
+//                        return a
+//                    else
+//                        return b
+//                }}
+//            ]
+//        },
+//        '!??': {
+//            type:'binary', order:6, dispatch: [
+//                {parameters:[{name:'a',type:'var'},{name:'b',type:'var'}], fn: function(a,b) {
+//                    return callFunction(this.operators['??'], this.callingScope, [a,b])
+//                }}
+//            ]
+//        },
+//        '!=': {
+//            type:'binary', order:6, dispatch: [
+//                {parameters:[{name:'a',type:'var'},{name:'b',type:'var'}], fn: function(a,b) {
+//                    return callFunction(this.operators['=='], this.callingScope, [a,b])
+//                }}
+//            ]
+//        }

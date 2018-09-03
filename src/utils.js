@@ -66,7 +66,12 @@ var callOperator = exports.callOperator = function(callingScope, operator, opera
         var thisContext = operands[0]
     } else {
         if(operator[0] === '[') {  // bracket operator
-            var dispatchInfo = getOperatorDispatch(operands[0], operator, operands[1])
+            var bracketArgs = operands[1]
+            if(operands[1] === undefined) {
+                bracketArgs = {args:[], unnamedCount: 0}
+            }
+            var thisContext = operands[0]
+            var dispatchInfo = getOperatorDispatch(operands[0], operator, bracketArgs)
         } else { // normal binary operator
             var dispatchInfo1 = getOperatorDispatch(operands[0], operator, operands)
             var dispatchInfo2 = getOperatorDispatch(operands[0], operator, operands)
@@ -75,7 +80,15 @@ var callOperator = exports.callOperator = function(callingScope, operator, opera
             }
 
             var dispatchInfo = dispatchInfo1 || dispatchInfo2
+            if(dispatchInfo === dispatchInfo1) {
+                var thisContext = operands[1]
+            } else { // dispatchInfo2
+                var thisContext = operands[2]
+            }
         }
+
+        if(dispatchInfo.boundObject !== undefined)
+            thisContext = dispatchInfo.boundObject
 
         var fn = dispatchInfo.dispatchItem.fn
         var args = dispatchInfo.normalizedArgs
@@ -85,6 +98,8 @@ var callOperator = exports.callOperator = function(callingScope, operator, opera
     var returnValue = fn.apply(context, args)
     if(returnValue === undefined) {
         return coreLevel1.nil
+    } else {
+        return returnValue
     }
 }
 
@@ -96,7 +111,8 @@ var callOperator = exports.callOperator = function(callingScope, operator, opera
     // dispatchItem - the matching dispatch item
     // normalizedArgs - the args normalized into an argument list without only unnamed parameters, resolving any defaults.
 var getOperatorDispatch = exports.getOperatorDispatch = function(object, operator, args) {
-    var dispatchList = object.operators[operator].dispatch
+    var operatorInfo = object.operators[operator]
+    var dispatchList = operatorInfo.dispatch
     for(var n=0; n<dispatchList.length; n++) {
         // todo: named parameters and defaults
         var dispatchItem = dispatchList[n]
@@ -104,12 +120,14 @@ var getOperatorDispatch = exports.getOperatorDispatch = function(object, operato
         if(normalizedArgs !== undefined) { // if the args match the dispatchItem's param list
             return {
                 dispatchItem: dispatchItem,
-                normalizedArgs: normalizedArgs
+                normalizedArgs: normalizedArgs,
+                boundObject: operatorInfo.boundObject
             }
         }
     }
 }
     // returns a normalized argument list if the args match the dispatchItem, or undefined if they don't match
+    // args - Should be the same form as passed into getOperatorDispatch
     function getNormalizedArgs(dispatchItem, args) {
         var argsToUse = [], paramIndex=0
         for(var n=0; n<dispatchItem.parameters.length; n++) {
@@ -199,12 +217,8 @@ var getProperty = exports.getProperty = function(context, obj, key) {
 // gets the primitive hashcode for an object
 var getHashCode = exports.getHashCode = function(obj) {
     while(true) {
-        if(obj.primitive !== undefined) {
-            if(obj.primitive.denominator === 1) {
-                return obj.primitive.numerator
-            } else if(typeof(obj.primitive) === 'string') {
-                return getJsStringKeyHash(obj.primitive)
-            }
+        if(obj.primitive !== undefined && obj.primitive.denominator === 1) {
+            return obj.primitive.numerator
         }
 
         var hashcodeFunction = getThisPrivilegedMember(blockCallingScope, obj, coreLevel1.StringObj('hashcode'))
@@ -214,28 +228,11 @@ var getHashCode = exports.getHashCode = function(obj) {
     return obj.primitive.numerator // now a primitive
 }
 
-
-
-    // returns a primitive integer hash
-    function getJsStringKeyHash(string) {
-      var hash = 0, i, chr
-      if (string.length === 0) return hash
-      for (i = 0; i < string.length; i++) {
-        chr   = string.charCodeAt(i)
-        hash  = ((hash << 5) - hash) + chr
-        hash |= 0 // Convert to 32bit integer
-      }
-      return hash
-    }
-
 // gets the primitive string representation of an object
 var getPrimitiveStr = exports.getPrimitiveStr = function(context, obj) {
     while(true) {
-        if(obj.primitive !== undefined) {
-            if(typeof(obj.primitive) === 'string')
-                return obj.primitive
-            else if(obj.primitive.denominator !== undefined)
-                return 'n'+obj.primitive.numerator+'/'+obj.primitive.denominator
+        if(obj.primitive !== undefined && typeof(obj.primitive) === 'string') {
+            return obj.primitive
         }
 
         var hashcodeFunction = getThisPrivilegedMember(blockCallingScope, obj, coreLevel1.StringObj('str'))
