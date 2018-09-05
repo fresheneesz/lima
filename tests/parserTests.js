@@ -1,15 +1,19 @@
 
 var P = require("parsimmon/src/parsimmon")
-var limaParser = require("../src/limaParser3")
 var colors = require("colors/safe")
 
 // the following are set like this so i can block comment out the tests below
 var binaryOperands={}, binaryOperandsForSuperExpression={}
 var indentTests=[], indentedWsTests=[], commentTests=[]
-var validNumeralsTests=[], floatTests=[], numberTests=[], stringTests=[], binaryOperandTests=[]
+var validNumeralsTests=[], floatTests=[], numberTests=[], stringTests=[], operatorTests=[]
+var binaryOperandTests=[]
 var rawExpressionTests=[{state: {indent: 0}, inputs: {}}, {state: {indent: 1}, inputs: {}}]
 var superExpressionTests=[], nonMacroExpressionContinuationTests=[]
-var objectDefinitionSpaceTests = {}, objectTests = []
+var objectDefinitionSpaceTests = {}, objectTests = [], moduleTests=[]
+
+
+
+
 
 
 //*
@@ -113,6 +117,24 @@ stringTests = {
     ]
 }
 
+operatorTests.push({
+    state: {indent:0},
+    inputs: [
+        "@","#","$","%","^","&","*","-","+","|","\\","/","<",">",".",",","?","!",
+        "=@", "=&^", "=&==$",
+        "==", "===", "+==", "#$%==", "=&^==",
+        ":::", ":>", "|:",
+        "..."
+    ]
+})
+operatorTests.push({
+    state: {indent:0}, shouldFail:true,
+    inputs: [
+        "=", "+=", "#$%=",
+        ":", "::"
+    ]
+})
+
 binaryOperands = {
    "1":     [ { type: 'number', numerator: 1, denominator: 1 } ],
    "+1":    [ { type: 'operator', opType: 'prefix', operator: '+' },
@@ -191,6 +213,25 @@ function getSuperExpressionTests() {
                        [ { type: 'string', string: 'h' },
                          { type: 'operator', operator: ':', opType: 'binary' },
                          { type: 'number', numerator: 5, denominator: 1 } ],
+                      needsEndParen: false },
+
+        "a : 5":  { type: 'superExpression',
+                      parts:
+                       [ { type: 'variable', name: 'a' },
+                         { type: 'rawExpression', expression: ' : 5' } ],
+                      needsEndParen: false },
+
+        "2 :: 5":  { type: 'superExpression',
+                      parts:
+                       [ { type: 'number', numerator: 2, denominator: 1 },
+                         { type: 'operator', operator: '::', opType: 'binary' },
+                         { type: 'number', numerator: 5, denominator: 1 } ],
+                      needsEndParen: false },
+
+        "a :: 5":  { type: 'superExpression',
+                      parts:
+                       [ { type: 'variable', name: 'a' },
+                         { type: 'rawExpression', expression: ' :: 5' } ],
                       needsEndParen: false },
     }
     variablesTests = {
@@ -497,9 +538,7 @@ function getSuperExpressionTests() {
         " 14 24 34\n" +
         "} 41 }",
 
-        // test bracket operator without a variable
-        "{}[0]"
-
+        "{}[0]",  // test bracket operator without a variable
     ]}
 
     failureTestGroup = {note:'failures', shouldFail:true, inputs:[
@@ -628,12 +667,28 @@ function getNonMacroExpressionContinuationTests() {
 
     var randomTests = {state:{indent:0}, inputs: {}}
 
-    randomTests.inputs = {
-        '["hello world"]':
-            [ { type: 'operator', operator: '[', opType: 'postfix' },
-              { type: 'string', string: 'hello world' },
-              { type: 'operator', operator: ']', opType: 'postfix' } ]
-    }
+    randomTests.inputs['["hello world"]'] =
+            { current:
+               [ { type: 'operator', operator: '[', opType: 'postfix' },
+                 { type: 'string', string: 'hello world' },
+                 { type: 'operator', operator: ']', opType: 'postfix' } ],
+                 next: [] }
+    randomTests.inputs[']'] =
+            { current: [ { type: 'operator', operator: ']', opType: 'postfix' } ],
+                 next: [] }
+    randomTests.inputs['[3] wout[x]'] =
+            { current:
+               [ { type: 'operator', operator: '[', opType: 'postfix' },
+                 { numerator: 3, denominator: 1, type: 'number' },
+                 { type: 'operator', operator: ']', opType: 'postfix' } ],
+              next:
+               [ { type: 'superExpression',
+                   parts:
+                    [ { type: 'variable', name: 'wout' },
+                      { type: 'rawExpression', expression: '[x]' } ],
+                   needsEndParen: false } ] }
+
+
 
     tests.push(randomTests)
 
@@ -698,6 +753,29 @@ function getObjectTests() {
     return tests
 }
 
+moduleTests.push({
+    inputs: [
+        "3\n  ",
+        "wout['hello world']\r\n",
+    ]
+})
+moduleTests.push({files:[
+   'whitespaceAndComments',
+   'numbers',
+   'strings',
+   'objectDefinitionSpace',
+   'objects',
+   'operators',
+   'moduleSpace',
+   'customFunctions',
+   // 'fuck'
+]})
+moduleTests.push({content:{
+   emptyFile: '',
+   unaryAmbiguity1: '3!2',
+   unterminatedBracketOperator2: '{}[3'
+}})
+
 //*/
 
 exports.indentedWsTests = indentedWsTests
@@ -707,12 +785,14 @@ exports.validNumeralsTests = validNumeralsTests
 exports.floatTests = floatTests
 exports.numberTests = numberTests
 exports.stringTests = stringTests
+exports.operatorTests = operatorTests
 exports.binaryOperandTests = {state:{indent:0}, inputs: binaryOperands}
 exports.rawExpressionTests = rawExpressionTests
 exports.superExpressionTests = superExpressionTests
 exports.nonMacroExpressionContinuationTests = nonMacroExpressionContinuationTests
 exports.objectDefinitionSpaceTests = {inputs: objectDefinitionSpaceTests}
 exports.objectTests = objectTests
+exports.moduleTests = moduleTests
 
 
 function testIndentSuccess(that, expectedIndent, v) {

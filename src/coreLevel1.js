@@ -14,10 +14,10 @@ var anyType = function() {
 var dotOperator = {
     type:'binary', order:0, scope: 0, dispatch: [
         {parameters: [{name:'name',type:anyType},{name:'value',type:anyType}], fn: function(name) {
-            var result = this.this.privileged[name.primitive]
+            var result = this.this.privileged[name.primitive.string]
             if(result !== undefined)
                 return result
-            result = utils.getProperty(this, this.this, name)
+            result = utils.getProperty(this, name)
             if(result !== undefined)
                 return result
             // else
@@ -38,6 +38,33 @@ function getJsStringKeyHash(string) {
   return hash
 }
 
+// creates a binary operator where it does the same thing no matter which side the primary object is on
+// options
+    // order
+    // scope
+    // paramType
+// rawOperationFn - The function to run.
+function symmetricalOperator(options, rawOperationFn) {
+    return {
+        type:'binary', order:options.order, scope: options.scope, dispatch: [
+            {parameters:[{name:'other',type:options.paramType}, {name:'this'}], fn: function(other) {
+                return rawOperationFn.call(this, other)
+            }},
+            {parameters:[{name:'this'}, {name:'other',type:options.paramType}], fn: function(other) {
+                return rawOperationFn.call(this, other)
+            }}
+        ]
+    }
+}
+
+function toLimaBoolean(primitiveBoolean) {
+    if(primitiveBoolean) {
+        return True
+    } else {
+        return False
+    }
+}
+
 // literals
 
 var nil = exports.nil = {
@@ -55,7 +82,7 @@ var nil = exports.nil = {
     properties: {},         // keys are hashcodes and values are arrays where each member looks like
                                 // {key:keyObj,value:valueObj} where both `keyObj` and `valueObj` are lima objects
     elements: 0,
-    //primitive: undefined,
+    primitive: {nil:true},
 
     //interfaces: [],       // each inherited object will be listed here to be used for interface dispatch (see the spec)
     // // macro: undefined,
@@ -86,27 +113,20 @@ var nil = exports.nil = {
                 }}
             ]
         },
-        '~>': {
-            type:'binary', order:9, scope: 0, dispatch: [
-                {parameters:[{name:'rvalue',type:anyType}], fn: function(rvalue) {
-                    //return utils.callOperator(this.this, this.this.operators['>'], this.callingScope, [rvalue])
-                }}
-            ]
-        },
-        '??': {
-            type:'binary', order:6, scope: 0, dispatch: [
-                {parameters:[{name:'a',type:anyType},{name:'b',type:anyType}], fn: function(a,b) {
-                    return a === b // todo: support references
-                }}
-            ]
-        },
-        '==': {
-            type:'binary', order:6, scope: 0, dispatch: [
-                {parameters:[{name:'other',type:anyType}], fn: function(other) {
-                    return utils.isNil(other)
-                }}
-            ]
-        }
+        // '~>': {
+        //     type:'binary', order:9, scope: 0, dispatch: [
+        //         {parameters:[{name:'rvalue',type:anyType}], fn: function(rvalue) {
+        //             throw new Error("unsupported yet")
+        //             //return utils.callOperator(this.this, this.this.operators['>'], this.callingScope, [rvalue])
+        //         }}
+        //     ]
+        // },
+        '??': symmetricalOperator({order:6, scope:0, paramType: anyType}, function(other) {
+            return toLimaBoolean(this.this === other) // todo: support references
+        }),
+        '==': symmetricalOperator({order:6, scope:0, paramType: anyType}, function(other) {
+            return toLimaBoolean(utils.isNil(other))
+        })
     }
 }
 
@@ -115,15 +135,24 @@ var zero = exports.zero = basicUtils.copyValue(nil)
 zero.name = '0'
 zero.primitive = {numerator:0, denominator: 1}
 zero.operators['.'] = dotOperator
+zero.operators['=='] = symmetricalOperator({order:6, scope:0, paramType: anyType}, function(other) {
+    return toLimaBoolean(other.primitive && other.primitive.numerator === this.this.primitive.numerator
+                                         && other.primitive.denominator === this.this.primitive.denominator)
+})
 
 
 var emptyString = exports.emptyString = basicUtils.copyValue(nil)
 emptyString.name = '""'
+emptyString.primitive = {string: ""}
 emptyString.operators['.'] = dotOperator
+emptyString.operators['=='] = symmetricalOperator({order:6, scope:0, paramType: anyType}, function(other) {
+    return toLimaBoolean(other.primitive && other.primitive.string === this.this.primitive.string)
+})
 
 
 var emptyObj = exports.emptyObj = basicUtils.copyValue(nil)
 emptyObj.name = '{}'
+delete emptyString.primitive
 // emptyObj.type = utils.hasInterface(emptyObj)     // what was this?
 emptyObj.operators['.'] = dotOperator
 
@@ -134,6 +163,7 @@ emptyObj.operators['.'] = dotOperator
 // boundObject - The boundObject property of an operator
 function FunctionObj(boundObject, bracketOperatorDispatch) {
     var obj = basicUtils.copyValue(nil)
+    delete obj.primitive
     obj.operators['['] = {
         type:'binary', order:0, scope: 0, boundObject:boundObject, dispatch: [bracketOperatorDispatch]
     }
@@ -162,7 +192,7 @@ zero.privileged.str = FunctionObj(zero, {parameters: [], fn: function() {
 
 // define hashcode and str as a function for now (when I figure out how to make accessors, we'll use that instead)
 emptyString.privileged.hashcode = FunctionObj(emptyString, {parameters: [], fn: function() {
-    var primitiveHashcode = getJsStringKeyHash('s'+this.this.primitive) // the 's' is for string - to distinguish it from the hashcode for numbers
+    var primitiveHashcode = getJsStringKeyHash('s'+this.this.primitive.string) // the 's' is for string - to distinguish it from the hashcode for numbers
     return NumberObj(primitiveHashcode,1)
 }})
 emptyString.privileged.str = FunctionObj(emptyString, {parameters: [], fn: function() {
@@ -175,7 +205,7 @@ emptyString.privileged.str = FunctionObj(emptyString, {parameters: [], fn: funct
 // contains the private variable `primitive` (in scope[0]) that holds the primitive string
 var StringObj = exports.StringObj = function(primitiveString) {
     var result = basicUtils.copyValue(emptyString)
-    result.primitive = primitiveString
+    result.primitive = {string:primitiveString}
     return result
 }
 
@@ -190,14 +220,14 @@ var NumberObj = exports.NumberObj = function(primitiveNumerator, primitiveDenomi
     return result
 }
 
-// returns the lima object the variable holds
-var Variable = exports.Variable = function(scope, primitiveStringName) {
-    return scope.get(primitiveStringName)
-}
 
 // variable definitions that depend on the above
 
 var one = exports.one = NumberObj(1,1)
+var True = exports.True = NumberObj(1,1)
+True.name = 'true'
+var False = exports.False = NumberObj(0,1)
+False.name = 'false'
 
 var wout = basicUtils.copyValue(emptyObj)
 wout.operators['['] = {

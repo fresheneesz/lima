@@ -3,9 +3,8 @@ var util = require("util")
 var deepEqual = require("deep-equal")
 var colors = require("colors/safe")
 
+var limaParser = require("./src/parser")
 var tests = require("./tests/parserTests")
-
-var limaParser = require("./src/limaParser3")
 
 var tests = {
     indentedWs: tests.indentedWsTests,
@@ -15,30 +14,14 @@ var tests = {
     float: tests.floatTests,
     number: tests.numberTests,
     rawString: tests.stringTests,
+    basicOperator: tests.operatorTests,
     binaryOperand: tests.binaryOperandTests,
     rawExpression: tests.rawExpressionTests,
     superExpression: tests.superExpressionTests,
     nonMacroExpressionContinuation: tests.nonMacroExpressionContinuationTests,
     objectDefinitionSpace: tests.objectDefinitionSpaceTests,
     object: tests.objectTests,
-    module: [
-       //  {files:[
-       //     'whitespaceAndComments',
-       //     'numbers',
-       //     'strings',
-       //     'objectDefinitionSpace',
-       //     'objects',
-       //     'operators',
-       //     'moduleSpace',
-       //     'customFunctions',
-       //     // 'fuck'
-       //  ]},
-       // {content:{
-       //     emptyFile: '',
-       //     unaryAmbiguity1: '3!2',
-       //     unterminatedBracketOperator2: '{}[3'
-       // }}
-    ]
+    module: tests.moduleTests
 }
 
 var normalizedTests = []

@@ -1,5 +1,5 @@
 
-var parser = require('./limaParser3')
+var parser = require('./parser')
 var evaluate = require('./evaluate')
 var coreLevel1 = require('./coreLevel1')
 
@@ -10,7 +10,7 @@ module.exports = function(sourceString, args) {
     var coreLevel1Scope = coreLevel1.makeCoreLevel1Scope()
 
     var moduleContext = coreLevel1.limaObjectContext(coreLevel1Scope)
-    evaluate.resolveObjectSpace(moduleContext, moduleAst.expressions, 0)
+    evaluate.resolveObjectSpace(moduleContext, moduleAst.expressions, 0, true, true)
 
     var module = moduleContext.this
     // if(module.meta.public.main !== undefined) {
@@ -19,5 +19,7 @@ module.exports = function(sourceString, args) {
     //     })
     //     module.privileged.main(mainScope, [args])
     // }
+
+    return module
 }
 

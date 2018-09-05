@@ -7,6 +7,7 @@ var copyValue = exports.copyValue = function(value) {
 }
 var overwriteValue = exports.overwriteValue = function(destination, source) {
     //destination.interfaces = value.interfaces
+    destination.primitive = source.primitive
     destination.elements = source.elements
     destination.destructors = source.destructors.slice(0)
     destination.privileged = copyScope(source.privileged, destination, source)
@@ -50,3 +51,12 @@ var overwriteValue = exports.overwriteValue = function(destination, source) {
             }
         }
     }
+
+
+exports.strMult = function(str, multiplier) {
+	var result = [];
+	for(var n=0; n<multiplier; n++)
+	    result.push(str)
+
+	return result.join('')
+}

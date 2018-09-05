@@ -23,8 +23,10 @@ var Scope = exports.Scope = function(upperScope, innerScope) {
     }
 
 // returns a context scope - the same type of value `evaluate.superExpression` takes as its `scope` parameter
-var ContextScope = exports.ContextScope = function(getFromScope, setInScope) {
-    return {get:getFromScope, set:setInScope}
+// getFromScope(name)
+// setOnScope(name, value, private)
+var ContextScope = exports.ContextScope = function(getFromScope, setOnScope) {
+    return {get:getFromScope, set:setOnScope}
 }
 
 var blockCallingScope = exports.blockCallingScope = {
@@ -43,9 +45,10 @@ var blockCallingScope = exports.blockCallingScope = {
     // get(name) - Gets a value from the scope.
     // set(name, value, private) - Declares and/or sets a variable in the scope.
 // operator - A string representing the operator.
-// operands - Will have one element for unary operations, and two for binary operations. Each element is a lima object,
-           // except that for non-macro bracket operators, the first operand should be the main object,
-           // and the second operand should be an `arguments` object of the same type `getOperatorDispatch` takes.
+// operands - Will have one element for unary operations, and two for binary operations.
+    // Each element is a lima object, with the following exception:
+        // For non-macro bracket operators, the first operand should be the main object, and the second operand should be
+            // an `arguments` object of the same type `getOperatorDispatch` takes.
 // operatorType - Either 'prefix', 'postfix', or undefined (for binary)
 var callOperator = exports.callOperator = function(callingScope, operator, operands, operatorType) {
     // todo: implement chaining and multiple dispatch
@@ -72,10 +75,28 @@ var callOperator = exports.callOperator = function(callingScope, operator, opera
             }
             var thisContext = operands[0]
             var dispatchInfo = getOperatorDispatch(operands[0], operator, bracketArgs)
+            
+        } else if(isAssignmentOperator({type:'operator', operator:operator})) {
+            if(operator !== '=') {
+                var baseOperator = operator.slice(0, -1)
+                var baseResult = callOperator(callingScope, baseOperator, operands) // execute operator1
+                operands = [operands[0], baseResult]
+            }
+
+            var rvalueDispatchInfo = getOperatorDispatch(operands[1], operator, {args:[], unnamedCount: 0})
+            var rvalueContext = {this:operands[1], callingScope: callingScope}
+            var rvalue = applyOperator(rvalueDispatchInfo.dispatchItem.fn, rvalueContext, [])
+
+            var lvalueDispatchInfo = getOperatorDispatch(operands[0], operator, {args:[rvalue], unnamedCount: 1})
+            var dispatchInfo = lvalueDispatchInfo
+            var thisContext = operands[0]
+
         } else { // normal binary operator
-            var dispatchInfo1 = getOperatorDispatch(operands[0], operator, operands)
-            var dispatchInfo2 = getOperatorDispatch(operands[0], operator, operands)
-            if(dispatchInfo1 !== undefined && dispatchInfo2 !== undefined) {
+            var dispatchInfo1 = getOperatorDispatch(operands[0], operator, {args:operands, unnamedCount: 2})
+            var dispatchInfo2 = getOperatorDispatch(operands[0], operator, {args:operands, unnamedCount: 2})
+            if(dispatchInfo1 !== undefined && dispatchInfo2 !== undefined
+               && operands[0].operators[operator].dispatch !== operands[1].operators[operator].dispatch
+            ) {
                 throw Error("Can't resolved conflicting operators") // todo: weak dispatch
             }
 
@@ -95,13 +116,16 @@ var callOperator = exports.callOperator = function(callingScope, operator, opera
     }
 
     var context = {this:thisContext, callingScope: callingScope}
-    var returnValue = fn.apply(context, args)
-    if(returnValue === undefined) {
-        return coreLevel1.nil
-    } else {
-        return returnValue
-    }
+    return applyOperator(fn, context, args)
 }
+    function applyOperator(fn, context, args) {
+        var returnValue = fn.apply(context, args)
+        if(returnValue === undefined) {
+            return coreLevel1.nil
+        } else {
+            return returnValue
+        }
+    }
 
 // Returns info (see below) about the first dispatch element who's parameters match the args
 // args is an object with the following properties:
@@ -110,13 +134,13 @@ var callOperator = exports.callOperator = function(callingScope, operator, opera
 // returns an object with the following properties:
     // dispatchItem - the matching dispatch item
     // normalizedArgs - the args normalized into an argument list without only unnamed parameters, resolving any defaults.
-var getOperatorDispatch = exports.getOperatorDispatch = function(object, operator, args) {
+function getOperatorDispatch(object, operator, args) {
     var operatorInfo = object.operators[operator]
     var dispatchList = operatorInfo.dispatch
     for(var n=0; n<dispatchList.length; n++) {
         // todo: named parameters and defaults
         var dispatchItem = dispatchList[n]
-        var normalizedArgs = getNormalizedArgs(dispatchItem, args)
+        var normalizedArgs = getNormalizedArgs(object, dispatchItem, args)
         if(normalizedArgs !== undefined) { // if the args match the dispatchItem's param list
             return {
                 dispatchItem: dispatchItem,
@@ -128,7 +152,7 @@ var getOperatorDispatch = exports.getOperatorDispatch = function(object, operato
 }
     // returns a normalized argument list if the args match the dispatchItem, or undefined if they don't match
     // args - Should be the same form as passed into getOperatorDispatch
-    function getNormalizedArgs(dispatchItem, args) {
+    function getNormalizedArgs(object, dispatchItem, args) {
         var argsToUse = [], paramIndex=0
         for(var n=0; n<dispatchItem.parameters.length; n++) {
           var param = dispatchItem.parameters[n]
@@ -147,7 +171,13 @@ var getOperatorDispatch = exports.getOperatorDispatch = function(object, operato
               return // doesn't match the dispatch list
           }
 
-          if(param.type(arg)) {
+          if(param.name === 'this') {
+              var matches = arg === object
+          } else {
+              var matches = param.type(arg)
+          }
+
+          if(matches) {
                argsToUse.push(arg)
           } else {
                return // doesn't match the dispatch list
@@ -181,16 +211,17 @@ var callMacro = exports.callMacro = function(obj, context, args) {
 }
 
 
-var setProperty = exports.setProperty = function(obj, key, value) {
+// key and value are both lima values
+var setProperty = exports.setProperty = function(context, key, value) {
     var hashcode = getHashCode(key)
-    var items = obj.properties[hashcode]
+    var items = context.this.properties[hashcode]
     if(isNil(value)) {
         if(items !== undefined) {
             delete items[key]
         }
     } else {
         if(items === undefined) {
-            items = obj.properties[hashcode] = []
+            items = context.this.properties[hashcode] = []
         }
 
         items.push({key:key, value:value})
@@ -198,8 +229,9 @@ var setProperty = exports.setProperty = function(obj, key, value) {
 }
 
 // returns the value at the passed key in the obj or undefined if no value exists at that key
-var getProperty = exports.getProperty = function(context, obj, key) {
-    var items = obj.properties[getHashCode(key)]
+// key is a lima value
+var getProperty = exports.getProperty = function(context, key) {
+    var items = context.this.properties[getHashCode(key)]
     if(items === undefined)
         return undefined
 
@@ -231,8 +263,8 @@ var getHashCode = exports.getHashCode = function(obj) {
 // gets the primitive string representation of an object
 var getPrimitiveStr = exports.getPrimitiveStr = function(context, obj) {
     while(true) {
-        if(obj.primitive !== undefined && typeof(obj.primitive) === 'string') {
-            return obj.primitive
+        if(obj.primitive !== undefined && obj.primitive.string !== undefined) {
+            return obj.primitive.string
         }
 
         var hashcodeFunction = getThisPrivilegedMember(blockCallingScope, obj, coreLevel1.StringObj('str'))
@@ -247,20 +279,7 @@ var getThisPrivilegedMember = exports.getThisPrivilegedMember = function(calling
 }
 
 var isNil = exports.isNil = function(x) {
-    if(Object.keys(x.privileged).length !== 0
-       || Object.keys(x.properties).length !== 0
-       || Object.keys(x.operators) !== Object.keys(coreLevel1.nil.operators).length
-    ) {
-        return false
-    }
-
-    for(var k in x.operators) {
-        if(x.operators[k] !== coreLevel1.nil.operators[k])
-            return false
-    }
-
-    // else
-    return true
+    return x.primitive !== undefined && x.primitive.nil === true
 }
 
 exports.isMacro = function(x) {
@@ -271,9 +290,61 @@ exports.hasProperties = function(obj) {
     return Object.keys(obj.properties).length > 0
 }
 
-exports.appendElement = function(obj, value) {
-    setProperty(obj, coreLevel1.NumberObj(obj.elements, 1), value)
-    obj.elements++
+exports.appendElement = function(context, value) {
+    setProperty(context, coreLevel1.NumberObj(context.this.elements, 1), value)
+    context.this.elements++
+}
+
+
+// functions for testing propositions about ast nodes
+
+// Returns true if the passed `operator` has the operator type `opType` for `valueObject`
+var hasOperatorOfType = exports.hasOperatorOfType = function(valueObject, operator, opType) {
+    if(opType in {prefix:1,postfix:1} && operator.opType !== opType) {
+        return false // even if it has this operator as a prefix/postfix, the spacing might not be right for it
+    }
+    if(!isNodeType(operator, 'operator')) {
+        return false
+    }
+    if(operator.operator in {':':1,'::':1}) {
+        return opType === 'binary'
+    }
+
+    var opInfo = valueObject.operators[operator.operator]
+    return opInfo && opInfo.type === opType
+}
+var isOperatorOfType = exports.isOperatorOfType = function(x, opType) {
+    return isNodeType(x, 'operator') && x.opType === opType
+}
+var isAssignmentOperator = exports.isAssignmentOperator = function(x) {
+    return isNodeType(x, 'operator') && x.operator.match(/=+$/)[0] === '=' // the operator ends in a single =
+}
+var isReferenceAssignmentOperator = exports.isReferenceAssignmentOperator = function(x) {
+    return isNodeType(x, 'operator') && x.operator.match(/^~*>$/)  // many ~ and a single >
+}
+var isDereferenceOperator = exports.isDereferenceOperator = function(x) {
+    return isNodeType(x, 'operator') && (x.operator === '.' || isBracketOperator(x, '['))
+}
+// returns true if the operator consists only of `op` characters, eg ']]]]]]' or '[[[['
+// op - Should be either '[' or ']'
+var isBracketOperator = exports.isBracketOperator = function(x, op) {
+    if(op === '[') {
+        var matcher = new RegExp("\\[*")
+    } else {
+        var matcher = new RegExp("]*")
+    }
+    
+    return isNodeType(x, 'operator')
+           && x.operator.match(matcher)[0].length === x.operator.length
+}
+var isSpecificOperator = exports.isSpecificOperator = function(x, operator) {
+    return isNodeType(x, 'operator') && x.operator === operator
+}
+var isNodeType = exports.isNodeType = function isNodeType(x, type) { // returns true if the expression item is an AST node of the given type
+    return isNode(x) && x.type === type
+}
+var isNode = exports.isNode = function(x) { // returns true if the expression item is an AST node
+    return x.type in {superExpression:1, rawExpression:1, operator:1,number:1,string:1,variable:1,object:1}
 }
 
 

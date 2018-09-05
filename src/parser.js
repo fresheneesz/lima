@@ -92,13 +92,14 @@ var L = P.createLanguage({scope:{}}, {
             })
         })
     },
-        // represents a binary operator, then a bainary operand (with potential prefix and postfix operators)
-        // returns an array of superexpression parts
+        // represents a binary operator, then a binary operand (with potential prefix and postfix operators)
+        // returns an array of superExpression parts
         binaryOperatorAndOperand: function(){
             return seqObj(
                 alt(this.indentedWs().many(),
                     this.expressionEndLine()),
-                ['operator', alt(this.basicOperator(),
+                ['operator', alt(
+                    this.basicOperator(),
                     this.equalsOperator(),
                     this.colonOperator(),
                     this.openingBrace(),
@@ -143,11 +144,12 @@ var L = P.createLanguage({scope:{}}, {
         // parses a value with potential unary operators
         // returns an array of superExpression parts
         binaryOperand: function() {
-            return seq(
-                this.binaryOperandPrefixAndAtom(),
-                this.binaryOperandPostfix()
+            return seqObj(
+                ['binaryOperandPrefixAndAtom', this.binaryOperandPrefixAndAtom()],
+                ['binaryOperandPostfix', this.binaryOperandPostfix()],
+                ['closingBraces', this.closingBraces().atMost(1)]
             ).map(function(v) {
-                return v[0].concat(v[1])
+                return v.binaryOperandPrefixAndAtom.concat(v.binaryOperandPostfix).concat(v.closingBraces)
             })
         },
             // returns an array of superExpression parts
@@ -189,7 +191,7 @@ var L = P.createLanguage({scope:{}}, {
                 }).atMost(1).map(function(v) {
                     var result = []
                     if(v.length === 1) {
-                        if(v[0].operator in {':':1,'=':1})
+                        if(v[0].operator in {':':1, '::':1,'=':1})
                             v[0].opType = 'binary'
                         else
                             v[0].opType = 'postfix'
@@ -201,13 +203,20 @@ var L = P.createLanguage({scope:{}}, {
             },
 
     // evaluates the string of a rawExpression once it has been determined that the previous item was not a macro
-    // returns an array of superExpression parts
+    // returns an object with the properties:
+        // current - An array of superExpression parts representing the continuation of the current expression
+        // next - A list of super expressions that follow the current expression
     nonMacroExpressionContinuation: function() {
         return seqObj(
             ['postfix', this.binaryOperandPostfix()],
-            ['binaryOperatorAndOperands', this.binaryOperatorAndOperand().many()]
+            ['closingBraces', this.closingBraces().atMost(1)],
+            ['binaryOperatorAndOperands', this.binaryOperatorAndOperand().many()],
+            ['superExpressions', this.superExpression().many()],
+            this.ws().many()
         ).map(function(v) {
-            return v.postfix.concat(flatten(v.binaryOperatorAndOperands))
+            return {current: v.postfix.concat(v.closingBraces).concat(flatten(v.binaryOperatorAndOperands)),
+                    next: v.superExpressions
+            }
         })
     },
 
@@ -259,7 +268,7 @@ var L = P.createLanguage({scope:{}}, {
     },
 
     colonOperator: function() {
-        return str(":").map(function(v) {
+        return alt("::", ":").map(function(v) {
             return {type:'operator', operator:v} // opType will get filled in upstream with 'prefix', 'postfix', or 'binary'
         })
     },
@@ -279,10 +288,21 @@ var L = P.createLanguage({scope:{}}, {
     // any operator excluding ones that end in equals and brackets
     // returns an operator node
     basicOperator: function() {
-        return alt(
-            this.basicOperatorWithoutEquals(),
-            seq('=',this.basicOperatorWithoutEquals()).atLeast(1)
-        ).tie()
+        return seq(
+            alt(
+                this.basicOperatorWithoutEquals(),
+                seq(
+                    str('=').atLeast(1),
+                    this.basicOperatorWithoutEquals()
+                ),
+                str('=').atLeast(2)
+            ).atLeast(1)
+        ).tie().chain(function(v) {
+            if(v in {':':1,'::':1})
+                return fail()
+            else
+                return succeed(v)
+        })
         .desc("an operator")
         .map(function(v) {
             return {type:'operator', operator:v} // opType will get filled in upstream with 'prefix', 'postfix', or 'binary'
@@ -291,7 +311,7 @@ var L = P.createLanguage({scope:{}}, {
         basicOperatorWithoutEquals: function() {
             return alt(
                 alt(
-                    one('!$%^&*-+/|\\/<>.,?!'),
+                    one('!$%^&*-+/|\\/<>.,?!:'),
                     seq(one("@#"),
                         notFollowedBy(this.rawString()) // since strings are modified by the @ and # symbols
                     ).map(function(v){
@@ -309,9 +329,7 @@ var L = P.createLanguage({scope:{}}, {
 
     openingBrace: function() {
         return alt(this.braceOperator(
-            alt(str('['),
-                str('[[')
-            )
+            str('[').atLeast(1).tie()
         ))
     },
 
@@ -641,14 +659,6 @@ function charToNumber(char) {
     } else { // A <= c&&c <= Z
         return c-A+10
     }
-}
-
-function strMult(str, multiplier) {
-	var result = [];
-	for(var n=0; n<multiplier; n++)
-	    result.push(str)
-
-	return result.join('')
 }
 
 // end
