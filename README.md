@@ -10,10 +10,10 @@ These are all under the `src/` directory.
 
 * **interpreter.js** - The entrypoint for the interpreter. Takes a string and executes it as a lima program.
 * **coreLevel1.js** - Contains the unsimplifiable set of core lima constructs. This includes some (incomplete) basic values (like `nil`, `{}`, `0`, and `""`) as well as some functions that return lima objects when given the AST node for that object. The incomplete values are completed by coreLevel2.lima .
-* **coreLevel2.lima** - Contains lima code that builds the full core module scope. It completes the incomplete core constructs from `coreLevel1.js` and adds any other core constructs that are fully definable in lima based on the constructs in `coreLevel1.js`.
+* **coreLevel2.lima** - Contains lima code that completes the incomplete core constructs from `coreLevel1.js`. For example, while `coreLevel1.js` defines object literals, things like the `str` member or the `has` method are defined in `coreLevel2.lima`. Core level 1 and core level 2 taken together have everything in the spec other than the "standard library" objects.
 * **evaluate.js** - Contains the logic around evaluating operators on lima objects, and evaluting superExpressions and objects.
 * **utils.js** - Contains utility functions mostly around interacting with lima objects, composing lima objects, and higher-level functions for evaluating lima objects.
-* **basicUtils.js** - Utilities that don't depend on any other module. Currently only contains `copyValue`. Existsto avoid a circular dependency.
+* **basicUtils.js** - Utilities that don't depend on any other module. Currently only contains `copyValue`. Exists to avoid a circular dependency.
 * **parser.js** - Contains the tokenization parser that parses a lima file into AST nodes (described below). During the first pass, usually this will only partially parse the file since the parser won't have scope context to figure out if variables (and other values) are macros or not. Parser functions can also be called with scope context at later points (from evalute.js) in order to further parse `rawExpression`s.
 
 #### Test files
@@ -21,6 +21,7 @@ These are all under the `src/` directory.
 * **testParser.js** - Runs unit tests of `parser.js`.
 	* **parserTests.js** - A list of tests run by `testParser`.
 * **testInterpreter.js** - Runs unit tests of `interpreter.js`
+	* **interpreterTests.js** - A list of tests run by `testInterpreter`.
 
 #### Execution files
 
@@ -67,30 +68,48 @@ Core level 1 are all the constructs required for implementing the rest of the li
 2. Run each `superExpression` of the module, sequentially. `evalute.js` will further parse remaining rawExpressions as they come up.
 3. After every top-level statement in the module has run, run the module's entrypoint if there is one.
 
-Todo:
-* var type
+
+#### Step 2: Transpiler
+
+1. Parse the source with `parser.js` into an AST
+2. Compile the AST into a set of javascript code.
+
+#### Step 3: Add analyzation and optimization steps
+
+1. Parse the source with `parser.js` into an AST
+3. Run all the lima-analyzers
+4. Run all the lima-optimizers
+2. Compile the AST into a set of javascript code.
+
+#### Step 4: Compile into LLVM IR, use a standard LLVM backend to create the final output
+
+#### Step 5: Translate optimizers from step 2 into LLVM optimizers
+
+## Core Level 2 Roadmap
+
+Core level 2 completes the core of lima left incomplete by core level 1 by implementing those constructs in lima code that only depends on core level 1 constructs.
+
+## Status
+
+#### Core Level 1 Todo
+
+* variable declaration with a type
 * error about undeclared variables
 * prevent _ from being declared or used outside the context of an object member initialization
 * error for declared variables with the same first character and case but are not case-insensitive-unique after the first character
 * entrypoint command line args
 * entrypoint signals
 * Const hoisting - Add a new initial step for each function scope, which looks for any hoistable const expressions to evaluate first.
-* desctructuring assignment
+* destructuring assignment
 * `...`
 * `~` (etc)
 * `~>` (etc)
 * Operator overloading
-* compound assignment operators (+= -= *= etc)
 * operator chaining
-* objects
-  * `[= ]` (etc)
 * functions
 	* function creation
-	* default parameter  values
 	* self member access
-	* self.x parameters
-	* destructuring assignment in parameters
-	* ! (function type operator)
+    * destructuring assignment in parameters
 	* ==
 	* sideEffectLess
 	* functional
@@ -99,11 +118,170 @@ Todo:
 	* withCallingScope
 	* thisfn
 	* callingScope
-	*  
+	* parse
+	* paramType
+	* condType
+* macro
+* types
+ * &
+ * $
+ * !$
+ * ?
+ * values
+* interfaces
+ * automatic interface promotion
+ * cast
+* attributes
+ * attributes crossing asynchronous boundaries
+* number postfixes
+* operator chaining
+* general operators 
+ * ??
+ * ~
+ * ~>
+ * ...
+* nil
+ * =
+ * ==
+* object literals
+ * values with implicit keys (elements)
+ * `:` with literal valued keys
+ * `:` with named keys
+ * `::` with expressio keys
+ * implicitly declared privileged members (with var type)
+ * override
+ * `_`
+ * require self for members that alias a variable from an upper scope
+ * operators
+  * `.`
+  * ==
+  * ! (interface operator)
+  * `[ ]`
+  * [[ ]]
+ * members
+  * len
+  * peeklen
+  * keys
+  * iterlist
+ * special constructs
+  * self
+  * this
+  * static
+  * target
+ * methods
+  * tslice
+* numbers
+ * 00 (infinity)
+ * error
+ * operators
+  * +
+  * -
+  * *
+  * /
+  * %
+  * ^
+  * ==
+  * <
+  * >  
+* strings
+ * single quote strings
+ * double quote strings
+ * triple quote strings
+ * grave accent strings (`)
+ * `#` quote
+ * @ newline
+ * % extended space
+ * ! LimaEncoding codepoint
+ * str
+ * code 
+ * name
+* core library
+ * types
+  * var
+  * string
+   * chars
+   * encodings
+  * type
+   * set
+   * cond
+  * probability
+  * list
+ * core objects
+  * selectively `mix`ing in the standardLibrary
+  * contin
+  * ref
+   * ~
+   * ~>
+  * weakRef
+  * meta
+  * rand
+  * arb
+  * con
+  * process
+   * `[ ]`
+  * file
+  * dir
+  * system
+  * unixtime
+  * adr
+  * udp
+  * tcp
+  * inputs
+  * keyboard
+  * touch
+ * core functions
+  * exit
+ * core macros
+  * ready
+  * outReady
+  * const
+  * if
+  * while
+  * throw
+  * try
+  * atry
+  * rawthread
+  * atomic
+  * change
+  * override
+  * future
+  * jump
+  * assert
+  * optimize
+ * core attributes
+  * uncaughtExceptionHandler
+  * infoHandler
+  * encodingFail
+  * exitFn
+  * attributes with basic defaults:
+   * ready
+   * outReady
+   * allowMemberOverride
+  * ensure these objects are using their respective attributes:
+   * file
+   * dir
+   * system
+   * dns
+   * socket
+   * ipv4
+   * udp
+   * tcp
+   * http
+   * https
+   * inputs
+ * core character encodings
+  * bits
+  * limaEnc8
+  * limaEnc16
+  * utf8
+  * ASCII
+  * utf32
+  * utf16
+  * dosText
+  * url
 
-LEFT OFF AT FUNCTIONS AND MACROS
+#### Core Level 1 Done:
 
-Done:
 * basic token parser
 * Built core structure for operator and macro evaluation
 * indent delimited blocks
@@ -114,38 +292,121 @@ Done:
 * objects
   * `:` and `::`
 
-#### Step 2: Transpiler
 
-1. Parse the source with `parser.js` into an AST
-2. Compile the AST into a set of javascript code.
+#### Core Level 2 Todo:
 
 
-#### Step 2: Add analyzation and optimization steps
+* nil
+ * !=
+ * `?`
+ * `|` (the nil-coalescence operator)
+ * !??
+* functions
+ * default parameter values
+ * self.x parameters
+ * destructuring assignment in parameters
+ * fn! (basic function type)
+ * [[ ]]
+* object literals
+ * operators
+  * `+` (matrix and vector addition)
+  * `-` (matrix and vector subtraction)
+  * `*` (matrix-to-matrix product)
+  * `*` (scaler matrix product)
+  * `/` (product of inverse matricies)
+  * `/` (scaler product of an inverse matrix)
+  * compound assignment operators += -= *= /= &= $= !$= &&= $$= !$$= |= ||=
+  * `[= ]` (etc)
+  * `.=`
+  * &
+  * $
+  * !$
+  * &&
+  * $$
+  * !$$
+  * <>
+  * !<>
+  * <
+  * >
+  * `<=`
+  * `>=`
+  * << >> <<= >>= (key aware comparisons)
+  * |
+  * ||
+ * members
+  * str
+  * hashcode
+ * methods
+  * has
+  * ins
+  * cat
+  * rm
+  * find
+  * split
+  * replace
+  * dot
+  * cross
+  * map
+  * join
+  * scan
+  * split
+  * all
+  * group
+  * rm[[
+  * ins[[
+  * sort
+  * sortus
+  * sort[[
+  * sortus[[
+* numbers
+ * str
+ * bits
+ * sign
+ * ones
+ * twos
+ * mod
+ * operators
+  * //
+  * .. (binary)
+  * ...
+  * &
+  * $
+  * !$
+  * `<=`
+  * `>=`
+  * unary:
+   * -
+   * `++`
+   * `--`
+   * !
+* strings
+ * lower
+ * upper
+ * operators
+  * `,` (concatenation)
+  * <
+  * >
+  * `<=`
+  * `>=`
+  * `..`
+* core library
+ * types
+  * bits
+* core objects
+  * chan
 
-1. Parse the source with `parser.js` into an AST
-3. Run all the lima-analyzers
-4. Run all the lima-optimizers
-2. Compile the AST into a set of javascript code.
 
-#### Step 3: Compile into LLVM IR, use a standard LLVM backend to create the final output
+#### Core Level 2 Done:
 
-#### Step 4: Translate optimizers from step 2 into LLVM optimizers
 
-## Core Level 2 Roadmap
 
-Core level 2 completes the core of lima left incomplete by core level 1 by implementing those constructs in lima code that only depends on core level 1 constructs.
-
-Todo:
-* `?`
-* `|` (the nil-coalescence operator)
-
-Done:
 
 ## Ideas and unprioritized todo
 
 
 ## Change log
 
+* 0.0.7 - 1
 * 0.0.6 - 2018-09-04
 	* Adding windows batch file for running lima programs
 	* Adding unit tests for the interpreter.
