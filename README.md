@@ -10,7 +10,7 @@ These are all under the `src/` directory.
 
 * **interpreter.js** - The entrypoint for the interpreter. Takes a string and executes it as a lima program.
 * **coreLevel1.js** - Contains the unsimplifiable set of core lima constructs. This includes some (incomplete) basic values (like `nil`, `{}`, `0`, and `""`) as well as some functions that return lima objects when given the AST node for that object. The incomplete values are completed by coreLevel2.lima .
-* **coreLevel2.lima** - Contains lima code that completes the incomplete core constructs from `coreLevel1.js`. For example, while `coreLevel1.js` defines object literals, things like the `str` member or the `has` method are defined in `coreLevel2.lima`. Core level 1 and core level 2 taken together have everything in the spec other than the "standard library" objects.
+* **coreLevel2.lima** - Contains lima code that completes the incomplete core constructs from `coreLevel1.js`. For example, while `coreLevel1.js` defines object literals, things like the `str` member or the `has` method for objects are defined in `coreLevel2.lima`. Core level 1 and core level 2 taken together have everything in the spec other than the "standard library" objects.
 * **evaluate.js** - Contains the logic around evaluating operators on lima objects, and evaluting superExpressions and objects.
 * **utils.js** - Contains utility functions mostly around interacting with lima objects, composing lima objects, and higher-level functions for evaluating lima objects.
 * **basicUtils.js** - Utilities that don't depend on any other module. Currently only contains `copyValue`. Exists to avoid a circular dependency.
