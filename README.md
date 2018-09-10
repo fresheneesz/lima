@@ -174,15 +174,15 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * 00 (infinity)
   * error
   * operators
-    * +
-    * -
-    * *
-    * /
-    * %
-    * ^
-    * ==
-    * <
-    * >  
+    * `+`
+    * `-`
+    * `*`
+    * `/`
+    * `%`
+    * `^`
+    * `==`
+    * `<`
+    * `>`
 * strings
   * single quote strings
   * double quote strings
