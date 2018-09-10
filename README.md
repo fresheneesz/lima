@@ -123,162 +123,162 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 	* condType
 * macro
 * types
- * &
- * $
- * !$
- * ?
- * values
+  * &
+  * $
+  * !$
+  * ?
+  * values
 * interfaces
- * automatic interface promotion
- * cast
+  * automatic interface promotion
+  * cast
 * attributes
- * attributes crossing asynchronous boundaries
+  * attributes crossing asynchronous boundaries
 * number postfixes
 * operator chaining
 * general operators 
- * ??
- * ~
- * ~>
- * ...
+  * ??
+  * ~
+  * ~>
+  * ...
 * nil
- * =
- * ==
+  * =
+  * ==
 * object literals
- * values with implicit keys (elements)
- * `:` with literal valued keys
- * `:` with named keys
- * `::` with expressio keys
- * implicitly declared privileged members (with var type)
- * override
- * `_`
- * require self for members that alias a variable from an upper scope
- * operators
-  * `.`
-  * ==
-  * ! (interface operator)
-  * `[ ]`
-  * [[ ]]
- * members
-  * len
-  * peeklen
-  * keys
-  * iterlist
- * special constructs
-  * self
-  * this
-  * static
-  * target
- * methods
-  * tslice
-* numbers
- * 00 (infinity)
- * error
- * operators
-  * +
-  * -
-  * *
-  * /
-  * %
-  * ^
-  * ==
-  * <
-  * >  
-* strings
- * single quote strings
- * double quote strings
- * triple quote strings
- * grave accent strings (`)
- * `#` quote
- * @ newline
- * % extended space
- * ! LimaEncoding codepoint
- * str
- * code 
- * name
-* core library
- * types
-  * var
-  * string
-   * chars
-   * encodings
-  * type
-   * set
-   * cond
-  * probability
-  * list
- * core objects
-  * selectively `mix`ing in the standardLibrary
-  * contin
-  * ref
-   * ~
-   * ~>
-  * weakRef
-  * meta
-  * rand
-  * arb
-  * con
-  * process
-   * `[ ]`
-  * file
-  * dir
-  * system
-  * unixtime
-  * adr
-  * udp
-  * tcp
-  * inputs
-  * keyboard
-  * touch
- * core functions
-  * exit
- * core macros
-  * ready
-  * outReady
-  * const
-  * if
-  * while
-  * throw
-  * try
-  * atry
-  * rawthread
-  * atomic
-  * change
+  * values with implicit keys (elements)
+  * `:` with literal valued keys
+  * `:` with named keys
+  * `::` with expressio keys
+  * implicitly declared privileged members (with var type)
   * override
-  * future
-  * jump
-  * assert
-  * optimize
- * core attributes
-  * uncaughtExceptionHandler
-  * infoHandler
-  * encodingFail
-  * exitFn
-  * attributes with basic defaults:
-   * ready
-   * outReady
-   * allowMemberOverride
-  * ensure these objects are using their respective attributes:
-   * file
-   * dir
-   * system
-   * dns
-   * socket
-   * ipv4
-   * udp
-   * tcp
-   * http
-   * https
-   * inputs
- * core character encodings
-  * bits
-  * limaEnc8
-  * limaEnc16
-  * utf8
-  * ASCII
-  * utf32
-  * utf16
-  * dosText
-  * url
+  * `_`
+  * require self for members that alias a variable from an upper scope
+  * operators
+    * `.`
+    * ==
+    * ! (interface operator)
+    * `[ ]`
+    * [[ ]]
+  * members
+    * len
+    * peeklen
+    * keys
+    * iterlist
+  * special constructs
+    * self
+    * this
+    * static
+    * target
+  * methods
+    * tslice
+* numbers
+  * 00 (infinity)
+  * error
+  * operators
+    * +
+    * -
+    * *
+    * /
+    * %
+    * ^
+    * ==
+    * <
+    * >  
+* strings
+  * single quote strings
+  * double quote strings
+  * triple quote strings
+  * grave accent strings (`)
+  * `#` quote
+  * @ newline
+  * % extended space
+  * ! LimaEncoding codepoint
+  * str
+  * code 
+  * name
+* core library
+  * types
+    * var
+    * string
+       * chars
+       * encodings
+    * type
+       * set
+       * cond
+    * probability
+    * list
+  * core objects
+    * selectively `mix`ing in the standardLibrary
+    * contin
+    * ref
+       * ~
+       * ~>
+    * weakRef
+    * meta
+    * rand
+    * arb
+    * con
+    * process
+       * `[ ]`
+    * file
+    * dir
+    * system
+    * unixtime
+    * adr
+    * udp
+    * tcp
+    * inputs
+    * keyboard
+    * touch
+  * core functions
+    * exit
+  * core macros
+    * ready
+    * outReady
+    * const
+    * if
+    * while
+    * throw
+    * try
+    * atry
+    * rawthread
+    * atomic
+    * change
+    * override
+    * future
+    * jump
+    * assert
+    * optimize
+  * core attributes
+    * uncaughtExceptionHandler
+    * infoHandler
+    * encodingFail
+    * exitFn
+    * attributes with basic defaults:
+       * ready
+       * outReady
+    * allowMemberOverride
+    * ensure these objects are using their respective attributes:
+       * file
+       * dir
+       * system
+       * dns
+       * socket
+       * ipv4
+       * udp
+       * tcp
+       * http
+       * https
+       * inputs
+  * core character encodings
+    * bits
+    * limaEnc8
+    * limaEnc16
+    * utf8
+    * ASCII
+    * utf32
+    * utf16
+    * dosText
+    * url
 
 #### Core Level 1 Done:
 
@@ -297,101 +297,101 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 
 
 * nil
- * !=
- * `?`
- * `|` (the nil-coalescence operator)
- * !??
+  * !=
+  * `?`
+  * `|` (the nil-coalescence operator)
+  * !??
 * functions
- * default parameter values
- * self.x parameters
- * destructuring assignment in parameters
- * fn! (basic function type)
- * [[ ]]
+  * default parameter values
+  * self.x parameters
+  * destructuring assignment in parameters
+  * fn! (basic function type)
+  * [[ ]]
 * object literals
- * operators
-  * `+` (matrix and vector addition)
-  * `-` (matrix and vector subtraction)
-  * `*` (matrix-to-matrix product)
-  * `*` (scaler matrix product)
-  * `/` (product of inverse matricies)
-  * `/` (scaler product of an inverse matrix)
-  * compound assignment operators += -= *= /= &= $= !$= &&= $$= !$$= |= ||=
-  * `[= ]` (etc)
-  * `.=`
-  * &
-  * $
-  * !$
-  * &&
-  * $$
-  * !$$
-  * <>
-  * !<>
-  * <
-  * >
-  * `<=`
-  * `>=`
-  * << >> <<= >>= (key aware comparisons)
-  * |
-  * ||
- * members
-  * str
-  * hashcode
- * methods
-  * has
-  * ins
-  * cat
-  * rm
-  * find
-  * split
-  * replace
-  * dot
-  * cross
-  * map
-  * join
-  * scan
-  * split
-  * all
-  * group
-  * rm[[
-  * ins[[
-  * sort
-  * sortus
-  * sort[[
-  * sortus[[
+  * operators
+    * `+` (matrix and vector addition)
+    * `-` (matrix and vector subtraction)
+    * `*` (matrix-to-matrix product)
+    * `*` (scaler matrix product)
+    * `/` (product of inverse matricies)
+    * `/` (scaler product of an inverse matrix)
+    * compound assignment operators += -= *= /= &= $= !$= &&= $$= !$$= |= ||=
+    * `[= ]` (etc)
+    * `.=`
+    * &
+    * $
+    * !$
+    * &&
+    * $$
+    * !$$
+    * <>
+    * !<>
+    * <
+    * >
+    * `<=`
+    * `>=`
+    * << >> <<= >>= (key aware comparisons)
+    * |
+    * ||
+  * members
+    * str
+    * hashcode
+  * methods
+    * has
+    * ins
+    * cat
+    * rm
+    * find
+    * split
+    * replace
+    * dot
+    * cross
+    * map
+    * join
+    * scan
+    * split
+    * all
+    * group
+    * rm[[
+    * ins[[
+    * sort
+    * sortus
+    * sort[[
+    * sortus[[
 * numbers
- * str
- * bits
- * sign
- * ones
- * twos
- * mod
- * operators
-  * //
-  * .. (binary)
-  * ...
-  * &
-  * $
-  * !$
-  * `<=`
-  * `>=`
-  * unary:
-   * -
-   * `++`
-   * `--`
-   * !
-* strings
- * lower
- * upper
- * operators
-  * `,` (concatenation)
-  * <
-  * >
-  * `<=`
-  * `>=`
-  * `..`
-* core library
- * types
+  * str
   * bits
+  * sign
+  * ones
+  * twos
+  * mod
+  * operators
+    * //
+    * .. (binary)
+    * ...
+    * &
+    * $
+    * !$
+    * `<=`
+    * `>=`
+    * unary:
+       * -
+       * `++`
+       * `--`
+       * !
+* strings
+  * lower
+  * upper
+  * operators
+    * `,` (concatenation)
+    * <
+    * >
+    * `<=`
+    * `>=`
+    * `..`
+* core library
+  * types
+    * bits
 * core objects
   * chan
 
