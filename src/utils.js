@@ -41,15 +41,16 @@ var blockCallingScope = exports.blockCallingScope = {
 // Utils for interacting with lima objects
 
 // calls an operator on its operands (ie operandArgs)
-// callingScope - An object representing the calling scope. It has the properties:
-    // get(name) - Gets a value from the scope.
-    // set(name, value, private) - Declares and/or sets a variable in the scope.
-// operator - A string representing the operator.
-// operands - Will have one element for unary operations, and two for binary operations.
-    // Each element is a lima object, with the following exception:
-        // For non-macro bracket operators, the first operand should be the main object, and the second operand should be
-            // an `arguments` object of the same type `getOperatorDispatch` takes.
-// operatorType - Either 'prefix', 'postfix', or undefined (for binary)
+// parameters:
+    // callingScope - An object representing the calling scope. It has the properties:
+        // get(name) - Gets a value from the scope.
+        // set(name, value, private) - Declares and/or sets a variable in the scope.
+    // operator - A string representing the operator.
+    // operands - Will have one element for unary operations, and two for binary operations.
+        // Each element is a lima object, with the following exception:
+            // For non-macro bracket operators, the first operand should be the main object, and the second operand should be
+                // an `arguments` object of the same type `getOperatorDispatch` takes.
+    // operatorType - Either 'prefix', 'postfix', or undefined (for binary)
 var callOperator = exports.callOperator = function(callingScope, operator, operands, operatorType) {
     // todo: implement chaining and multiple dispatch
     var operatorInfo1 = operands[0].operators[operator]
@@ -92,24 +93,16 @@ var callOperator = exports.callOperator = function(callingScope, operator, opera
             var thisContext = operands[0]
 
         } else { // normal binary operator
-            var dispatchInfo1 = getOperatorDispatch(operands[0], operator, {args:operands, unnamedCount: 2})
-            var dispatchInfo2 = getOperatorDispatch(operands[0], operator, {args:operands, unnamedCount: 2})
-            if(dispatchInfo1 !== undefined && dispatchInfo2 !== undefined
-               && operands[0].operators[operator].dispatch !== operands[1].operators[operator].dispatch
-            ) {
-                throw Error("Can't resolved conflicting operators") // todo: weak dispatch
-            }
-
-            var dispatchInfo = dispatchInfo1 || dispatchInfo2
-            if(dispatchInfo === dispatchInfo1) {
+            var dispatchInfo = getBinaryDispatch(operands[0], operator, operands[1])
+            if(dispatchInfo.operatorInfo === operands[0].operators[operator]) {
+                var thisContext = operands[0]
+            } else { 
                 var thisContext = operands[1]
-            } else { // dispatchInfo2
-                var thisContext = operands[2]
             }
         }
 
-        if(dispatchInfo.boundObject !== undefined)
-            thisContext = dispatchInfo.boundObject
+        if(dispatchInfo.operatorInfo.boundObject !== undefined)
+            thisContext = dispatchInfo.operatorInfo.boundObject
 
         var fn = dispatchInfo.dispatchItem.fn
         var args = dispatchInfo.normalizedArgs
@@ -127,68 +120,117 @@ var callOperator = exports.callOperator = function(callingScope, operator, opera
         }
     }
 
-// Returns info (see below) about the first dispatch element who's parameters match the args
-// args is an object with the following properties:
-    // args - An object where each key is a primitive string name and each value is a lima object.
-    // unnamedCount - The number of unnamed arguments in `args.args`
-// returns an object with the following properties:
-    // dispatchItem - the matching dispatch item
-    // normalizedArgs - the args normalized into an argument list without only unnamed parameters, resolving any defaults.
-function getOperatorDispatch(object, operator, args) {
-    var operatorInfo = object.operators[operator]
-    var dispatchList = operatorInfo.dispatch
-    for(var n=0; n<dispatchList.length; n++) {
-        // todo: named parameters and defaults
-        var dispatchItem = dispatchList[n]
-        var normalizedArgs = getNormalizedArgs(object, dispatchItem, args)
-        if(normalizedArgs !== undefined) { // if the args match the dispatchItem's param list
-            return {
-                dispatchItem: dispatchItem,
-                normalizedArgs: normalizedArgs,
-                boundObject: operatorInfo.boundObject
+// determines which operand's operator to use and returns the operator dispatch info for that operand's operator (in the
+    // same form as getOperatorDispatch returns)
+// parameters:
+    // operand1 and operand2 should both be lima objects
+    // operator - A string representing the operator.
+var getBinaryDispatch = exports.getBinaryDispatch = function(operand1, operator, operand2) {
+    var operand1Dispatch = getOperatorDispatch(
+        operand1, operator, {args:[operand1, operand2], unnamedCount:2}
+    )
+    var operand2Dispatch = getOperatorDispatch(
+        operand2, operator, {args:[operand1, operand2], unnamedCount:2}
+    )
+
+    if(operand1Dispatch && operand2Dispatch) {
+        if(operand1Dispatch.dispatchItem === operand2Dispatch.dispatchItem
+           || isAssignmentOperator({type:'operator', operator: operator})
+           || operator === '.'
+           || isReferenceAssignmentOperator({type:'operator', operator: operator})
+        ) {
+            return operand1Dispatch
+        } else {
+            var operator1_otherParam = getOtherParameter(operand1Dispatch.dispatchItem)
+            var operator2_otherParam = getOtherParameter(operand2Dispatch.dispatchItem)
+            if(operator1_otherParam.type === coreLevel1.anyType && operator2_otherParam.type === coreLevel1.anyType) {
+                return operand1Dispatch // if they're both weak dispatch items, use the first operand
+            } else if(operator1_otherParam.type !== coreLevel1.anyType) {
+                return operand1Dispatch
+            } else if(operator2_otherParam.type !== coreLevel1.anyType) {
+                return operand2Dispatch
+            } else {
+                throw new Error("Can't execute ambiguous operator resolution : (")
+            }
+        }
+    } else {
+        return operand1Dispatch || operand2Dispatch
+    }
+}
+    // returns the parameter that isn't 'this'
+    function getOtherParameter(dispatchItem) {
+        if(dispatchItem.parameters[0].name === 'this') {
+            return dispatchItem.parameters[1]
+        } else {
+            return dispatchItem.parameters[0]
+        }
+    }
+
+    // Returns info (see below) about the first dispatch element who's parameters match the args
+    // parameters:
+        // operator is a primitive string representing the operator
+        // args is an object with the following properties:
+            // args - An object where each key is a primitive string name and each value is a lima object.
+            // unnamedCount - The number of unnamed arguments in `args.args`
+    // returns an object with the following properties:
+        // operatorInfo - The full meta information for the operator in the object
+        // dispatchItem - the matching dispatch item
+        // normalizedArgs - the args normalized into an argument list without only unnamed parameters, resolving any defaults.
+    function getOperatorDispatch(object, operator, args) {
+        var operatorInfo = object.operators[operator]
+        var dispatchList = operatorInfo.dispatch
+        for(var n=0; n<dispatchList.length; n++) {
+            // todo: named parameters and defaults
+            var dispatchItem = dispatchList[n]
+            var normalizedArgs = getNormalizedArgs(object, dispatchItem, args)
+            if(normalizedArgs !== undefined) { // if the args match the dispatchItem's param list
+                return {
+                    operatorInfo: operatorInfo,
+                    dispatchItem: dispatchItem,
+                    normalizedArgs: normalizedArgs
+                }
             }
         }
     }
-}
-    // returns a normalized argument list if the args match the dispatchItem, or undefined if they don't match
-    // args - Should be the same form as passed into getOperatorDispatch
-    function getNormalizedArgs(object, dispatchItem, args) {
-        var argsToUse = [], paramIndex=0
-        for(var n=0; n<dispatchItem.parameters.length; n++) {
-          var param = dispatchItem.parameters[n]
-          if(paramIndex < args.unnamedCount) {
-            var mappedParamIndex = getPrimitiveStr(blockCallingScope, coreLevel1.NumberObj(paramIndex,1))
-            var arg = args.args[mappedParamIndex]
-            paramIndex++
-          } else {  // into named parameters
-            var arg = args.args[param.name]
-          }
+        // returns a normalized argument list if the args match the dispatchItem, or undefined if they don't match
+        // args - Should be the same form as passed into getOperatorDispatch
+        function getNormalizedArgs(object, dispatchItem, args) {
+            var argsToUse = [], paramIndex=0
+            for(var n=0; n<dispatchItem.parameters.length; n++) {
+              var param = dispatchItem.parameters[n]
+              if(paramIndex < args.unnamedCount) {
+                var mappedParamIndex = getPrimitiveStr(blockCallingScope, coreLevel1.NumberObj(paramIndex,1))
+                var arg = args.args[mappedParamIndex]
+                paramIndex++
+              } else {  // into named parameters
+                var arg = args.args[param.name]
+              }
 
-          if(arg === undefined) {
-            if(param.default !== undefined)
-              arg = param.default
-            else
+              if(arg === undefined) {
+                if(param.default !== undefined)
+                  arg = param.default
+                else
+                  return // doesn't match the dispatch list
+              }
+
+              if(param.name === 'this') {
+                  var matches = arg === object
+              } else {
+                  var matches = param.type(arg)
+              }
+
+              if(matches) {
+                   argsToUse.push(arg)
+              } else {
+                   return // doesn't match the dispatch list
+              }
+            }
+
+            if(dispatchItem.parameters.length < Object.keys(args.args).length)
               return // doesn't match the dispatch list
-          }
-
-          if(param.name === 'this') {
-              var matches = arg === object
-          } else {
-              var matches = param.type(arg)
-          }
-
-          if(matches) {
-               argsToUse.push(arg)
-          } else {
-               return // doesn't match the dispatch list
-          }
+            // else
+            return argsToUse
         }
-
-        if(dispatchItem.parameters.length < Object.keys(args.args).length)
-          return // doesn't match the dispatch list
-        // else
-        return argsToUse
-    }
 
 // Returns an `arguments` object of the same type `utils.getOperatorDispatch` takes.
 // contextObject - A lima object containing the arguments in its properties.
@@ -238,12 +280,17 @@ var getProperty = exports.getProperty = function(context, key) {
     for(var n=0; n<items.length; n++) {
         var itemKey = items[n].key
         var equalsComparisonResult = callOperator(context.scope, '==', [key,itemKey])
-        if(equalsComparisonResult === coreLevel1.one
-           || callOperator(context.scope, '==', [equalsComparisonResult,coreLevel1.one]) === coreLevel1.one
+        if(primitiveEqualsInteger(equalsComparisonResult, 1)
+           || primitiveEqualsInteger(callOperator(context.scope, '==', [equalsComparisonResult,coreLevel1.one]), 1)
         ) {
             return items[n].value
         }
     }
+}
+
+
+var normalizedVariableName = exports.normalizedVariableName = function(name) {
+    return name[0]+name.slice(1).toLowerCase()
 }
 
 // gets the primitive hashcode for an object
@@ -260,7 +307,7 @@ var getHashCode = exports.getHashCode = function(obj) {
     return obj.primitive.numerator // now a primitive
 }
 
-// gets the primitive string representation of an object
+// gets the primitive string representation of an object, via the 'str' member if its not a primitive
 var getPrimitiveStr = exports.getPrimitiveStr = function(context, obj) {
     while(true) {
         if(obj.primitive !== undefined && obj.primitive.string !== undefined) {
@@ -270,6 +317,11 @@ var getPrimitiveStr = exports.getPrimitiveStr = function(context, obj) {
         var hashcodeFunction = getThisPrivilegedMember(blockCallingScope, obj, coreLevel1.StringObj('str'))
         obj = callOperator(blockCallingScope, '[', [hashcodeFunction])
     }
+}
+
+// returns true of the obj's primitive representation equals the passed in integer
+function primitiveEqualsInteger(obj, integer) {
+    return obj.primitive && obj.primitive.numerator === integer && obj.primitive.denominator === 1
 }
 
 // gets a privileged member as if it was accessed like this.member

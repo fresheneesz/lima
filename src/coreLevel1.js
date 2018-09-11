@@ -7,8 +7,8 @@ var utils = require("./utils")
 
 // constructs and functions used by multiple literals
 
-var anyType = function() {
-    return true // everything's a var
+var anyType = exports.anyType = function() {
+    return true // everything's a var?
 }
 
 var dotOperator = {
@@ -50,7 +50,7 @@ function symmetricalOperator(options, rawOperationFn) {
             {parameters:[{name:'other',type:options.paramType}, {name:'this'}], fn: function(other) {
                 return rawOperationFn.call(this, other)
             }},
-            {parameters:[{name:'this'}, {name:'other',type:options.paramType}], fn: function(other) {
+            {parameters:[{name:'this'}, {name:'other',type:options.paramType}], fn: function(thisObj, other) {
                 return rawOperationFn.call(this, other)
             }}
         ]
@@ -152,7 +152,7 @@ emptyString.operators['=='] = symmetricalOperator({order:6, scope:0, paramType: 
 
 var emptyObj = exports.emptyObj = basicUtils.copyValue(nil)
 emptyObj.name = '{}'
-delete emptyString.primitive
+delete emptyObj.primitive
 // emptyObj.type = utils.hasInterface(emptyObj)     // what was this?
 emptyObj.operators['.'] = dotOperator
 

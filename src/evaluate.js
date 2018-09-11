@@ -144,7 +144,8 @@ function resolveBinaryOperations(context, curState, allowProperties, implicitDec
                             if(operator1.operator === '=') {
                                 var newValue = basicUtils.copyValue(coreLevel1.nil)
                                 newValue.name = operand1.name
-                                context.scope.set(operand1.name, newValue)
+                                var normalizedName = utils.normalizedVariableName(operand1.name)
+                                context.scope.set(normalizedName, newValue)
                                 operand1 = newValue
                                 var allowReassignment = true
                             } else if(utils.isReferenceAssignmentOperator(operator1)) {
@@ -191,21 +192,18 @@ function resolveBinaryOperations(context, curState, allowProperties, implicitDec
         if(allowProperties && op in {':':1,'::':1}) {
             return {order: 9, backward: true}
         } else {
-            var operand1Operator = getValueForOpInfo(operand1).operators[op]
-            var operand2Operator = getValueForOpInfo(operand2).operators[op]
+            var operand1ValueForInfo = getValueForOpInfo(operand1)
+            var operand2ValueForInfo = getValueForOpInfo(operand2)
 
-            if(operand1Operator && operand2Operator && operand1Operator.dispatch !== operand2Operator.dispatch) {
-                if(utils.isAssignmentOperator(operatorNode)
-                   || operatorNode.operator === '.'
-                   || utils.isReferenceAssignmentOperator(operatorNode)
-                ) {
-                    return operand1Operator
-                } else {
-                    throw new Error("Can't execute ambiguous operator resolution : (")
-                }
+            if(utils.isAssignmentOperator(operatorNode)
+                || operatorNode.operator === '.'
+                || utils.isReferenceAssignmentOperator(operatorNode)
+            ) {
+                return operand1ValueForInfo.operators[operatorNode.operator]
+            } else {
+                var dispatchInfo = utils.getBinaryDispatch(operand1ValueForInfo, op, operand2ValueForInfo)
+                return dispatchInfo.operatorInfo
             }
-
-            return operand1Operator || operand2Operator
         }
     }
         // if the operand is a lima object, just return it
@@ -242,7 +240,8 @@ function resolveBinaryOperandFrom(context, curState, index, implicitDeclarations
         } else if(!utils.isNodeType(item, 'operator')) {
             var nextItem = curState[n+1], nextItemExists = n+1 < curState.length
             if(utils.isNodeType(item, 'variable')) {
-                var variableValue = context.scope.get(item.name)
+                var normalizedVarName = utils.normalizedVariableName(item.name)
+                var variableValue = context.scope.get(normalizedVarName)
                 if(variableValue === undefined) {
                     if(nextItemExists && utils.isNodeType(nextItem, 'rawExpression')) { // previously unevaluted stuff because the variable might have been a macro
                         resolveNonmacroRawExpression(context, curState, n+1)
@@ -400,6 +399,8 @@ function resolveBinaryOperandFrom(context, curState, index, implicitDeclarations
             if(objectNode.needsEndBrace && !utils.isSpecificOperator(objectNode.expressions[0], "}")) {
                 throw new Error("Missing '}' in object literal.")
             }
+
+            curState.splice(n, 2, limaObjectContext.this)
         } else { // if its not a basic value, variable, or object, it must be a superExpression
             var result = superExpression(context, item.parts, allowProperties, implicitDeclarations)
             if(!allowRemainingParts && result.remainingParts.length !== 0)

@@ -94,16 +94,12 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 #### Core Level 1 Todo
 
 * variable declaration with a type
-* error about undeclared variables
+* error about undeclared variables in functions
 * prevent _ from being declared or used outside the context of an object member initialization
-* error for declared variables with the same first character and case but are not case-insensitive-unique after the first character
 * entrypoint command line args
 * entrypoint signals
 * Const hoisting - Add a new initial step for each function scope, which looks for any hoistable const expressions to evaluate first.
 * destructuring assignment
-* `...`
-* `~` (etc)
-* `~>` (etc)
 * Operator overloading
 * operator chaining
 * functions
@@ -135,20 +131,14 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * attributes crossing asynchronous boundaries
 * number postfixes
 * operator chaining
-* general operators 
+* resolveOperatorConflict
+* resolveWeakOperatorConflict
+* general operators
   * ??
-  * ~
-  * ~>
+  * `~` (etc)
+  * `~>` (etc)
   * ...
-* nil
-  * =
-  * ==
 * object literals
-  * values with implicit keys (elements)
-  * `:` with literal valued keys
-  * `:` with named keys
-  * `::` with expressio keys
-  * implicitly declared privileged members (with var type)
   * override
   * `_`
   * require self for members that alias a variable from an upper scope
@@ -193,8 +183,9 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * % extended space
   * ! LimaEncoding codepoint
   * str
-  * code 
+  * code
   * name
+* C bindings
 * core library
   * types
     * var
@@ -287,11 +278,18 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 * indent delimited blocks
 * single-line comments
 * span-comments
-* `=` `.` `??` `==`
-* implicitly declared variables
-* objects
-  * `:` and `::`
-
+* error about undeclared variables in object definition space
+* error for declared variables with the same first character and case but are not case-insensitive-unique after the first character
+* nil
+  * =
+  * ==
+  * ??
+* object literals
+  * values with implicit keys (elements)
+  * `:` with literal valued keys
+  * `:` with named keys
+  * `::` with expression keys
+  * implicitly declared privileged members (with var type)
 
 #### Core Level 2 Todo:
 
@@ -406,7 +404,10 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 
 ## Change log
 
-* 0.0.7 - 1
+* 0.0.7 - 2018-09-10
+	* weak dispatch
+	* nil ==
+	* error for declared variables with the same first character and case but are not case-insensitive-unique after the first character
 * 0.0.6 - 2018-09-04
 	* Adding windows batch file for running lima programs
 	* Adding unit tests for the interpreter.
