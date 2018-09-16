@@ -15,6 +15,9 @@ These are all under the `src/` directory.
 * **utils.js** - Contains utility functions mostly around interacting with lima objects, composing lima objects, and higher-level functions for evaluating lima objects.
 * **basicUtils.js** - Utilities that don't depend on any other module. Currently only contains `copyValue`. Exists to avoid a circular dependency.
 * **parser.js** - Contains the tokenization parser that parses a lima file into AST nodes (described below). During the first pass, usually this will only partially parse the file since the parser won't have scope context to figure out if variables (and other values) are macros or not. Parser functions can also be called with scope context at later points (from evalute.js) in order to further parse `rawExpression`s.
+	* **statefulParsimmon.js** - A hack over [Parsimmon](https://github.com/jneen/parsimmon) that allows using state.
+	* **limaParsimmon.js** - Some additional convenience parsers over *statefulParsimmon.js* and a convenience method.
+* **macroParsers.js** - Contains parsers for core macros, which are defined using the parsers in *parser.js*.
 
 #### Test files
 
@@ -94,14 +97,67 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 #### Core Level 1 Todo
 
 * variable declaration with a type
-* error about undeclared variables in functions
 * prevent _ from being declared or used outside the context of an object member initialization
-* entrypoint command line args
-* entrypoint signals
 * Const hoisting - Add a new initial step for each function scope, which looks for any hoistable const expressions to evaluate first.
 * destructuring assignment
-* Operator overloading
-* operator chaining
+* operators
+  * Operator overloading
+    * fallback operator (`operator[else]`)
+    * operator chaining
+  * resolveOperatorConflict
+  * resolveWeakOperatorConflict
+* nil
+  * `=`  (created, but can't be tested until the var? exists and is usable)
+  * `~>`
+* general operators
+  * `~` (etc)
+  * `~>` (etc)
+  * ...
+* numbers
+  * 00 (infinity)
+  * error
+  * number postfixes
+  * operators
+    * `+`
+    * `-`
+    * `*`
+    * `/`
+    * `%`
+    * `^`
+    * `==`
+    * `<`
+    * `>`
+  * members
+  	* str (partially implemented but not testable yet)
+  	* hashcode (partially implemented but not testable yet)
+* strings
+  * % extended space
+  * ! LimaEncoding codepoint
+  * code
+  * name
+  * members
+  	* str (partially implemented but not testable yet)
+  	* hashcode (partially implemented but not testable yet)
+* object literals
+  * override
+  * `_`
+  * require self for members that alias a variable from an upper scope
+  * operators
+    * `.`
+    * ! (interface operator)
+    * `[ ]`
+    * [[ ]]
+  * members
+    * len
+    * keys
+    * iterlist
+  * special constructs
+    * self
+    * this
+    * static
+    * target
+  * methods
+    * tslice
 * functions
 	* function creation
 	* self member access
@@ -117,6 +173,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 	* parse
 	* paramType
 	* condType
+	* error about undeclared variables in functions
 * macro
 * types
   * &
@@ -129,62 +186,6 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * cast
 * attributes
   * attributes crossing asynchronous boundaries
-* number postfixes
-* operator chaining
-* resolveOperatorConflict
-* resolveWeakOperatorConflict
-* general operators
-  * ??
-  * `~` (etc)
-  * `~>` (etc)
-  * ...
-* object literals
-  * override
-  * `_`
-  * require self for members that alias a variable from an upper scope
-  * operators
-    * `.`
-    * ==
-    * ! (interface operator)
-    * `[ ]`
-    * [[ ]]
-  * members
-    * len
-    * peeklen
-    * keys
-    * iterlist
-  * special constructs
-    * self
-    * this
-    * static
-    * target
-  * methods
-    * tslice
-* numbers
-  * 00 (infinity)
-  * error
-  * operators
-    * `+`
-    * `-`
-    * `*`
-    * `/`
-    * `%`
-    * `^`
-    * `==`
-    * `<`
-    * `>`
-* strings
-  * single quote strings
-  * double quote strings
-  * triple quote strings
-  * grave accent strings (`)
-  * `#` quote
-  * @ newline
-  * % extended space
-  * ! LimaEncoding codepoint
-  * str
-  * code
-  * name
 * C bindings
 * core library
   * types
@@ -280,10 +281,24 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 * span-comments
 * error about undeclared variables in object definition space
 * error for declared variables with the same first character and case but are not case-insensitive-unique after the first character
-* nil
-  * =
-  * ==
+* general operators
   * ??
+* nil
+  * ==
+* numbers
+  * operators
+    * `==`
+* strings
+  * single quote strings
+  * double quote strings
+  * triple quote strings
+  * grave accent strings (`)
+  * `#` quote
+  * @ newline
+  * operators
+    * `==`
+  * members
+  	* str
 * object literals
   * values with implicit keys (elements)
   * `:` with literal valued keys
@@ -293,12 +308,14 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 
 #### Core Level 2 Todo:
 
-
+* core objects are constant (can't be overwritten or modified even if pointed to by a reference)
+  * includes nil, true, false, meta, etc
 * nil
-  * !=
-  * `?`
-  * `|` (the nil-coalescence operator)
-  * !??
+  * Operators
+    * !=
+    * `?`
+    * `|` (the nil-coalescence operator)
+    * !??
 * functions
   * default parameter values
   * self.x parameters
@@ -307,6 +324,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * [[ ]]
 * object literals
   * operators
+    * ==
     * `+` (matrix and vector addition)
     * `-` (matrix and vector subtraction)
     * `*` (matrix-to-matrix product)
@@ -404,6 +422,12 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 
 ## Change log
 
+* 0.0.8 - 2018-09-15
+	* Adding a number of unit tests for string literals
+	* Adding unit tests for `??` and `==` on nil, numbers, and strings
+	* Adding unit tests for `::` using variables as the lvalue
+	* Adding triple quotes with single quotes and grave accents
+	* Properly separating out the parsimmon extensions
 * 0.0.7 - 2018-09-10
 	* weak dispatch
 	* nil ==

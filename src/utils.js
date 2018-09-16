@@ -17,9 +17,7 @@ var Scope = exports.Scope = function(upperScope, innerScope) {
 }
     // merges the items from the `source` scope into the `dest` scope
     function mergeIntoScope(dest, source) {
-        for(var k in source) {
-            dest[k] = source[k]
-        }
+        return basicUtils.merge(dest,source) // for now, this is the same as merging objects
     }
 
 // returns a context scope - the same type of value `evaluate.superExpression` takes as its `scope` parameter
@@ -108,7 +106,7 @@ var callOperator = exports.callOperator = function(callingScope, operator, opera
         var args = dispatchInfo.normalizedArgs
     }
 
-    var context = {this:thisContext, callingScope: callingScope}
+    var context = {this: thisContext, scope: callingScope}
     return applyOperator(fn, context, args)
 }
     function applyOperator(fn, context, args) {
@@ -141,13 +139,11 @@ var getBinaryDispatch = exports.getBinaryDispatch = function(operand1, operator,
         ) {
             return operand1Dispatch
         } else {
-            var operator1_otherParam = getOtherParameter(operand1Dispatch.dispatchItem)
-            var operator2_otherParam = getOtherParameter(operand2Dispatch.dispatchItem)
-            if(operator1_otherParam.type === coreLevel1.anyType && operator2_otherParam.type === coreLevel1.anyType) {
+            if(operand1Dispatch.weak && operand2Dispatch.weak) {
                 return operand1Dispatch // if they're both weak dispatch items, use the first operand
-            } else if(operator1_otherParam.type !== coreLevel1.anyType) {
+            } else if(operand1Dispatch.weak) {
                 return operand1Dispatch
-            } else if(operator2_otherParam.type !== coreLevel1.anyType) {
+            } else if(operand2Dispatch.weak) {
                 return operand2Dispatch
             } else {
                 throw new Error("Can't execute ambiguous operator resolution : (")
@@ -157,14 +153,6 @@ var getBinaryDispatch = exports.getBinaryDispatch = function(operand1, operator,
         return operand1Dispatch || operand2Dispatch
     }
 }
-    // returns the parameter that isn't 'this'
-    function getOtherParameter(dispatchItem) {
-        if(dispatchItem.parameters[0].name === 'this') {
-            return dispatchItem.parameters[1]
-        } else {
-            return dispatchItem.parameters[0]
-        }
-    }
 
     // Returns info (see below) about the first dispatch element who's parameters match the args
     // parameters:
@@ -174,30 +162,40 @@ var getBinaryDispatch = exports.getBinaryDispatch = function(operand1, operator,
             // unnamedCount - The number of unnamed arguments in `args.args`
     // returns an object with the following properties:
         // operatorInfo - The full meta information for the operator in the object
-        // dispatchItem - the matching dispatch item
-        // normalizedArgs - the args normalized into an argument list without only unnamed parameters, resolving any defaults.
+        // dispatchItem - The matching dispatch item
+        // normalizedArgs - The args normalized into an argument list without only unnamed parameters, resolving any defaults.
+        // weak - True if the matching parameters are weak dispatch.
     function getOperatorDispatch(object, operator, args) {
         var operatorInfo = object.operators[operator]
         var dispatchList = operatorInfo.dispatch
         for(var n=0; n<dispatchList.length; n++) {
             // todo: named parameters and defaults
             var dispatchItem = dispatchList[n]
-            var normalizedArgs = getNormalizedArgs(object, dispatchItem, args)
-            if(normalizedArgs !== undefined) { // if the args match the dispatchItem's param list
-                return {
-                    operatorInfo: operatorInfo,
-                    dispatchItem: dispatchItem,
-                    normalizedArgs: normalizedArgs
+            var context = {this:object}
+            var matchResult = dispatchItem.params.match.call(context, args)
+            if(matchResult) {
+                var normalizedArgs = dispatchItem.params.normalize.call(context, args)
+                if(normalizedArgs !== undefined) { // if the args match the dispatchItem's param list
+                    return {
+                        operatorInfo: operatorInfo,
+                        dispatchItem: dispatchItem,
+                        normalizedArgs: normalizedArgs,
+                        weak: matchResult === 'weak'
+                    }
                 }
             }
         }
     }
+
         // returns a normalized argument list if the args match the dispatchItem, or undefined if they don't match
         // args - Should be the same form as passed into getOperatorDispatch
-        function getNormalizedArgs(object, dispatchItem, args) {
+        // parameters - An array of objects with the properties:
+            // name
+            // type
+        var getNormalizedArgs = exports.getNormalizedArgs = function(object, parameters, args) {
             var argsToUse = [], paramIndex=0
-            for(var n=0; n<dispatchItem.parameters.length; n++) {
-              var param = dispatchItem.parameters[n]
+            for(var n=0; n<parameters.length; n++) {
+              var param = parameters[n]
               if(paramIndex < args.unnamedCount) {
                 var mappedParamIndex = getPrimitiveStr(blockCallingScope, coreLevel1.NumberObj(paramIndex,1))
                 var arg = args.args[mappedParamIndex]
@@ -226,7 +224,7 @@ var getBinaryDispatch = exports.getBinaryDispatch = function(operand1, operator,
               }
             }
 
-            if(dispatchItem.parameters.length < Object.keys(args.args).length)
+            if(parameters.length < Object.keys(args.args).length)
               return // doesn't match the dispatch list
             // else
             return argsToUse
@@ -248,7 +246,7 @@ exports.getArgsFromObject = function(contextObject) {
 }
 
 // callingScopeInfo - the same type of argument as is passed to callOperator
-var callMacro = exports.callMacro = function(obj, context, args) {
+var callMacro = exports.callMacro = function(context, obj, args) {
     return obj.macro.apply(context, args)
 }
 
@@ -369,7 +367,15 @@ var isOperatorOfType = exports.isOperatorOfType = function(x, opType) {
     return isNodeType(x, 'operator') && x.opType === opType
 }
 var isAssignmentOperator = exports.isAssignmentOperator = function(x) {
-    return isNodeType(x, 'operator') && x.operator.match(/=+$/)[0] === '=' // the operator ends in a single =
+    if(isNodeType(x, 'operator')) {
+        var matchResult = x.operator.match(/=+$/)
+        if(matchResult && matchResult[0] === '=') { // the operator ends in a single =
+            return true
+        }
+    }
+
+    // else
+    return false
 }
 var isReferenceAssignmentOperator = exports.isReferenceAssignmentOperator = function(x) {
     return isNodeType(x, 'operator') && x.operator.match(/^~*>$/)  // many ~ and a single >

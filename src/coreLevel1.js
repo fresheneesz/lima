@@ -1,5 +1,8 @@
 var basicUtils = require("./basicUtils")
 var utils = require("./utils")
+var parser = require("./parser")
+var macroParsers = require("./macroParsers")
+var evaluate = require("./evaluate")
 
 // Conventions:
     // For any function that takes in a `scope`, that has the same structure as the
@@ -7,13 +10,14 @@ var utils = require("./utils")
 
 // constructs and functions used by multiple literals
 
+var _ = undefined // for places where you don't need a value
 var anyType = exports.anyType = function() {
     return true // everything's a var?
 }
 
 var dotOperator = {
     type:'binary', order:0, scope: 0, dispatch: [
-        {parameters: [{name:'name',type:anyType},{name:'value',type:anyType}], fn: function(name) {
+        {params: makeParamInfo([{name:anyType},{value:anyType}]), fn: function(name) {
             var result = this.this.privileged[name.primitive.string]
             if(result !== undefined)
                 return result
@@ -47,10 +51,10 @@ function getJsStringKeyHash(string) {
 function symmetricalOperator(options, rawOperationFn) {
     return {
         type:'binary', order:options.order, scope: options.scope, dispatch: [
-            {parameters:[{name:'other',type:options.paramType}, {name:'this'}], fn: function(other) {
+            {params: makeParamInfo([{other:options.paramType},{this:_}]), fn: function(other) {
                 return rawOperationFn.call(this, other)
             }},
-            {parameters:[{name:'this'}, {name:'other',type:options.paramType}], fn: function(thisObj, other) {
+            {params: makeParamInfo([{this:_},{other:options.paramType}]), fn: function(thisObj, other) {
                 return rawOperationFn.call(this, other)
             }}
         ]
@@ -64,6 +68,47 @@ function toLimaBoolean(primitiveBoolean) {
         return False
     }
 }
+
+// Returns a function that takes in arguments and returns true if they match the parameters.
+// This is used for internal functions and operators, since parameters for user-created functions
+// are evaluated in a different way.
+// parameters - An array of objects where each object has one key with one value where:
+    // the key is the name
+    // the value is the type
+function makeParamInfo(parameters) {
+    var expandedParams = expandParameters(parameters)
+    return {
+        match: function(args) {
+            if(utils.getNormalizedArgs(this.this, expandedParams, args) !== undefined) {
+                for(var n=0; n<expandedParams.length; n++) {
+                    if(expandedParams[n].type !== anyType && expandedParams[n].type !== undefined) {
+                        return true // not weak
+                    }
+                }
+                // else
+                return 'weak'
+            } else {
+                return false
+            }
+        },
+        normalize: function(args) {
+            return utils.getNormalizedArgs(this.this, expandedParams, args)
+        }
+    }
+
+    function expandParameters(params) {
+        return params.map(function(param) {
+            return expandParameter(param)
+        })
+    }
+
+    function expandParameter(param) {
+        for(var name in param) {
+            return {name:name, type:param[name]}
+        }
+    }
+}
+
 
 // literals
 
@@ -96,19 +141,29 @@ var nil = exports.nil = {
         // backward - (Optional) If true, the operator is right-to-left associative
         // boundObject - (Optional) The object the function is bound to (because it was defined inside that object)
         // dispatch - An array of objects each with the properties:
-            // parameters - Defines the parameters for this dispatch item. Is a list of objects where each object has the properties:
-                // name
-                // type
+            // params - Defines how parameters match and are normalized for this dispatch item.
+            //          Is an object with the following two function members that each get a `context`
+            //          object as their `this`-context:
+                // match(args) - Should return true if it matches with types, "weak" if it matches with
+                //               anyType or varType, and undefined otherwise.
+                // normalize(args) - Should process any named parameters and return an array of values to be
+                //                   paired with parameters in order.
             // fn - The raw function to call if the parameters match.
     operators: {
+        '??': symmetricalOperator({order:6, scope:0, paramType: anyType}, function(other) {
+            return toLimaBoolean(this.this === other) // todo: support references
+        }),
+        '==': symmetricalOperator({order:6, scope:0, paramType: anyType}, function(other) {
+            return toLimaBoolean(utils.isNil(other))
+        }),
         '=':{
             type:'binary', order:9, backward:true, scope: 0, dispatch: [
-                {parameters: [{name:'rvalue',type:anyType}], fn: function(rvalue) { // assignment operator
+                {params: makeParamInfo([{rvalue:anyType}]), fn: function(rvalue) { // assignment operator
                     if(this.this.const)
                         throw new Error("Can't assign a const variable")
                     basicUtils.overwriteValue(this.this, rvalue)
                 }},
-                {parameters: [], fn: function() { // copy operator
+                {params: makeParamInfo([]), fn: function() { // copy operator
                     return basicUtils.copyValue(this.this)
                 }}
             ]
@@ -121,12 +176,6 @@ var nil = exports.nil = {
         //         }}
         //     ]
         // },
-        '??': symmetricalOperator({order:6, scope:0, paramType: anyType}, function(other) {
-            return toLimaBoolean(this.this === other) // todo: support references
-        }),
-        '==': symmetricalOperator({order:6, scope:0, paramType: anyType}, function(other) {
-            return toLimaBoolean(utils.isNil(other))
-        })
     }
 }
 
@@ -165,7 +214,7 @@ function FunctionObj(boundObject, bracketOperatorDispatch) {
     var obj = basicUtils.copyValue(nil)
     delete obj.primitive
     obj.operators['['] = {
-        type:'binary', order:0, scope: 0, boundObject:boundObject, dispatch: [bracketOperatorDispatch]
+        type:'binary', order:0, scope: 0, boundObject:boundObject, dispatch: bracketOperatorDispatch
     }
     return obj
 }
@@ -173,31 +222,32 @@ function FunctionObj(boundObject, bracketOperatorDispatch) {
 
 // privileged members
 
-// define hashcode and str as a function for now (when I figure out how to make accessors, we'll use that instead)
-zero.privileged.hashcode = FunctionObj(zero, {parameters: [], fn: function() {
+// todo: define hashcode and str as a function for now (when I figure out how to make accessors, we'll use that instead)
+zero.privileged.hashcode = FunctionObj(zero, [{params: makeParamInfo([]), fn: function() {
     if(this.this.primitive.denominator === 1) {
         return this.this
     } else {
         var primitiveHashcode = getJsStringKeyHash(this.this.primitive.numerator+'/'+this.this.primitive.denominator)
         return NumberObj(primitiveHashcode,1)
     }
-}})
-zero.privileged.str = FunctionObj(zero, {parameters: [], fn: function() {
+}}])
+// todo: move zero.str to coreLevel2
+zero.privileged.str = FunctionObj(zero, [{params: makeParamInfo([]), fn: function() {
     if(this.this.primitive.denominator === 1) {
         return StringObj(''+this.this.primitive.numerator)
     } else {
         return StringObj(this.this.primitive.numerator+'/'+this.this.primitive.denominator)
     }
-}})
+}}])
 
-// define hashcode and str as a function for now (when I figure out how to make accessors, we'll use that instead)
-emptyString.privileged.hashcode = FunctionObj(emptyString, {parameters: [], fn: function() {
+// todo: define hashcode and str as a function for now (when I figure out how to make accessors, we'll use that instead)
+emptyString.privileged.hashcode = FunctionObj(emptyString, [{params: makeParamInfo([]), fn: function() {
     var primitiveHashcode = getJsStringKeyHash('s'+this.this.primitive.string) // the 's' is for string - to distinguish it from the hashcode for numbers
     return NumberObj(primitiveHashcode,1)
-}})
-emptyString.privileged.str = FunctionObj(emptyString, {parameters: [], fn: function() {
+}}])
+emptyString.privileged.str = FunctionObj(emptyString, [{params: makeParamInfo([]), fn: function() {
     return this.this
-}})
+}}])
 
 
 // object creation functions
@@ -232,11 +282,101 @@ False.name = 'false'
 var wout = basicUtils.copyValue(emptyObj)
 wout.operators['['] = {
     type:'binary', order:0, scope: 0, dispatch: [
-        {parameters: [{name:'s',type:anyType}], fn: function(s) {
+        {params: makeParamInfo([{s:anyType}]), fn: function(s) {
             console.log(utils.getPrimitiveStr(this, s))
         }}
     ]
 }
+
+// macros
+
+function macro(macroFn) {
+    var macroObject = basicUtils.copyValue(nil)
+    delete macroObject.primitive
+    macroObject.macro = macroFn
+    macroObject.operators['=='] = symmetricalOperator({order:6, scope:0, paramType: anyType}, function(other) {
+        return toLimaBoolean(other.macro === this.this.macro)
+    })
+
+    return macroObject
+}
+
+// var fn = macro(function(input) {
+//     var ast = macroParsers.blockConstruct(
+//         macroParsers.functionBody()
+//     ).tryParse(input)
+//
+//     function createFunctionContext(retPtr) {
+//         var functionScope = {}, upperScope = this.scope
+//         functionScope.ret = macro(function(input) {
+//             var ast = macroParsers.retStatement().tryParse(input)
+//             var result = evaluate.superExpression(functionContext, [ast[0]], false, false)
+//             retPtr.returnValue = result.value
+//             return {
+//                 charsConsumed: input.length - ast[1].length,
+//                 return: nil
+//             }
+//         })
+//         var functionContext = {
+//             this: this.this,
+//             scope: utils.ContextScope(
+//                 function get(name) {
+//                     if(name in functionScope) {
+//                         return functionScope[name]
+//                     } else {
+//                         return upperScope.get(name)
+//                     }
+//                 },
+//                 function set(name, value, isPrivate) {
+//                     if(functionContext.scope.get(name) === undefined)
+//                         throw new Error("Variable "+name+" undeclared!")
+//
+//                     functionScope[name] = value
+//                 }
+//             )
+//         }
+//
+//         return functionContext
+//     }
+//
+//     var dispatch = []
+//     ast.forEach(function(block) {
+//         var params = []
+//         if(block.param) {
+//             // var params =
+//             // resolveObjectSpace(bracketArgumentObject, argumentSpaceSuperExpressionList, 0, isObjectEnd)
+//         }
+//
+//         var fn = function() {
+//             var retPtr = {}
+//             var functionContext = createFunctionContext(retPtr);
+//             for(var j=0; j<block.body.length; j++) {
+//                 var body = block.body[j]
+//                 if(utils.isNodeType(body, 'superExpression')) {
+//                     var parts = body.parts
+//                 } else {
+//                     var parts = [body.parts]
+//                 }
+//
+//                 while(parts.length > 0) {
+//                     var result = evaluate.superExpression(functionContext, parts, false, false)
+//                     parts = result.remainingParts
+//                     if(retPtr.returnValue !== undefined) {
+//                         return retPtr.returnValue
+//                     }
+//                 }
+//             }
+//         }
+//
+//         dispatch.push({params:params, fn:fn})
+//     })
+//
+//     return {
+//         charsConsumed: input.length,
+//         return: FunctionObj(undefined, dispatch)
+//     }
+// })
+
 
 // context functions
 
@@ -282,6 +422,7 @@ var limaArgumentContext = exports.limaArgumentContext = function(upperScope) {
 exports.makeCoreLevel1Scope = function() {
     var scope = utils.Scope({
         nil: nil,
+        // fn: fn,
         wout: wout
     })
 

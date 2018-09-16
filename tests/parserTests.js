@@ -1,6 +1,7 @@
 
 var P = require("parsimmon/src/parsimmon")
 var colors = require("colors/safe")
+var basicUtils = require("../src/basicUtils")
 
 // the following are set like this so i can block comment out the tests below
 var binaryOperands={}, binaryOperandsForSuperExpression={}
@@ -8,11 +9,9 @@ var indentTests=[], indentedWsTests=[], commentTests=[]
 var validNumeralsTests=[], floatTests=[], numberTests=[], stringTests=[], operatorTests=[]
 var binaryOperandTests=[]
 var rawExpressionTests=[{state: {indent: 0}, inputs: {}}, {state: {indent: 1}, inputs: {}}]
+var closingBraces = []
 var superExpressionTests=[], nonMacroExpressionContinuationTests=[]
 var objectDefinitionSpaceTests = {}, objectTests = [], moduleTests=[]
-
-
-
 
 
 
@@ -110,9 +109,12 @@ numberTests = {inputs:[
 stringTests = {
     state: {indent:0},
     inputs: [
-        "''", '""', '"""hi"""',
+        "''", '""', '"""hi"""', "'''hi'''", "```hi```",
         "@'newlineBefore'", "'newlineAfter'@",
-        "#'singleQuote'#", '#"doubleQuote"#', '#"""tripleQuote"""#',
+        "#'singleQuote'#", '#"doubleQuote"#',
+        '#"""tripleDoubleQuote"""#',
+        "#'''tripleSingleQuote'''#",
+        "#```tripleGraveQuote```#",
         "'hi\nlo'"
     ]
 }
@@ -161,6 +163,10 @@ rawExpressionTests[1].inputs[
      "\n" +
      "}}" // first end brace here might be part of a if a is a macro
 ] = { type: 'rawExpression', expression: '\n}}' }
+
+
+closingBraces = {state:{indent:0}, inputs: {}}
+closingBraces.inputs['] ]'] = { type: 'operator', operator: ']]', opType: 'postfix' }
 
 superExpressionTests = getSuperExpressionTests()
 function getSuperExpressionTests() {
@@ -244,6 +250,11 @@ function getSuperExpressionTests() {
                       parts:
                        [ { type: 'variable', name: 'a' },
                          { type: 'rawExpression', expression: '[4]' } ],
+                      needsEndParen: false },
+        "a[]":      { type: 'superExpression',
+                      parts:
+                       [ { type: 'variable', name: 'a' },
+                         { type: 'rawExpression', expression: '[]' } ],
                       needsEndParen: false },
 
         "3:b":      { type: 'superExpression',
@@ -640,7 +651,7 @@ function getSuperExpressionTests() {
     )
 
 
-    tests.push({inputs: merge(
+    tests.push({inputs: basicUtils.merge(
         elementsTests,
         equalsTests,
         colonTests,
@@ -673,8 +684,18 @@ function getNonMacroExpressionContinuationTests() {
                  { type: 'string', string: 'hello world' },
                  { type: 'operator', operator: ']', opType: 'postfix' } ],
                  next: [] }
+    randomTests.inputs['[]'] =
+            { current:
+               [ { type: 'operator', operator: '[', opType: 'postfix' },
+                 { type: 'operator', operator: ']', opType: 'postfix' } ],
+                 next: [] }
     randomTests.inputs[']'] =
-            { current: [ { type: 'operator', operator: ']', opType: 'postfix' } ],
+            { current:
+                [ { type: 'operator', operator: ']', opType: 'postfix' } ],
+                 next: [] }
+    randomTests.inputs['[] ]'] =
+            { current: [ { type: 'operator', operator: '[', opType: 'postfix' },
+                         { type: 'operator', operator: ']]', opType: 'postfix' } ],
                  next: [] }
     randomTests.inputs['[3] wout[x]'] =
             { current:
@@ -687,6 +708,12 @@ function getNonMacroExpressionContinuationTests() {
                     [ { type: 'variable', name: 'wout' },
                       { type: 'rawExpression', expression: '[x]' } ],
                    needsEndParen: false } ] }
+   randomTests.inputs['[ 3 ]'] =
+            { current:
+               [ { type: 'operator', operator: '[', opType: 'postfix' },
+                 { numerator: 3, denominator: 1, type: 'number' },
+                 { type: 'operator', operator: ']', opType: 'postfix' } ],
+                 next: [] }
 
 
 
@@ -788,6 +815,7 @@ exports.stringTests = stringTests
 exports.operatorTests = operatorTests
 exports.binaryOperandTests = {state:{indent:0}, inputs: binaryOperands}
 exports.rawExpressionTests = rawExpressionTests
+exports.closingBraces = closingBraces
 exports.superExpressionTests = superExpressionTests
 exports.nonMacroExpressionContinuationTests = nonMacroExpressionContinuationTests
 exports.objectDefinitionSpaceTests = {inputs: objectDefinitionSpaceTests}
@@ -803,15 +831,6 @@ function testIndentSuccess(that, expectedIndent, v) {
         console.log(colors.red('Got an indent of      : '+that.state.indent))
     }
     return P.succeed(v)
-}
-
-// merges a number of objects into the object passed as the first parameter
-function merge(a/*, b,...*/) {
-    for(var n=1; n<arguments.length; n++) {
-        Object.assign(a,arguments[n])
-    }
-
-    return a
 }
 
 // returns a new object with the values at each key mapped using mapFn(value)

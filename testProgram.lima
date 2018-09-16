@@ -1,3 +1,3 @@
-wout[7==7]
-x = 8
-wout[x]
+x = fn: ret 5
+
+wout[ x[] ]

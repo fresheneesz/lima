@@ -60,3 +60,12 @@ exports.strMult = function(str, multiplier) {
 
 	return result.join('')
 }
+
+// merges a number of objects into the object passed as the first parameter
+exports.merge = function(a/*, b,...*/) {
+    for(var n=1; n<arguments.length; n++) {
+        Object.assign(a,arguments[n])
+    }
+
+    return a
+}

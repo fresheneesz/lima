@@ -1,61 +1,8 @@
-var P = require("parsimmon/src/parsimmon")
+var P = require("./limaParsimmon")
 
-class Language {
-  constructor(state, parsers) {
-    this.state = state;
-    this.parsers = parsers;
-    for(var key in parsers) {
-        var val = parsers[key]
-
-        const func = val.bind(this)
-        func.original = val // debug info
-        if (val.length === 0) {   // if the parser function doesn't have parameters
-            const parser = P.lazy(func);
-            this[key] = function() {return parser}
-        } else {
-            this[key] = func      // if the parser function does have parameters, you'll need to use `chain` if the parser is recursive
-        }
-    }
-  }
-
-  withState(state) {
-    return new Language(state, this.parsers);
-  }
-
-  static create(state, parsers) {
-    return new Language(state, parsers);
-  }
+for(var name in P.getBasicParsers()) {
+  eval('var '+name+' = P["'+name+'"]')
 }
-
-P.createLanguage = function(state, parsers) {
-    return Language.create(state, parsers)
-    //     Object.assign({
-    //     one:P.oneOf, none:P.noneOf, str:P.string
-    // }, P, {
-    //     //override (lima doesn't accept tab characters)
-    //     any: function() {
-    //         return none('\t')
-    //     },
-    //     none: function(chars) {
-    //         return noneOf(chars+'\t')
-    //     }
-    // }, parsers))
-}
-
-
-
-
-// put Parsimmon functions in scope (so you don't have to do `Parsimmon.` everywhere)
-for(var k in P) {
-    try {
-        if(!k.match(/-/)) // avoid errors by not parsing names with dashes in them
-            eval('var '+k+' = P["'+k+'"]')
-    } catch(e) {
-        // ignore errors
-    }
-}
-
-var one=P.oneOf, none=P.noneOf, str=P.string
 
 var a = 'a'.charCodeAt(0)
 var A = 'A'.charCodeAt(0)
@@ -64,25 +11,25 @@ var Z = 'Z'.charCodeAt(0)
 var zero = '0'.charCodeAt(0)
 var nine = '9'.charCodeAt(0)
 
-//override (lima doesn't accept tab characters)
-any = none('\t')
-none = function(chars) {
-    return noneOf(chars+'\t')
-}
 
+// Conventions in this set of parsers:
+    // No parsers start with whitespace except superExpression
+    // All parsers consume some input. If you want to optionally consume input,
+        // the calling parser should specify `many`, `atMost`, etc.
 var L = P.createLanguage({scope:{}}, {
 
 	// expressions
 
     // the returned superExpression can contain multiple logical expressions, and
         // where one begins and another ends is determined later (in the interpreter)
-    superExpression: function() {
+    superExpression: function(allowColonOperators/*=true*/) {
+        if(allowColonOperators === undefined) allowColonOperators = true
         return this.indent(function() {
             return seq(
                 this.binaryOperand().map(function(v){
                     return v
                 }),
-                this.binaryOperatorAndOperand().many()
+                this.binaryOperatorAndOperand(allowColonOperators).many()
             ).map(function(v) {
                 if(v[0].length === 1 && v[1].length === 0) {
                     return v[0][0]
@@ -94,36 +41,48 @@ var L = P.createLanguage({scope:{}}, {
     },
         // represents a binary operator, then a binary operand (with potential prefix and postfix operators)
         // returns an array of superExpression parts
-        binaryOperatorAndOperand: function(){
-            return seqObj(
-                alt(this.indentedWs().many(),
-                    this.expressionEndLine()),
-                ['operator', alt(
-                    this.basicOperator(),
-                    this.equalsOperator(),
-                    this.colonOperator(),
-                    this.openingBrace(),
-                    this.closingBraces()
-                ).map(function(v) {
-                    if(v.opType === undefined)
-                        v.opType = 'binary'
-                    return v
-                })],
-                alt(this.indentedWs().many(),
-                    this.expressionEndLine()
-                ),
-                ['operand', this.binaryOperand().map(function(v) {
-                    return v
-                })],
-                ['closingBraces',this.closingBraces().atMost(1)]
-            ).map(function(v){
-                var result = [v.operator].concat(v.operand)
-                if(v.closingBraces.length > 0) {
-                    result = result.concat(v.closingBraces)
-                }
-                
-                return result
-            })
+        binaryOperatorAndOperand: function(allowColonOperators){
+            var operators = [
+                this.basicOperator(),
+                this.equalsOperator(),
+                this.openingBrace(),
+                this.closingBraces()
+            ]
+            if(allowColonOperators) {
+                operators.push(this.colonOperator())
+            }
+
+            return alt(
+                seq(this.openingBrace(), this.indentedWs().many(), this.closingBraces()).map(function(v) {
+                    return [v[0],v[2]]
+                }),
+                seqObj(
+                    alt(this.indentedWs().many(),
+                        this.expressionEndLine()),
+                    ['operator', alt.apply(null, operators).map(function(v) {
+                        if(v.opType === undefined)
+                            v.opType = 'binary'
+                        return v
+                    })],
+                    alt(this.indentedWs().many(),
+                        this.expressionEndLine()
+                    ),
+                    ['operand', this.binaryOperand().map(function(v) {
+                        return v
+                    })],
+                    alt(this.indentedWs().many(),
+                        this.expressionEndLine()
+                    ),
+                    ['closingBraces',this.closingBraces().atMost(1)]
+                ).map(function(v){
+                    var result = [v.operator].concat(v.operand)
+                    if(v.closingBraces.length > 0) {
+                        result = result.concat(v.closingBraces)
+                    }
+
+                    return result
+                })
+            )
         },
 
         // parses the last possible line of an expression block, that must start with an end paren of some kind
@@ -146,7 +105,7 @@ var L = P.createLanguage({scope:{}}, {
         binaryOperand: function() {
             return seqObj(
                 ['binaryOperandPrefixAndAtom', this.binaryOperandPrefixAndAtom()],
-                ['binaryOperandPostfix', this.binaryOperandPostfix()],
+                ['binaryOperandPostfix', this.binaryOperandPostfix().atMost(1)],
                 ['closingBraces', this.closingBraces().atMost(1)]
             ).map(function(v) {
                 return v.binaryOperandPrefixAndAtom.concat(v.binaryOperandPostfix).concat(v.closingBraces)
@@ -186,19 +145,13 @@ var L = P.createLanguage({scope:{}}, {
                 return seq(
                     this.basicOperator(),
                     notFollowedBy(this.expressionAtom()) // to prevent capturing a binary operator
-                ).map(function(v){
-                    return v[0]
-                }).atMost(1).map(function(v) {
-                    var result = []
-                    if(v.length === 1) {
-                        if(v[0].operator in {':':1, '::':1,'=':1})
-                            v[0].opType = 'binary'
-                        else
-                            v[0].opType = 'postfix'
-                        result.push(v[0])
-                    }
+                ).map(function(v) {
+                    if(v[0].operator in {':':1, '::':1,'=':1})
+                        v[0].opType = 'binary'
+                    else
+                        v[0].opType = 'postfix'
 
-                    return result
+                    return v[0]
                 })
             },
 
@@ -206,12 +159,19 @@ var L = P.createLanguage({scope:{}}, {
     // returns an object with the properties:
         // current - An array of superExpression parts representing the continuation of the current expression
         // next - A list of super expressions that follow the current expression
-    nonMacroExpressionContinuation: function() {
+    nonMacroExpressionContinuation: function(allowColonOperators/*=true*/) {
+        if(allowColonOperators === undefined) allowColonOperators = true
         return seqObj(
-            ['postfix', this.binaryOperandPostfix()],
-            ['closingBraces', this.closingBraces().atMost(1)],
-            ['binaryOperatorAndOperands', this.binaryOperatorAndOperand().many()],
-            ['superExpressions', this.superExpression().many()],
+            ['postfix', this.binaryOperandPostfix().atMost(1).map(function(v){
+                return v
+            })],
+            ['closingBraces', this.closingBraces().atMost(1).map(function(v){
+                return v
+            })],
+            ['binaryOperatorAndOperands', this.binaryOperatorAndOperand(allowColonOperators).many().map(function(v){
+                return v
+            })],
+            ['superExpressions', this.superExpression(allowColonOperators).many()],
             this.ws().many()
         ).map(function(v) {
             return {current: v.postfix.concat(v.closingBraces).concat(flatten(v.binaryOperatorAndOperands)),
@@ -226,8 +186,9 @@ var L = P.createLanguage({scope:{}}, {
             this.value(),
             seqObj('(',
                 ['superExpression', this.superExpression()],
-                ['end', seq(this.indentedWs(this.state.indent-1).many(),
-                            str(')')
+                ['end', seq(
+                    this.indentedWs(this.state.indent-1).many(),
+                    str(')')
                 ).atMost(1)]
             ).map(function(v) {
                 if(v.end.length !== 1) {// if the end paren hasn't been found
@@ -324,17 +285,28 @@ var L = P.createLanguage({scope:{}}, {
     // represents one or more closing single- or double- braces
     // can represent a sequence of both
     closingBraces: function() {
-        return this.braceOperator(str(']').atLeast(1).tie())
+        return this.braceOperator(
+            seq(
+                str(']').atLeast(1),
+                seq(this.indentedWs(),
+                    str(']').atLeast(1)
+                ).map(function(v){
+                    return v[1]
+                }).many()
+            )
+        ).map(function(v) {
+            return v
+        })
     },
 
     openingBrace: function() {
-        return alt(this.braceOperator(
-            str('[').atLeast(1).tie()
-        ))
+        return this.braceOperator(
+            str('[').atLeast(1)
+        )
     },
 
     braceOperator(braceParser) {
-        return braceParser.map(function(v) {
+        return braceParser.tie().map(function(v) {
             return {type:'operator', operator:v, opType:'postfix'}
         })
     },
@@ -361,7 +333,7 @@ var L = P.createLanguage({scope:{}}, {
     object: function() {
         return seq(
             '{',
-            this.objectDefinitionSpace(),
+            this.objectDefinitionSpace(true),
             seq(this.indentedWs(this.state.indent-1).many(), str('}')).atMost(1)
         ).map(function(v) {
             return {type:'object', expressions:v[1], needsEndBrace: v[2].length !== 1}
@@ -369,8 +341,9 @@ var L = P.createLanguage({scope:{}}, {
     },
 
         // returns a list of value nodes representing expressions
-        objectDefinitionSpace: function() {
-            return this.superExpression().many()
+        objectDefinitionSpace: function(allowColonOperators/*=true*/) {
+            if(allowColonOperators === undefined) allowColonOperators = true
+            return this.superExpression(allowColonOperators).many()
         },
 
     module: function() {
@@ -383,7 +356,14 @@ var L = P.createLanguage({scope:{}}, {
 
     // a string before any multi-line processing (what multi-line processing? the indent is already taken into account)
     rawString: function() {
-        return alt(this.generalString('"""', '"'), this.generalString('"'), this.generalString("'"), this.generalString("`"))
+        return alt(
+            this.generalString('"""', '"'),
+            this.generalString("'''", "'"),
+            this.generalString('```', '`'),
+            this.generalString('"'),
+            this.generalString("'"),
+            this.generalString("`")
+        )
     },
         generalString: function(delimiter, allowTrailing) {
             var sequence = [

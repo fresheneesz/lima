@@ -4,25 +4,32 @@ var deepEqual = require("deep-equal")
 var colors = require("colors/safe")
 
 var limaParser = require("./src/parser")
+var macroParsers = require("./src/macroParsers")
 var tests = require("./tests/parserTests")
+var macroParserTests = require("./tests/macroParserTests")
 
 var tests = {
-    indentedWs: tests.indentedWsTests,
-    indent: tests.indentTests,
-    comment: tests.commentTests,
-    validNumerals: tests.validNumeralsTests,
-    float: tests.floatTests,
-    number: tests.numberTests,
-    rawString: tests.stringTests,
-    basicOperator: tests.operatorTests,
-    binaryOperand: tests.binaryOperandTests,
-    rawExpression: tests.rawExpressionTests,
-    superExpression: tests.superExpressionTests,
-    nonMacroExpressionContinuation: tests.nonMacroExpressionContinuationTests,
-    objectDefinitionSpace: tests.objectDefinitionSpaceTests,
-    object: tests.objectTests,
-    module: tests.moduleTests
+    // indentedWs: tests.indentedWsTests,
+    // indent: tests.indentTests,
+    // comment: tests.commentTests,
+    // validNumerals: tests.validNumeralsTests,
+    // float: tests.floatTests,
+    // number: tests.numberTests,
+    // rawString: tests.stringTests,
+    // basicOperator: tests.operatorTests,
+    // binaryOperand: tests.binaryOperandTests,
+    // rawExpression: tests.rawExpressionTests,
+    // closingBraces: tests.closingBraces,
+    // superExpression: tests.superExpressionTests,
+    // nonMacroExpressionContinuation: tests.nonMacroExpressionContinuationTests,
+    // objectDefinitionSpace: tests.objectDefinitionSpaceTests,
+    // object: tests.objectTests,
+    // module: tests.moduleTests,
+
+    "macroParsers.parameterSpace": macroParserTests.parameterSpaceTests,
 }
+
+
 
 var normalizedTests = []
 for(var method in tests) {
@@ -87,18 +94,32 @@ normalizedTests.forEach(function(testItem) {
         console.log(' '+testItem.title+":\n")
     } else {
         try {
-            var parserState = limaParser
+            var methodParts = testItem.method.split('.')
+            if(methodParts.length > 1) {
+                var parser = methodParts[0]
+                var method = methodParts[1]
+            } else {
+                var parser = 'parser'
+                var method = testItem.method
+            }
+
+            if(parser === 'parser') {
+                var parserState = limaParser
+            } else if(parser === 'macroParsers') {
+                var parserState = macroParsers
+            } else throw new Error(parser+" isn't a parser")
+
             if(testItem.state !== undefined)
                 parserState = limaParser.withState(testItem.state)
-            
-            var result = parserState[testItem.method].apply(limaParser,testItem.args).tryParse(testItem.content)
+
+            var result = parserState[method].apply(limaParser,testItem.args).tryParse(testItem.content)
             if(testItem.shouldFail) {
                 console.log(colors.red(JSON.stringify(testItem.content)+" incorrectly did not fail! Instead returned:\n"
                                         +util.inspect(result, {depth: null})
                 ))
             } else {
                 if(testItem.expectedResult !== undefined) {
-                    if(deepEqual(result,testItem.expectedResult)) {
+                    if(deepEqual(result,testItem.expectedResult, {strict:true})) {
                         console.log('./ - '+util.inspect(result, {depth:null}))
                     } else {
                         console.log(colors.red("X - Got unexpected result for "+JSON.stringify(testItem.content)+"!!!"))

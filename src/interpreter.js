@@ -10,7 +10,7 @@ module.exports = function(sourceString, args) {
     var coreLevel1Scope = coreLevel1.makeCoreLevel1Scope()
 
     var moduleContext = coreLevel1.limaObjectContext(coreLevel1Scope)
-    evaluate.resolveObjectSpace(moduleContext, moduleAst.expressions, 0, true, true)
+    evaluate.resolveObjectSpace(moduleContext, moduleAst.expressions, 0, undefined, true)
 
     var module = moduleContext.this
     // if(module.meta.public.main !== undefined) {
