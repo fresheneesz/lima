@@ -6,6 +6,7 @@ var tests = require('./tests/interpreterTests').tests
 
 var normalizedTests = normalizeTests(tests)
 
+var failures = 0
 for(var name in normalizedTests) {
     var test = normalizedTests[name]
     console.log(name+":\n")
@@ -16,11 +17,13 @@ for(var name in normalizedTests) {
             if(test.check(module)) {
                 console.log("success!")
             } else {
+                failures++
                 console.log(colors.red("Failed for:"))
                 console.log(colors.red(test.content))
             }
         }
         if(test.shouldFail) {
+            failures++
             console.log(colors.red("Didn't correctly fail for:"))
             console.log(colors.red(test.content))
         }
@@ -28,6 +31,7 @@ for(var name in normalizedTests) {
         if(test.shouldFail) {
             console.log("Correctly failed!")
         } else {
+            failures++
             console.log(colors.red("Exception for:"))
             console.log(colors.red(test.content))
             console.log(colors.red(e))
@@ -37,6 +41,11 @@ for(var name in normalizedTests) {
     console.log()
 }
 
+if(failures > 0) {
+    console.log(colors.red("Got "+failures+" failures."))
+} else {
+    console.log(colors.green("---All green!---"))
+}
 
 function normalizeTests(tests) {
     var normalizedTests = {}

@@ -1,4 +1,7 @@
 var P = require("./limaParsimmon")
+var basicUtils = require("./basicUtils")
+var utils = require("./utils")
+var coreLevel1 = require("./coreLevel1")
 
 for(var name in P.getBasicParsers()) {
   eval('var '+name+' = P["'+name+'"]')
@@ -11,25 +14,26 @@ var Z = 'Z'.charCodeAt(0)
 var zero = '0'.charCodeAt(0)
 var nine = '9'.charCodeAt(0)
 
+var emptyScope = {get: function() {}}
 
 // Conventions in this set of parsers:
     // No parsers start with whitespace except superExpression
     // All parsers consume some input. If you want to optionally consume input,
         // the calling parser should specify `many`, `atMost`, etc.
-var L = P.createLanguage({scope:{}}, {
+var L = P.createLanguage({scope:{}, consumeFirstlineMacros: false, firstLine:false}, {
 
 	// expressions
 
     // the returned superExpression can contain multiple logical expressions, and
         // where one begins and another ends is determined later (in the interpreter)
-    superExpression: function(allowColonOperators/*=true*/) {
+    superExpression: function(allowColonOperators/*=true*/, allowEndBracesAndParens/*=false*/) {
         if(allowColonOperators === undefined) allowColonOperators = true
         return this.indent(function() {
             return seq(
                 this.binaryOperand().map(function(v){
                     return v
                 }),
-                this.binaryOperatorAndOperand(allowColonOperators).many()
+                this.binaryOperatorAndOperand(allowColonOperators, allowEndBracesAndParens).many()
             ).map(function(v) {
                 if(v[0].length === 1 && v[1].length === 0) {
                     return v[0][0]
@@ -41,28 +45,30 @@ var L = P.createLanguage({scope:{}}, {
     },
         // represents a binary operator, then a binary operand (with potential prefix and postfix operators)
         // returns an array of superExpression parts
-        binaryOperatorAndOperand: function(allowColonOperators){
+        binaryOperatorAndOperand: function(allowColonOperators, allowEndBracesAndParens/*=false*/){
             var operators = [
-                this.basicOperator(),
-                this.equalsOperator(),
-                this.openingBrace(),
-                this.closingBraces()
+                this.basicOperator().times(1),
+                this.equalsOperator().times(1),
+                this.openingBracket().times(1),
+                this.closingBBPs(allowEndBracesAndParens)
             ]
             if(allowColonOperators) {
-                operators.push(this.colonOperator())
+                operators.push(this.colonOperator().times(1))
             }
 
             return alt(
-                seq(this.openingBrace(), this.indentedWs().many(), this.closingBraces()).map(function(v) {
-                    return [v[0],v[2]]
+                seq(this.openingBracket(), this.indentedWs().many(), this.closingBrackets()).map(function(v) {
+                    return [v[0]].concat(v[2])
                 }),
                 seqObj(
                     alt(this.indentedWs().many(),
                         this.expressionEndLine()),
-                    ['operator', alt.apply(null, operators).map(function(v) {
-                        if(v.opType === undefined)
-                            v.opType = 'binary'
-                        return v
+                    ['operators', alt.apply(null, operators).map(function(v) {
+                        return v.map(function(o) {
+                            if(o.opType === undefined)
+                                o.opType = 'binary'
+                            return o
+                        })
                     })],
                     alt(this.indentedWs().many(),
                         this.expressionEndLine()
@@ -73,11 +79,11 @@ var L = P.createLanguage({scope:{}}, {
                     alt(this.indentedWs().many(),
                         this.expressionEndLine()
                     ),
-                    ['closingBraces',this.closingBraces().atMost(1)]
+                    ['closingBBPs',this.closingBBPs(allowEndBracesAndParens).atMost(1)]
                 ).map(function(v){
-                    var result = [v.operator].concat(v.operand)
-                    if(v.closingBraces.length > 0) {
-                        result = result.concat(v.closingBraces)
+                    var result = v.operators.concat(v.operand)
+                    if(v.closingBBPs.length > 0) {
+                        result = result.concat(v.closingBBPs[0])
                     }
 
                     return result
@@ -106,9 +112,11 @@ var L = P.createLanguage({scope:{}}, {
             return seqObj(
                 ['binaryOperandPrefixAndAtom', this.binaryOperandPrefixAndAtom()],
                 ['binaryOperandPostfix', this.binaryOperandPostfix().atMost(1)],
-                ['closingBraces', this.closingBraces().atMost(1)]
+                ['closingBrackets', this.closingBrackets().atMost(1)]
             ).map(function(v) {
-                return v.binaryOperandPrefixAndAtom.concat(v.binaryOperandPostfix).concat(v.closingBraces)
+                if(v.closingBrackets.length > 0)
+                    v.closingBrackets = v.closingBrackets[0]
+                return v.binaryOperandPrefixAndAtom.concat(v.binaryOperandPostfix).concat(v.closingBrackets)
             })
         },
             // returns an array of superExpression parts
@@ -116,16 +124,17 @@ var L = P.createLanguage({scope:{}}, {
                 return seqObj(
                     ['basicOperators', this.basicOperator().atMost(1)],
                     ['expressionAtom', this.expressionAtom().chain(function(v) {
-                        if(v.type in {variable:1, superExpression:1}) {
+                        //var unknownMacrosAllowed = !this.state.consumeFirstlineMacros
+                        if(/*unknownMacrosAllowed && */v[0].type in {variable:1, superExpression:1}) {
                             return this.rawExpression().atMost(1).map(function(rawExpressions) {
                                 if(rawExpressions.length === 1) {
-                                    return [v, rawExpressions[0]]
+                                    return v.concat([rawExpressions[0]])
                                 } else {
-                                    return [v]
+                                    return v
                                 }
                             })
                         } else {
-                            return succeed([v])
+                            return succeed(v)
                         }
                     }.bind(this))]
                 ).map(function(v) {
@@ -162,28 +171,40 @@ var L = P.createLanguage({scope:{}}, {
     nonMacroExpressionContinuation: function(allowColonOperators/*=true*/) {
         if(allowColonOperators === undefined) allowColonOperators = true
         return seqObj(
-            ['postfix', this.binaryOperandPostfix().atMost(1).map(function(v){
-                return v
+            ['postfix', this.binaryOperandPostfix().atMost(1)],
+            ['closingBBPs', this.closingBBPs(true).atMost(1).map(function(v){
+                if(v.length > 0)
+                    return v[0]
+                else
+                    return []
             })],
-            ['closingBraces', this.closingBraces().atMost(1).map(function(v){
-                return v
-            })],
-            ['binaryOperatorAndOperands', this.binaryOperatorAndOperand(allowColonOperators).many().map(function(v){
-                return v
-            })],
-            ['superExpressions', this.superExpression(allowColonOperators).many()],
+            ['binaryOperatorAndOperands', this.binaryOperatorAndOperand(allowColonOperators, true).many()],
+            ['superExpressions', this.superExpression(allowColonOperators, true).many()],
             this.ws().many()
         ).map(function(v) {
-            return {current: v.postfix.concat(v.closingBraces).concat(flatten(v.binaryOperatorAndOperands)),
+            return {current: v.postfix.concat(v.closingBBPs).concat(flatten(v.binaryOperatorAndOperands)),
                     next: v.superExpressions
             }
         })
     },
 
-    // returns a value node
+    // returns a list of nodes where the first is always a value node and the second node is a macroConsumption node if it exists
     expressionAtom: function() {
         return alt(
-            this.value(),
+            this.value().chain(function(v) {
+                if(this.state.consumeFirstlineMacros && v.type === 'variable') {
+                    var value = this.state.scope.get(v.name)
+                    if(value !== undefined && value.macro !== undefined) {
+                        // evaluate macro consumption
+                        return this.macro(value).map(function(parts) {
+                            return [v].concat(parts)
+                        })
+                    }
+                }
+                // else
+                return P.succeed([v])
+            }.bind(this)),
+
             seqObj('(',
                 ['superExpression', this.superExpression()],
                 ['end', seq(
@@ -192,17 +213,39 @@ var L = P.createLanguage({scope:{}}, {
                 ).atMost(1)]
             ).map(function(v) {
                 if(v.end.length !== 1) {// if the end paren hasn't been found
-                    v.superExpression.needEndParen = true  // set superExpression's 'needEndParen" to true
+                    v.superExpression.needsEndParen = true
                 }
 
                 if(v.superExpression.length === 1 && !v.superExpression.needsEndParen) { // todo: do we need to check needsEndParen? That might always be false here
-                    return v.superExpression.parts[0] // return the lone part of the superExpression
+                    return [v.superExpression.parts[0]] // return the lone part of the superExpression
                 } else {
-                    return v.superExpression
+                    return [v.superExpression]
                 }
             })
         )
     },
+        // macro - A lima macro value.
+        // returns a macroConsumption node
+        macro: function(macro) {
+            return P(function(input, i) {
+                var context = {scope:this.state.scope}
+                var result = utils.consumeMacro(context, macro, input.slice(i))
+                var consumedCharsLimaValue = utils.getProperty({this:result}, coreLevel1.StringObj('consume'))
+                if(consumedCharsLimaValue.primitive.denominator !== 1) {
+                    throw new Error("The 'consume' property returned from the macro '"+macro.name+"' isn't an integer.")
+                }
+                var consumedChars = consumedCharsLimaValue.primitive.numerator
+                var consumedString = input.slice(i, i+consumedChars)
+                if(consumedString.indexOf('\n')) {
+                    this.state.firstLine = false
+                }
+
+                var nextIndex = i+consumedChars
+                var macroConsumption = {type:"macroConsumption", index: 0, consume:consumedChars}
+                var rawExpression = {type:"rawExpression", expression:input.slice(i, nextIndex)}
+                return P.makeSuccess(nextIndex, [macroConsumption, rawExpression]);
+            }.bind(this))
+        },
 
     // operators and macros
 
@@ -272,8 +315,8 @@ var L = P.createLanguage({scope:{}}, {
         basicOperatorWithoutEquals: function() {
             return alt(
                 alt(
-                    one('!$%^&*-+/|\\/<>.,?!:'),
-                    seq(one("@#"),
+                    one('!$@%^&*-+/|\\/<>.,?!:'),
+                    seq(one("#"),
                         notFollowedBy(this.rawString()) // since strings are modified by the @ and # symbols
                     ).map(function(v){
                         return v[0]
@@ -282,30 +325,48 @@ var L = P.createLanguage({scope:{}}, {
             )
         },
 
-    // represents one or more closing single- or double- braces
-    // can represent a sequence of both
-    closingBraces: function() {
-        return this.braceOperator(
-            seq(
-                str(']').atLeast(1),
-                seq(this.indentedWs(),
-                    str(']').atLeast(1)
-                ).map(function(v){
-                    return v[1]
-                }).many()
+    // closing Braces, Brackets, and/or Parens
+    closingBBPs: function(allowEndBracesAndEndParens) {
+        if(allowEndBracesAndEndParens) {
+            return alt(
+                alt('}',')').map(function(v) {
+                    return {type:'operator', operator:v, opType:'postfix'}
+                }).atLeast(1),
+                this.closingBrackets()
             )
+        } else {
+            return this.closingBrackets()
+        }
+    },
+
+    // Represents one or more closing single- or double- brackets.
+    // Can represent sequences of both.
+    // Returns a list of operator nodes.
+    closingBrackets: function() {
+        return seq(
+            this.closingBracket(),
+            seq(this.indentedWs(),
+                this.closingBracket()
+            ).map(function(v){
+                return v[1]
+            }).many()
         ).map(function(v) {
-            return v
+            return [v[0]].concat(v[1])
         })
     },
 
-    openingBrace: function() {
-        return this.braceOperator(
+    openingBracket: function() {
+        return this.braceParenBracket(
             str('[').atLeast(1)
         )
     },
+    closingBracket: function() {
+        return this.braceParenBracket(
+            str(']').atLeast(1)
+        )
+    },
 
-    braceOperator(braceParser) {
+    braceParenBracket: function(braceParser) {
         return braceParser.tie().map(function(v) {
             return {type:'operator', operator:v, opType:'postfix'}
         })
@@ -405,16 +466,14 @@ var L = P.createLanguage({scope:{}}, {
             )
 
             return seqObj.apply(seqObj, sequence).map(function(v) {
+                maybeUnsetFirstline(this, v)
                 var trailing = v.trailingQuotes || ''
                 return {type:'string', string:v.preChars+v.mainBody+trailing+v.postChars}
-            })
+            }.bind(this))
         },
 
         specialStringPrefix: function(quoteChar) {
-            return alt(
-                str('@').map(function(){return '\n'}),
-                str('#').map(function(){return quoteChar})
-            )
+            return str('#').map(function(){return quoteChar})
         },
 
     // numbers
@@ -496,7 +555,8 @@ var L = P.createLanguage({scope:{}}, {
     indent: function(cb) {
         if(this.state.indent === undefined) {
             var firstLine = true
-            var parserState = this.withState({indent:0})
+            var newState = basicUtils.merge({},this.state, {indent:0})
+            var parserState = this.withState(newState)
         } else {
             var parserState = this
         }
@@ -515,9 +575,14 @@ var L = P.createLanguage({scope:{}}, {
                 newIndent++ // the construct is the first thing in the file, so treat it like it started after a newline
             }
 
-            var state = this.withState({indent: newIndent})
+            var newState = basicUtils.merge({},this.state, {indent:newIndent})
+            var state = this.withState(newState)
             return cb.call(state, v)
         }.bind(parserState))
+    },
+
+    anyNonWhitespace: function() {
+        return none(' \n\r')
     },
 
     // a block of at least one whitespace character, where any newline consumes
@@ -543,12 +608,15 @@ var L = P.createLanguage({scope:{}}, {
     },
     // a newline with indentation consumed and stripped away
     indentedNewline: function(indent) {
-        return str('\n').skip(str(' ').times(indent))
+        return str('\n').skip(str(' ').times(indent)).map(function(v) {
+            this.state.firstLine = false
+            return v
+        }.bind(this))
     },
     newlineFreeWs: function() {
         return this.ws(false)
     },
-    // a block of whitespace (or no whitespace)
+    // a block of whitespace
     // returns ['indent', indentChars]
     ws: function(allowNewlines) {
         return this.whitespace(allowNewlines).atLeast(1).tie()
@@ -557,47 +625,43 @@ var L = P.createLanguage({scope:{}}, {
         var chars = ' \r'
         if(allowNewlines !== false)
             chars += '\n'
-        return alt(one(chars), this.comment(allowNewlines)).expected(['whitespace'])
+        return alt(one(chars), this.comment(allowNewlines)).expected(['whitespace']).map(function(v) {
+            maybeUnsetFirstline(this, v)
+            return v
+        }.bind(this))
     },
-    comment: function(allowNewlines) {
-        return alt(this.spanComment(allowNewlines), this.singlelineComment()).tie()
-    },
-        singlelineComment: function() {
-            return seq(";", none("\n").many(), alt("\n", eof)).map(function(v) {
-                if(v[2] === null)
-                    v[2] = ''
-
-                return v
-            })
+        comment: function(allowNewlines) {
+            return alt(this.spanComment(allowNewlines), this.singlelineComment()).tie()
         },
-        spanComment: function(allowNewlines) {
-            var open = str(";["), close = str(";]")
-            var anyChar = any
-            if(allowNewlines !== false)
-                anyChar = seq(notFollowedBy('\n'),any)
+            singlelineComment: function() {
+                return seq(";", none("\n").many(), alt("\n", eof)).map(function(v) {
+                    if(v[2] === null)
+                        v[2] = ''
 
-            return seq(
-                open,
-                alt(
-                    notFollowedBy(alt(open,close)).then(anyChar),
-                    succeed().chain(function() {
-                        return this.spanComment(allowNewlines)
-                    }.bind(this))
-                ).many(),
-                close
-            )
-        }
+                    return v
+                })
+            },
+            spanComment: function(allowNewlines) {
+                var open = str(";["), close = str(";]")
+                var anyChar = any
+                if(allowNewlines !== false)
+                    anyChar = seq(notFollowedBy('\n'),any)
+
+                return seq(
+                    open,
+                    alt(
+                        notFollowedBy(alt(open,close)).then(anyChar),
+                        succeed().chain(function() {
+                            return this.spanComment(allowNewlines)
+                        }.bind(this))
+                    ).many(),
+                    close
+                )
+            }
 })
 
 
 // util methods
-
-// finds the indentation of the last line of a string of whitespace
-function findIndent(whitespaceString) {
-    var lines = whitespaceString.split('\n')
-    var lastLine = lines[lines.length-1]
-    return lastLine.length
-}
 
 // flattens a 2D array into a 1D array of 2nd level parts in order
 function flatten(list) {
@@ -646,5 +710,12 @@ function charToNumber(char) {
 
 module.exports = L
 module.exports.tryParse = function(content) {
-        return  L.module().tryParse(content)
+    return  L.module().tryParse(content)
+}
+
+function maybeUnsetFirstline(that, v) {
+    var optimization = that.state.firstLine
+    if(optimization && v.indexOf('\n')) {
+        that.state.firstLine = false
+    }
 }

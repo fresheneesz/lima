@@ -193,3 +193,158 @@ df itemsToLock item:
 //                }}
 //            ]
 //        }
+
+
+//var fn = macro(function(context, rawInput) {
+//    var firstLineAst = macroParsers.parseBlockFirstLine().tryParse(rawInput)
+//
+//    /* First line cases:
+//
+//        fn
+//        fn params:
+//        fn[ params:
+//        fn[ params: expression
+//        fn[ params: expression
+//        ]
+//        fn[ params: expression ]
+//        fn[ params: expression ] more expressions
+//
+//       Non-cases:
+//        fn params: expression  moreParams: moreExpressions
+//        fn[params: expression  moreParams: moreExpressions]
+//
+//     */
+//
+//    var possibleMacroError = false // assume false until proven otherwise
+//    var body = rawInput // assume this until proven otherwise too
+//    if(firstLineAst.openingBracket && firstLineAst.contains(']')) { // macros could eat the end of the function
+//        // todo: this needs to be passed up somehow so if there's a parsing error, the runtime can tell you it might be macro weirdness in the function's first line. This would happen either if a macro was expected to consume input and didn't, or if it was expected not to and did.
+//        possibleMacroError = true // if a syntax error occurs, it might be the fault of a macro
+//        var macroEvaluationContext = createMacroConsumptionContext(context)
+//        var bodyFirstLineInfo = evaluate.fnFirstLineMacroConsumption(macroEvaluationContext, firstLineAst.body, /*endBracketPossible=*/true)
+//        if(bodyFirstLineInfo.endReached) {
+//            body = bodyFirstLineInfo.body
+//        }
+//    }
+//
+//    var ast = macroParsers.functionBody(/*endBracketPossible=*/true).tryParse(body)
+//
+//    return {
+//        consume: rawInput.length,
+//        run: FunctionObj(undefined, {
+//            match: function(args) {
+//                for(var n=0; n<ast.length; n++) {
+//                    var block = ast[n]
+//                    var blockInfo = evaluate.fnParams(block)
+//                    var normalizedArgs = utils.getNormalizedArgs(this.this, blockInfo.params, args)
+//                    if(normalizedArgs !== undefined) {
+//                        return {
+//                            args: normalizedArgs,
+//                            params: blockInfo.params,
+//                            body: blockInfo.body
+//                        }
+//                    }
+//                }
+//
+//
+//            },
+//            fn: function(callInfo) {
+//                var retPtr = {}
+//                var functionContext = createFunctionContext(this, retPtr, function(name, value, isPrivate, functionContext, functionScope) {
+//                    if(functionContext.scope.get(name) === undefined)
+//                        throw new Error("Variable "+name+" undeclared!")
+//
+//                    functionScope[name] = value
+//                })
+//
+//                setArgumentsOnParameters(functionContext, callInfo.params, callInfo.args)
+//
+//                for(var j=0; j<callInfo.body.length; j++) {
+//                    var body = callInfo.body[j]
+//                    if(utils.isNodeType(body, 'superExpression')) {
+//                        var parts = body.parts
+//                    } else {
+//                        var parts = [body.parts]
+//                    }
+//
+//                    while(parts.length > 0) {
+//                        var result = evaluate.superExpression(functionContext, parts, false, false)
+//                        parts = result.remainingParts
+//                        if(retPtr.returnValue !== undefined) {
+//                            return retPtr.returnValue
+//                        }
+//                    }
+//                }
+//            }
+//        })
+//    }
+//
+//
+//    function createFunctionContext(context, retPtr, setFn) {
+//        var functionScope = {}
+//        var functionContext = {
+//            this: context.this,
+//            scope: utils.ContextScope(
+//                function get(name) {
+//                    if(name in functionScope) {
+//                        return functionScope[name]
+//                    } else {
+//                        return context.scope.get(name)
+//                    }
+//                },
+//                function set(name, value, isPrivate) {
+//                    setFn(name, value, isPrivate, functionContext, functionScope)
+//                }
+//            )
+//        }
+//
+//        functionScope.ret = createRetMacro(retPtr, functionContext)
+//
+//        return functionContext
+//    }
+//
+//    function createMacroConsumptionContext(context) {
+//        return createFunctionContext(context, {}, function(name, value, isPrivate, functionContext, functionScope) {
+//            throw new Error("Can't overwrite variable "+name+" from an upper scope inside a macro " +
+//                "consumption function (mutations should be done in the `run` function).")
+//        })
+//    }
+//
+//    function createRetMacro(retPtr, functionContext) {
+//        return macro(function(input) {
+//            var ast = macroParsers.retStatement().tryParse(input)
+//            var result = evaluate.superExpression(functionContext, [ast[0]], false, false)
+//            retPtr.returnValue = result.value
+//            return {
+//                consume: input.length - ast[1].length,
+//                run: function() {return nil}
+//            }
+//        })
+//    }
+//})
+
+
+//* partial implementation of make (missing some necessary things - can't remember what at the moment: unmake?)
+//
+//var make = macro input:
+//  varparse:
+//    seq[ lima.ws '['
+//      alt[lima.fnBody seq['unmake' lima.ws ':' lima.superExpression.many]
+//    ]
+// var scopeObject ~> callingScope.this
+// var originalBracketOp = meta[scopeObject].operators['[']
+// meta[scopeObject].operators['['] = ret fn:
+//   var x = scopeObject
+//   meta[x].operators['['] = originalBracketOp
+//   callback[x]
+//   ret x
+//
+//* OLD partial implementation of make (missing some necessary things - can't remember what at the moment)
+//    var make = fn:
+//      var scopeObject ~> callingScope.this
+//      var originalBracketOp = meta[scopeObject].operators['[']
+//      meta[scopeObject].operators['['] = ret fn:
+//        var x = scopeObject
+//        meta[x].operators['['] = originalBracketOp
+//        callback[x]
+//        ret x

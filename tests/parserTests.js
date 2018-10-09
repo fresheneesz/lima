@@ -9,13 +9,13 @@ var indentTests=[], indentedWsTests=[], commentTests=[]
 var validNumeralsTests=[], floatTests=[], numberTests=[], stringTests=[], operatorTests=[]
 var binaryOperandTests=[]
 var rawExpressionTests=[{state: {indent: 0}, inputs: {}}, {state: {indent: 1}, inputs: {}}]
-var closingBraces = []
+var closingBrackets = []
 var superExpressionTests=[], nonMacroExpressionContinuationTests=[]
 var objectDefinitionSpaceTests = {}, objectTests = [], moduleTests=[]
+var macroTests=[]
 
 
-
-//*
+/*
 
 indentedWsTests = [
     {note: "0 indent", args: [0], inputs: [
@@ -110,7 +110,6 @@ stringTests = {
     state: {indent:0},
     inputs: [
         "''", '""', '"""hi"""', "'''hi'''", "```hi```",
-        "@'newlineBefore'", "'newlineAfter'@",
         "#'singleQuote'#", '#"doubleQuote"#',
         '#"""tripleDoubleQuote"""#',
         "#'''tripleSingleQuote'''#",
@@ -146,6 +145,8 @@ binaryOperands = {
    "+1+":   [ { type: 'operator', opType: 'prefix', operator: '+' },
               { type: 'number', numerator: 1, denominator: 1 },
               { type: 'operator', operator: '+', opType: 'postfix' } ],
+   "@'a'":  [ { type: 'operator', opType: 'prefix', operator: '@' },
+              { type: 'string', string: "a" } ],
    "a=1}":  [ { type: 'variable', name: 'a' },
               { type: 'rawExpression', expression: '=1}' } ]
 }
@@ -165,8 +166,10 @@ rawExpressionTests[1].inputs[
 ] = { type: 'rawExpression', expression: '\n}}' }
 
 
-closingBraces = {state:{indent:0}, inputs: {}}
-closingBraces.inputs['] ]'] = { type: 'operator', operator: ']]', opType: 'postfix' }
+closingBrackets = {state:{indent:0}, inputs: {}}
+closingBrackets.inputs['] ]'] = [{ type: 'operator', operator: ']', opType: 'postfix' },
+                                 { type: 'operator', operator: ']', opType: 'postfix' }]
+closingBrackets.inputs[']]'] = [{ type: 'operator', operator: ']]', opType: 'postfix' }]
 
 superExpressionTests = getSuperExpressionTests()
 function getSuperExpressionTests() {
@@ -294,7 +297,7 @@ function getSuperExpressionTests() {
                 [ { type: 'variable', name: 'b' },
                   { type: 'rawExpression', expression: '=4)' } ],
                needsEndParen: false,
-               needEndParen: true },
+               needsEndParen: true },
              { type: 'rawExpression', expression: '' } ],
           needsEndParen: false }
 
@@ -454,8 +457,7 @@ function getSuperExpressionTests() {
                parts:
                 [ { type: 'variable', name: 'B' },
                   { type: 'rawExpression', expression: '\n))' } ],
-               needsEndParen: false,
-               needEndParen: true },
+               needsEndParen: true },
              { type: 'rawExpression', expression: '' } ],
           needsEndParen: false }
     sameIndentMacroEndLineTests[
@@ -695,7 +697,8 @@ function getNonMacroExpressionContinuationTests() {
                  next: [] }
     randomTests.inputs['[] ]'] =
             { current: [ { type: 'operator', operator: '[', opType: 'postfix' },
-                         { type: 'operator', operator: ']]', opType: 'postfix' } ],
+                         { type: 'operator', operator: ']', opType: 'postfix' },
+                         { type: 'operator', operator: ']', opType: 'postfix' } ],
                  next: [] }
     randomTests.inputs['[3] wout[x]'] =
             { current:
@@ -715,6 +718,27 @@ function getNonMacroExpressionContinuationTests() {
                  { type: 'operator', operator: ']', opType: 'postfix' } ],
                  next: [] }
 
+   randomTests.inputs[' = 5}'] = // end brace
+            { current:
+               [ { type: 'operator', operator: '=', opType: 'binary' },
+                 { numerator: 5, denominator: 1, type: 'number' },
+                 { type: 'operator', operator: '}', opType: 'postfix' } ],
+                 next: [] }
+   randomTests.inputs[' + 5)'] = // end paren
+            { current:
+               [ { type: 'operator', operator: '+', opType: 'binary' },
+                 { numerator: 5, denominator: 1, type: 'number' },
+                 { type: 'operator', operator: ')', opType: 'postfix' } ],
+                 next: [] }
+
+   randomTests.inputs['}'] = // end brace
+            { current:
+               [ { type: 'operator', operator: '}', opType: 'postfix' } ],
+                 next: [] }
+   randomTests.inputs[')'] = // end paren
+            { current:
+               [ { type: 'operator', operator: ')', opType: 'postfix' } ],
+                 next: [] }
 
 
     tests.push(randomTests)
@@ -803,6 +827,13 @@ moduleTests.push({content:{
    unterminatedBracketOperator2: '{}[3'
 }})
 
+
+//macroTests.push({content:{
+//   emptyFile: '',
+//   unaryAmbiguity1: '3!2',
+//   unterminatedBracketOperator2: '{}[3'
+//}})
+
 //*/
 
 exports.indentedWsTests = indentedWsTests
@@ -815,12 +846,13 @@ exports.stringTests = stringTests
 exports.operatorTests = operatorTests
 exports.binaryOperandTests = {state:{indent:0}, inputs: binaryOperands}
 exports.rawExpressionTests = rawExpressionTests
-exports.closingBraces = closingBraces
+exports.closingBrackets = closingBrackets
 exports.superExpressionTests = superExpressionTests
 exports.nonMacroExpressionContinuationTests = nonMacroExpressionContinuationTests
 exports.objectDefinitionSpaceTests = {inputs: objectDefinitionSpaceTests}
 exports.objectTests = objectTests
 exports.moduleTests = moduleTests
+exports.macroTests = macroTests
 
 
 function testIndentSuccess(that, expectedIndent, v) {

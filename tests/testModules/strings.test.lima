@@ -4,9 +4,6 @@
 `moose`
 """hi"""
 
-@'newlineBefore'
-'newlineAfter'@
-
 #'singleQuote'#
 #"doubleQuote"#
 #"""tripleQuote"""#

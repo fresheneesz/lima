@@ -12,34 +12,21 @@ var evaluate = require("./evaluate")
 
 var _ = undefined // for places where you don't need a value
 var anyType = exports.anyType = function() {
-    return true // everything's a var?
+    return true // everything's a `var?`
 }
 
 var dotOperator = {
-    type:'binary', order:0, scope: 0, dispatch: [
-        {params: makeParamInfo([{name:anyType},{value:anyType}]), fn: function(name) {
-            var result = this.this.privileged[name.primitive.string]
-            if(result !== undefined)
-                return result
-            result = utils.getProperty(this, name)
-            if(result !== undefined)
-                return result
-            // else
-            return nil
-        }}
-    ]
-}
-
-// returns a primitive integer hash from a string
-function getJsStringKeyHash(string) {
-  var hash = 0, i, chr
-  if (string.length === 0) return hash
-  for (i = 0; i < string.length; i++) {
-    chr   = string.charCodeAt(i)
-    hash  = ((hash << 5) - hash) + chr
-    hash |= 0 // Convert to 32bit integer
-  }
-  return hash
+    order:0, scope: 0,
+    dispatch: makeParamInfo([{params: [{name:anyType}], fn: function(name) {
+        var result = this.this.privileged[name.primitive.string]
+        if(result !== undefined)
+            return result
+        result = utils.getProperty(this, name)
+        if(result !== undefined)
+            return result
+        // else
+        return nil
+    }}])
 }
 
 // creates a binary operator where it does the same thing no matter which side the primary object is on
@@ -50,14 +37,15 @@ function getJsStringKeyHash(string) {
 // rawOperationFn - The function to run.
 function symmetricalOperator(options, rawOperationFn) {
     return {
-        type:'binary', order:options.order, scope: options.scope, dispatch: [
-            {params: makeParamInfo([{other:options.paramType},{this:_}]), fn: function(other) {
+        order: options.order, scope: options.scope,
+        dispatch: makeParamInfo([
+            {params: [{other: options.paramType}, {this: _}], fn: function (other) {
                 return rawOperationFn.call(this, other)
             }},
-            {params: makeParamInfo([{this:_},{other:options.paramType}]), fn: function(thisObj, other) {
+            {params: [{this: _}, {other: options.paramType}], fn: function (thisObj, other) {
                 return rawOperationFn.call(this, other)
             }}
-        ]
+        ])
     }
 }
 
@@ -69,32 +57,37 @@ function toLimaBoolean(primitiveBoolean) {
     }
 }
 
-// Returns a function that takes in arguments and returns true if they match the parameters.
+// Returns a function dispatch object (with `match` and `run`)
 // This is used for internal functions and operators, since parameters for user-created functions
 // are evaluated in a different way.
 // parameters - An array of objects where each object has one key with one value where:
     // the key is the name
     // the value is the type
-function makeParamInfo(parameters) {
-    var expandedParams = expandParameters(parameters)
+function makeParamInfo(parameterSets) {
     return {
         match: function(args) {
-            if(utils.getNormalizedArgs(this.this, expandedParams, args) !== undefined) {
-                for(var n=0; n<expandedParams.length; n++) {
-                    if(expandedParams[n].type !== anyType && expandedParams[n].type !== undefined) {
-                        return true // not weak
+            for(var n=0; n<parameterSets.length; n++) {
+                var parameters = parameterSets[n].params
+                var expandedParams = expandParameters(parameters)
+                var normalizedArgs = utils.getNormalizedArgs(this.this, expandedParams, args)
+                if(normalizedArgs !== undefined) {
+                    for(var j=0; j<expandedParams.length; j++) {
+                        if(expandedParams[j].type !== anyType && expandedParams[j].type !== undefined) {
+                            return LimaObject({argInfo: {args: normalizedArgs, paramIndex: n}}) // not weak
+                        }
                     }
+                    // else
+                    return LimaObject({argInfo: {args: normalizedArgs, paramIndex: n}, weak: True})
                 }
-                // else
-                return 'weak'
-            } else {
-                return false
             }
+            // else
+            return nil
         },
-        normalize: function(args) {
-            return utils.getNormalizedArgs(this.this, expandedParams, args)
+        run: function(argInfo) {
+            return parameterSets[argInfo.paramIndex].fn.apply(this, argInfo.args)
         }
     }
+
 
     function expandParameters(params) {
         return params.map(function(param) {
@@ -134,21 +127,18 @@ var nil = exports.nil = {
     // //inherit: undefined,
     destructors: [],
 
-    // operators is an object where each key is an operator and value has the properties:
-        // type - 'binary', 'prefix', or 'postfix'
+    // operators is an object representing binary operators where each key is an operator and value has the properties:
         // order
         // scope - The index of the scope (within `scopes`) to look for variables in
         // backward - (Optional) If true, the operator is right-to-left associative
         // boundObject - (Optional) The object the function is bound to (because it was defined inside that object)
-        // dispatch - An array of objects each with the properties:
-            // params - Defines how parameters match and are normalized for this dispatch item.
-            //          Is an object with the following two function members that each get a `context`
-            //          object as their `this`-context:
-                // match(args) - Should return true if it matches with types, "weak" if it matches with
-                //               anyType or varType, and undefined otherwise.
-                // normalize(args) - Should process any named parameters and return an array of values to be
-                //                   paired with parameters in order.
-            // fn - The raw function to call if the parameters match.
+        // dispatch - An object with the properties
+            // match - Defines how parameters match and are normalized.
+            //         If the arguments don't match should return nil, and if the arguments do match it should return
+            //         an object with the following properties:
+                // argInfo - A value to be passed to `run`
+                // weak - True if the matching should be considered weak for operator dispatch.
+            // run - The raw function to call if the parameters match. Takes in `argInfo` from the return value of match.
     operators: {
         '??': symmetricalOperator({order:6, scope:0, paramType: anyType}, function(other) {
             return toLimaBoolean(this.this === other) // todo: support references
@@ -157,26 +147,29 @@ var nil = exports.nil = {
             return toLimaBoolean(utils.isNil(other))
         }),
         '=':{
-            type:'binary', order:9, backward:true, scope: 0, dispatch: [
-                {params: makeParamInfo([{rvalue:anyType}]), fn: function(rvalue) { // assignment operator
+            order:9, backward:true, scope: 0,
+            dispatch: makeParamInfo([
+                {params: [{rvalue:anyType}], fn: function(rvalue) { // assignment operator
                     if(this.this.const)
                         throw new Error("Can't assign a const variable")
                     basicUtils.overwriteValue(this.this, rvalue)
                 }},
-                {params: makeParamInfo([]), fn: function() { // copy operator
+                {params: [], fn: function() { // copy operator
                     return basicUtils.copyValue(this.this)
                 }}
-            ]
+            ])
         },
         // '~>': {
-        //     type:'binary', order:9, scope: 0, dispatch: [
+        //     order:9, scope: 0, dispatch: [
         //         {parameters:[{name:'rvalue',type:anyType}], fn: function(rvalue) {
         //             throw new Error("unsupported yet")
         //             //return utils.callOperator(this.this, this.this.operators['>'], this.callingScope, [rvalue])
         //         }}
         //     ]
         // },
-    }
+    },
+    preOperators:{}, // same form as operators, except won't have the order, backward, or chain properties
+    postOperators:{} // same form as preOperators
 }
 
 
@@ -188,6 +181,16 @@ zero.operators['=='] = symmetricalOperator({order:6, scope:0, paramType: anyType
     return toLimaBoolean(other.primitive && other.primitive.numerator === this.this.primitive.numerator
                                          && other.primitive.denominator === this.this.primitive.denominator)
 })
+zero.operators['+'] = symmetricalOperator({order:6, scope:0, paramType: anyType}, function(other) {
+    if(other.primitive.denominator === this.this.primitive.denominator) {
+        return NumberObj(this.this.primitive.numerator+other.primitive.numerator)
+    } else {
+        var commonDenominator = other.primitive.denominator * this.this.primitive.denominator
+        var otherNumeratorScaled = this.this.primitive.denominator*other.primitive.numerator
+        var thisNumeratorScaled = other.primitive.denominator*this.this.primitive.denominator
+        return NumberObj(otherNumeratorScaled+thisNumeratorScaled, commonDenominator)
+    }
+})
 
 
 var emptyString = exports.emptyString = basicUtils.copyValue(nil)
@@ -197,6 +200,18 @@ emptyString.operators['.'] = dotOperator
 emptyString.operators['=='] = symmetricalOperator({order:6, scope:0, paramType: anyType}, function(other) {
     return toLimaBoolean(other.primitive && other.primitive.string === this.this.primitive.string)
 })
+emptyString.preOperators['@'] = {
+    scope: 0,
+    dispatch: makeParamInfo([{params: [], fn: function() {
+        return StringObj('\n'+this.this.primitive.string)
+    }}])
+}
+emptyString.postOperators['@'] = {
+    scope: 0,
+    dispatch: makeParamInfo([{params: [], fn: function() {
+        return StringObj(this.this.primitive.string+'\n')
+    }}])
+}
 
 
 var emptyObj = exports.emptyObj = basicUtils.copyValue(nil)
@@ -210,11 +225,18 @@ emptyObj.operators['.'] = dotOperator
 
 // Returns a lima object that has a bracket operator with the passed in dispatch rules.
 // boundObject - The boundObject property of an operator
-function FunctionObj(boundObject, bracketOperatorDispatch) {
+function FunctionObj(/*boundObject=undefined, bracketOperatorDispatch*/) {
+    if(arguments.length === 1) {
+        var bracketOperatorDispatch = arguments[0]
+    } else {
+        var boundObject = arguments[0]
+        var bracketOperatorDispatch = arguments[1]
+    }
+
     var obj = basicUtils.copyValue(nil)
     delete obj.primitive
     obj.operators['['] = {
-        type:'binary', order:0, scope: 0, boundObject:boundObject, dispatch: bracketOperatorDispatch
+        order:0, scope: 0, boundObject:boundObject, dispatch: bracketOperatorDispatch
     }
     return obj
 }
@@ -223,31 +245,39 @@ function FunctionObj(boundObject, bracketOperatorDispatch) {
 // privileged members
 
 // todo: define hashcode and str as a function for now (when I figure out how to make accessors, we'll use that instead)
-zero.privileged.hashcode = FunctionObj(zero, [{params: makeParamInfo([]), fn: function() {
-    if(this.this.primitive.denominator === 1) {
-        return this.this
-    } else {
-        var primitiveHashcode = getJsStringKeyHash(this.this.primitive.numerator+'/'+this.this.primitive.denominator)
-        return NumberObj(primitiveHashcode,1)
-    }
-}}])
+zero.privileged.hashcode = FunctionObj(zero, makeParamInfo([
+    {params: [], fn: function() {
+        if(this.this.primitive.denominator === 1) {
+            return this.this
+        } else {
+            var primitiveHashcode = utils.getJsStringKeyHash(this.this.primitive.numerator+'/'+this.this.primitive.denominator)
+            return NumberObj(primitiveHashcode,1)
+        }
+    }}
+]))
 // todo: move zero.str to coreLevel2
-zero.privileged.str = FunctionObj(zero, [{params: makeParamInfo([]), fn: function() {
-    if(this.this.primitive.denominator === 1) {
-        return StringObj(''+this.this.primitive.numerator)
-    } else {
-        return StringObj(this.this.primitive.numerator+'/'+this.this.primitive.denominator)
-    }
-}}])
+zero.privileged.str = FunctionObj(zero, makeParamInfo([
+    {params: [], fn: function() {
+        if(this.this.primitive.denominator === 1) {
+            return StringObj(''+this.this.primitive.numerator)
+        } else {
+            return StringObj(this.this.primitive.numerator+'/'+this.this.primitive.denominator)
+        }
+    }}
+]))
 
 // todo: define hashcode and str as a function for now (when I figure out how to make accessors, we'll use that instead)
-emptyString.privileged.hashcode = FunctionObj(emptyString, [{params: makeParamInfo([]), fn: function() {
-    var primitiveHashcode = getJsStringKeyHash('s'+this.this.primitive.string) // the 's' is for string - to distinguish it from the hashcode for numbers
-    return NumberObj(primitiveHashcode,1)
-}}])
-emptyString.privileged.str = FunctionObj(emptyString, [{params: makeParamInfo([]), fn: function() {
-    return this.this
-}}])
+emptyString.privileged.hashcode = FunctionObj(emptyString, makeParamInfo([
+    {params: [], fn: function() {
+        var primitiveHashcode = utils.getJsStringKeyHash('s'+this.this.primitive.string) // the 's' is for string - to distinguish it from the hashcode for numbers
+        return NumberObj(primitiveHashcode,1)
+    }}
+]))
+emptyString.privileged.str = FunctionObj(emptyString, makeParamInfo([
+    {params: [], fn: function() {
+        return this.this
+    }}
+]))
 
 
 // object creation functions
@@ -261,6 +291,7 @@ var StringObj = exports.StringObj = function(primitiveString) {
 
 // contains the private variable `primitive` (in scope[0]) that holds the primitive string that holds the numerator and denominator of the number
 var NumberObj = exports.NumberObj = function(primitiveNumerator, primitiveDenominator) {
+    if(primitiveDenominator === undefined) primitiveDenominator = 1
     var result = basicUtils.copyValue(zero)
     result.name = primitiveNumerator+""
     if(primitiveDenominator !== 1)
@@ -268,6 +299,52 @@ var NumberObj = exports.NumberObj = function(primitiveNumerator, primitiveDenomi
 
     result.primitive = {numerator:primitiveNumerator, denominator: primitiveDenominator}
     return result
+}
+
+// creates a lima object from a javascript object's basic properties
+// currently only supports:
+    // js objects that have string keys
+    // js arrays
+    // the above where elements and values are either js numbers, js string values, or lima objects
+var LimaObject = exports.LimaObject = function(jsObjOrArray, allowNil) {
+    if(jsObjOrArray instanceof Array) {
+        return jsArrayToLimaObj(jsObjOrArray, allowNil)
+    } else if(typeof(jsObjOrArray) === 'object') {
+        return jsObjToLimaObj(jsObjOrArray, allowNil)
+    } else throw ": ("
+}
+
+function jsObjToLimaObj(jsObj, allowNil) {
+    var result = basicUtils.copyValue(emptyObj)
+    var context = {this:result, scope:utils.blockCallingScope}
+    for(var k in jsObj) {
+        var limaKey = StringObj(k)
+        var limaValue = jsValueToLimaValue(jsObj[k])
+
+        utils.setProperty(context, limaKey, limaValue, allowNil)
+    }
+
+    return result
+}
+function jsArrayToLimaObj(jsArray, allowNil) {
+    var result = basicUtils.copyValue(emptyObj)
+    jsArray.forEach(function(value) {
+        var limaValue = jsValueToLimaValue(value)
+        utils.appendElement({this:result}, limaValue, allowNil)
+    })
+
+    return result
+}
+//
+function jsValueToLimaValue(value) {
+    var type = typeof(value)
+    if(type === 'string') {
+        return StringObj(value)
+    } else if(type === 'number') {
+        return NumberObj(value)
+    } else {
+        return value
+    }
 }
 
 
@@ -279,17 +356,17 @@ True.name = 'true'
 var False = exports.False = NumberObj(0,1)
 False.name = 'false'
 
-var wout = basicUtils.copyValue(emptyObj)
-wout.operators['['] = {
-    type:'binary', order:0, scope: 0, dispatch: [
-        {params: makeParamInfo([{s:anyType}]), fn: function(s) {
-            console.log(utils.getPrimitiveStr(this, s))
-        }}
-    ]
-}
 
 // macros
 
+// creates a macro object from a javascript function
+// macroFn(rawInput, startColumn) is a javascript function that:
+    // has parameters:
+        // rawInput - a lima string of input
+        // startColumn - a lima number
+    // returns a lima object with the properties:
+        // consume
+        // run
 function macro(macroFn) {
     var macroObject = basicUtils.copyValue(nil)
     delete macroObject.primitive
@@ -301,81 +378,142 @@ function macro(macroFn) {
     return macroObject
 }
 
-// var fn = macro(function(input) {
-//     var ast = macroParsers.blockConstruct(
-//         macroParsers.functionBody()
-//     ).tryParse(input)
-//
-//     function createFunctionContext(retPtr) {
-//         var functionScope = {}, upperScope = this.scope
-//         functionScope.ret = macro(function(input) {
-//             var ast = macroParsers.retStatement().tryParse(input)
-//             var result = evaluate.superExpression(functionContext, [ast[0]], false, false)
-//             retPtr.returnValue = result.value
-//             return {
-//                 charsConsumed: input.length - ast[1].length,
-//                 return: nil
-//             }
-//         })
-//         var functionContext = {
-//             this: this.this,
-//             scope: utils.ContextScope(
-//                 function get(name) {
-//                     if(name in functionScope) {
-//                         return functionScope[name]
-//                     } else {
-//                         return upperScope.get(name)
-//                     }
-//                 },
-//                 function set(name, value, isPrivate) {
-//                     if(functionContext.scope.get(name) === undefined)
-//                         throw new Error("Variable "+name+" undeclared!")
-//
-//                     functionScope[name] = value
-//                 }
-//             )
-//         }
-//
-//         return functionContext
-//     }
-//
-//     var dispatch = []
-//     ast.forEach(function(block) {
-//         var params = []
-//         if(block.param) {
-//             // var params =
-//             // resolveObjectSpace(bracketArgumentObject, argumentSpaceSuperExpressionList, 0, isObjectEnd)
-//         }
-//
-//         var fn = function() {
-//             var retPtr = {}
-//             var functionContext = createFunctionContext(retPtr);
-//             for(var j=0; j<block.body.length; j++) {
-//                 var body = block.body[j]
-//                 if(utils.isNodeType(body, 'superExpression')) {
-//                     var parts = body.parts
-//                 } else {
-//                     var parts = [body.parts]
-//                 }
-//
-//                 while(parts.length > 0) {
-//                     var result = evaluate.superExpression(functionContext, parts, false, false)
-//                     parts = result.remainingParts
-//                     if(retPtr.returnValue !== undefined) {
-//                         return retPtr.returnValue
-//                     }
-//                 }
-//             }
-//         }
-//
-//         dispatch.push({params:params, fn:fn})
-//     })
-//
-//     return {
-//         charsConsumed: input.length,
-//         return: FunctionObj(undefined, dispatch)
-//     }
-// })
+var rawFn = macro(function(rawInput) {
+    /* Plan:
+        If its possible the macro is a one-liner, parse the macro with an option that indicates that words on the first line first line should be evaluated for macro consumption.
+        The parser should insert a `macroConsumption` ast node after any first-line value to mark how many characters each is expected to consume.
+     */
+
+    var javascriptRawInput = utils.getPrimitiveStr(this, rawInput)
+    var macroContext = createMacroConsumptionContext(this)
+    var ast = macroParsers.macroBlock(macroContext, {language: macroParsers, parser: 'rawFnInner'}).tryParse(javascriptRawInput)
+
+    // todo: ast.openingBracket needs to be passed up somehow so if there's a parsing error, the runtime can tell you it might be macro weirdness in the function's first line. This would happen either if a macro was expected to consume input and didn't, or if it was expected not to consume some output and did.
+
+    var originalContext = this
+    return LimaObject({
+        consume: NumberObj(javascriptRawInput.length),
+        run: FunctionObj({
+            match: function(args) {
+                return LimaObject({argInfo: True})
+            },
+            run: function() {
+                return FunctionObj({
+                    match: function(args) {
+                        var context = {this:this.this, scope:originalContext.scope}
+                        return runFunctionStatements(context, ast.match.body, ast.match.parameter, args)
+                    },
+                    run: function(callInfo) {
+                        var context = {this:this.this, scope:originalContext.scope}
+                        return runFunctionStatements(context, ast.run.body, ast.run.parameter, callInfo)
+                    }
+                })
+            }
+        })
+    })
+
+    function runFunctionStatements(context, body, parameter, argument) {
+        var retPtr = {}
+        var functionContext = createFunctionContext(context, retPtr, function(name, value, isPrivate, functionContext, functionScope) {
+            if(functionContext.scope.get(name) === undefined)
+                throw new Error("Variable "+name+" undeclared!")
+
+            functionScope[name] = value
+        })
+
+        if(parameter !== undefined) {
+            functionContext.scope.set(parameter, argument)
+        }
+
+        for(var j=0; j<body.length; j++) {
+            var node = body[j]
+            if(utils.isNodeType(node, 'superExpression')) {
+                var parts = node.parts
+            } else {
+                var parts = [node]
+            }
+
+            while(parts.length > 0) {
+                var result = evaluate.superExpression(functionContext, parts, false, false)
+                parts = result.remainingParts
+                if(retPtr.returnValue !== undefined) {
+                    return retPtr.returnValue
+                }
+            }
+        }
+    }
+
+    function createFunctionContext(context, retPtr, setFn) {
+        var functionScope = {}
+        var functionContext = {
+            this: context.this,
+            scope: utils.ContextScope(
+                function get(name) {
+                    if(name in functionScope) {
+                        return functionScope[name]
+                    } else {
+                        return context.scope.get(name)
+                    }
+                },
+                function set(name, value, isPrivate) {
+                    setFn(name, value, isPrivate, functionContext, functionScope)
+                }
+            )
+        }
+
+        functionScope.ret = createRetMacro(retPtr, functionContext)
+
+        return functionContext
+    }
+
+    function createMacroConsumptionContext(context) {
+        return createFunctionContext(context, {}, function(name, value, isPrivate, functionContext, functionScope) {
+            throw new Error("Can't overwrite variable "+name+" from an upper scope inside a macro " +
+                "consumption function (mutations should be done in the `run` function).")
+        })
+    }
+
+    function createRetMacro(retPtr, functionContext) {
+        var retMacro = macro(function(rawInputLima) {
+            var rawInput = utils.getPrimitiveStr(this, rawInputLima)
+            var statementInfo = macroParsers.retStatement().tryParse(rawInput)
+            if(statementInfo !== undefined) {
+                var parts = statementInfo.expression.parts
+                var consumed = statementInfo.consumed
+            } else {
+                var parts = []
+                var consumed = 0
+            }
+
+            return LimaObject({
+                consume: NumberObj(consumed),
+                run: FunctionObj({
+                    match: function(args) {
+                        return LimaObject({argInfo: True})
+                    },
+                    run: function(callInfo) {
+                        var result = evaluate.superExpression(functionContext, parts, false, false)
+                        retPtr.returnValue = result.value
+                        return nil
+                    }
+                })
+            })
+        })
+        retMacro.name = 'ret'
+        return retMacro
+    }
+})
+rawFn.name = 'rawFn'
+
+
+var wout = FunctionObj({
+    match: function() {
+        return LimaObject({argInfo: True})
+    },
+    run: function(value) {
+        console.log(utils.getPrimitiveStr(this, value))
+    }
+})
 
 
 // context functions
@@ -422,7 +560,9 @@ var limaArgumentContext = exports.limaArgumentContext = function(upperScope) {
 exports.makeCoreLevel1Scope = function() {
     var scope = utils.Scope({
         nil: nil,
-        // fn: fn,
+        true: True,
+        false: False,
+        rawFn: rawFn,
         wout: wout
     })
 

@@ -1,5 +1,4 @@
 
-var parser = require("./parser")
 var utils = require("./utils")
 var basicUtils = require("./basicUtils")
 var coreLevel1 = require("./coreLevel1")
@@ -297,6 +296,7 @@ function resolveBinaryOperandFrom(context, curState, index, implicitDeclarations
     return n
 }
     function resolveNonmacroRawExpression(context, curState, n) {
+        var parser = require("./parser") // here to resolve a circular dependency
         var state = {indent:0, scope:context.scope}
         var continuation = parser.withState(state).nonMacroExpressionContinuation().tryParse(curState[n].expression)
         var continuingAstSection = continuation.current
@@ -304,7 +304,7 @@ function resolveBinaryOperandFrom(context, curState, index, implicitDeclarations
     }
 
     // type - 'prefix' or 'postfix'
-    function resolveUnaryOperator(curState, callingScope, valueItemIndex, type) {
+    function resolveUnaryOperator(callingScope, curState, valueItemIndex, type) {
         if(type === 'prefix') {
             var operatorIndex = valueItemIndex-1
             var spliceIndex = valueItemIndex-1
@@ -354,8 +354,8 @@ function resolveBinaryOperandFrom(context, curState, index, implicitDeclarations
                 curState.splice(valueItemIndex+1, 1) // remove the closing bracket operator
             } else {
                 var argumentContext = resolveBracketArguments(context, curState, valueItemIndex+2, closeBracketOperator(operator))
-                var args = utils.getArgsFromObject(argumentContext.this)
-                var returnValue = utils.callOperator(context.scope, operator, [valueItem, args])
+//                var args = utils.getArgsFromObject(argumentContext.this)
+                var returnValue = utils.callOperator(context.scope, operator, [valueItem, argumentContext.this])
                 curState.splice(valueItemIndex, 2, returnValue)
             }
         }
@@ -368,23 +368,26 @@ function resolveBinaryOperandFrom(context, curState, index, implicitDeclarations
 
     function resolveMacro(context, curState, valueItemIndex) {
         var macroObject = curState[valueItemIndex]
-        var macroInput = curState[valueItemIndex+1].expression // for any item that is a macro, its expected that a rawExpression follows it
-        var arguments = [macroInput]
-        var result = utils.callMacro(context, macroObject, arguments)
-
-        curState[valueItemIndex] = result.return
-        if(result.charsConsumed === macroInput.length) {
-            curState.splice(valueItemIndex+1, 1)
-        } else {
-            var oldMetaInfo = curState[valueItemIndex+1][1]
-            var consumedString = macroInput.slice(0,result.charsConsumed)
-            var newMetaInfo = {index:{
-                offset:oldMetaInfo.index.offset+result.charsConsumed,
-                line:oldMetaInfo.index.offset+utils.countChars(consumedString, '\n'),
-                column: result.charsConsumed - consumedString.lastIndexOf('\n')
-            }}
-            curState[valueItemIndex+1] = ['rawExpression',newMetaInfo,macroInput.slice(result.charsConsumed)]
+        if(curState[valueItemIndex+1].type === 'macroConsumption') {
+            var expectedConsumption = curState[valueItemIndex+1].consume
+            curState.splice(valueItemIndex+1, 1) // remove it
         }
+
+        var rawExpressionIndex = valueItemIndex+1
+        var rawExpression = curState[rawExpressionIndex]
+        var macroInput = rawExpression.expression // for any item that is a macro, its expected that a rawExpression follows it
+        var consumeResult = utils.consumeMacro(context, macroObject, macroInput)
+        var consumedCharsLimaValue = utils.getProperty({this:consumeResult}, coreLevel1.StringObj('consume'))
+        var consumedChars = consumedCharsLimaValue.primitive.numerator
+        if(expectedConsumption !== undefined && consumedChars !== expectedConsumption) {
+            throw new Error("Macro "+macroObject.name+" had an inconsistent number of consumed characters between parsing ("+expectedConsumption+" characters) and dynamic execution ("+consumedChars+" characters). Make sure that any macro that needs to be known at parse time (eg a macro within the first line of another macro like `fn` or `if`) is known before that outer macro executes (at very least, some macro of the same name that consumes the exact same number of characters must be in scope before that outer macro executes).")
+        }
+
+        var run = utils.getProperty({this:consumeResult}, coreLevel1.StringObj('run'))
+        var runResult = utils.callOperator(context.scope, '[', [run])
+
+        curState[valueItemIndex] = runResult
+        curState.splice(valueItemIndex+1, 1)
     }
 
     function resolveReferenceAccessOperation(context, curState, valueItemIndex) {
@@ -418,8 +421,16 @@ function resolveBinaryOperandFrom(context, curState, index, implicitDeclarations
             curState.splice(n, numberToReplace, limaObjectContext.this)
         } else { // if its not a basic value, variable, or object, it must be a superExpression
             var result = superExpression(context, item.parts, allowProperties, implicitDeclarations)
-            if(!allowRemainingParts && result.remainingParts.length !== 0)
+            if(item.needsEndParen) {
+                if(utils.isSpecificOperator(result.remainingParts[0], ')')) {
+                    result.remainingParts.splice(0, 1)
+                } else {
+                    throw new Error("Needs end paren!")
+                }
+            }
+            if(!allowRemainingParts && result.remainingParts.length !== 0) {
                 throw new Error("Parentheses must contain only one expression.")
+            }
             curState[n] = result.value
             if(allowRemainingParts) {
                 curState.splice.apply(curState, [n+1,0].concat(result.remainingParts))

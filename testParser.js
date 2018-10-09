@@ -9,24 +9,29 @@ var tests = require("./tests/parserTests")
 var macroParserTests = require("./tests/macroParserTests")
 
 var tests = {
-    // indentedWs: tests.indentedWsTests,
-    // indent: tests.indentTests,
-    // comment: tests.commentTests,
-    // validNumerals: tests.validNumeralsTests,
-    // float: tests.floatTests,
-    // number: tests.numberTests,
-    // rawString: tests.stringTests,
-    // basicOperator: tests.operatorTests,
-    // binaryOperand: tests.binaryOperandTests,
-    // rawExpression: tests.rawExpressionTests,
-    // closingBraces: tests.closingBraces,
-    // superExpression: tests.superExpressionTests,
-    // nonMacroExpressionContinuation: tests.nonMacroExpressionContinuationTests,
-    // objectDefinitionSpace: tests.objectDefinitionSpaceTests,
-    // object: tests.objectTests,
-    // module: tests.moduleTests,
+    indentedWs: tests.indentedWsTests,
+    indent: tests.indentTests,
+    comment: tests.commentTests,
+    validNumerals: tests.validNumeralsTests,
+    float: tests.floatTests,
+    number: tests.numberTests,
+    rawString: tests.stringTests,
+    basicOperator: tests.operatorTests,
+    binaryOperand: tests.binaryOperandTests,
+    rawExpression: tests.rawExpressionTests,
+    closingBrackets: tests.closingBrackets,
+    superExpression: tests.superExpressionTests,
+    nonMacroExpressionContinuation: tests.nonMacroExpressionContinuationTests,
+    objectDefinitionSpace: tests.objectDefinitionSpaceTests,
+    object: tests.objectTests,
+    module: tests.moduleTests,
+    macro: tests.macroTests,
 
-    "macroParsers.parameterSpace": macroParserTests.parameterSpaceTests,
+    "macroParsers.macroBlock": macroParserTests.macroBlockTests,
+    "macroParsers.rawFnInnerBlock": macroParserTests.rawFnInnerBlockTests,
+    "macroParsers.rawFnInner": macroParserTests.rawFnInnerTests,
+    "macroParsers.indentedBlock": macroParserTests.indentedBlockTests,
+    "macroParsers.retStatement": macroParserTests.retStatementTests,
 }
 
 
@@ -89,6 +94,7 @@ for(var method in tests) {
     })
 }
 
+var failures = 0
 normalizedTests.forEach(function(testItem) {
     if(testItem.title) {
         console.log(' '+testItem.title+":\n")
@@ -110,10 +116,11 @@ normalizedTests.forEach(function(testItem) {
             } else throw new Error(parser+" isn't a parser")
 
             if(testItem.state !== undefined)
-                parserState = limaParser.withState(testItem.state)
+                parserState = parserState.withState(testItem.state)
 
             var result = parserState[method].apply(limaParser,testItem.args).tryParse(testItem.content)
             if(testItem.shouldFail) {
+                failures++
                 console.log(colors.red(JSON.stringify(testItem.content)+" incorrectly did not fail! Instead returned:\n"
                                         +util.inspect(result, {depth: null})
                 ))
@@ -122,6 +129,7 @@ normalizedTests.forEach(function(testItem) {
                     if(deepEqual(result,testItem.expectedResult, {strict:true})) {
                         console.log('./ - '+util.inspect(result, {depth:null}))
                     } else {
+                        failures++
                         console.log(colors.red("X - Got unexpected result for "+JSON.stringify(testItem.content)+"!!!"))
                         console.log("Expected: "+util.inspect(testItem.expectedResult, {depth:null}))
                         console.log(colors.red("Got: "))
@@ -135,6 +143,7 @@ normalizedTests.forEach(function(testItem) {
             if(testItem.shouldFail) {
                 console.log("Correctly failed!")
             } else {
+                failures++
                 console.log(colors.red("Error for: "+JSON.stringify(testItem.content)))
                 console.error(colors.red(e))
             }
@@ -143,3 +152,9 @@ normalizedTests.forEach(function(testItem) {
         console.log('') // \n
     }
 })
+
+if(failures > 0) {
+    console.log(colors.red("Got "+failures+" failures."))
+} else {
+    console.log(colors.green("---All green!---"))
+}

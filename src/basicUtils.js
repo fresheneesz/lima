@@ -18,19 +18,25 @@ var overwriteValue = exports.overwriteValue = function(destination, source) {
         rebindFunctions(newValue, destination, source)
         destination.properties[hashcode] = {key:copyValue(prop.key), value:newValue}
     }
-    destination.operators = {}
-    for(var op in source.operators) {
-        var operator = source.operators[op], newOperator = {}
-        for(var key in operator) {
-            newOperator[key] = operator[key]  // copy individual items from operator, because those items might be overwritten (by rebindFunctions)
-        }
-        destination.operators[op] = newOperator
-    }
+    copyOperators(destination, source, 'operators')
+    copyOperators(destination, source, 'preOperators')
+    copyOperators(destination, source, 'postOperators')
     destination.scopes = []
     source.scopes.forEach(function(scope) {
         destination.scopes.push(copyScope(scope, destination, source))
     })
 }
+    function copyOperators(destination, source, optype) {
+        destination[optype] = {}
+        for(var op in source[optype]) {
+            var operator = source[optype][op], newOperator = {}
+            for(var key in operator) {
+                newOperator[key] = operator[key]  // copy individual items from operator, because those items might be overwritten (by rebindFunctions)
+            }
+            destination[optype][op] = newOperator
+        }
+    }
+
     // scope - an object where keys are primitive string names and values are lima objects
     // returns a new scope where each value is a copy of the values in `scope`
     function copyScope(scope, destination, source) {

@@ -5,14 +5,6 @@ var coreLevel1 = require("../src/coreLevel1")
 var tests = exports.tests = {
 
 
-    // functionWithParameter: {
-    //     content:'a = fn x: ret x\n' +
-    //             'a[4]',
-    //     check: function(module) {
-    //         var element0 = getFirstProperty(module).value
-    //         return isSpecificInt(element0, 4)
-    //     }
-    // },
 
 
 
@@ -92,6 +84,20 @@ var tests = exports.tests = {
     }},
 
             // +
+
+    addTwoIntegers:    {content:'1+1', check: function(module) {
+        var element0 = getFirstProperty(module).value
+        return isSpecificInt(element0, 2)
+    }},
+    addIntegerAndReal:    {content:'1+1.3', check: function(module) {
+        var element0 = getFirstProperty(module).value
+        return isSpecificRatio(element0, 23, 10)
+    }},
+    // todo:
+//    addTwoRealsWithDifferentBases:    {content:'5.33+8x1.1', check: function(module) {
+//        var element0 = getFirstProperty(module).value
+//        return isSpecificRatio(element0, ?, ?)
+//    }},
 
     
 
@@ -280,7 +286,7 @@ var tests = exports.tests = {
     // }},
 
 
-    // object literal creation:
+    // module creation (almost the same as an object literal):
 
     varsWithFirstLetterCaseDif:     "a=1 A=2",
     varsWithFirstLetterCaseDif2:    "abc=1 Abc=2",
@@ -316,6 +322,12 @@ var tests = exports.tests = {
         }
     },
 
+    // A case where the end paren has to be resolved in a nonmacro expression continuation
+    parenNonMacroContinuation: {content:'a=5 (a)', check: function(module) {
+        var element0 = getFirstProperty(module).value
+        return element0.primitive.numerator === 5
+    }},
+
         //should fail:
 
     dupeProperties:          {shouldFail:true, content: "a:4 a:5"},
@@ -326,6 +338,38 @@ var tests = exports.tests = {
     propertyWithUndeclaredVariable2: {shouldFail:true, content: "3::x"},
     propertyWithUndeclaredVariable3: {shouldFail:true, content: "x::3"},
 
+
+    // object literal creation:
+
+    singleColonLiteralKey_object:    {content:'{2: 5}', check: function(module) {
+        var element0 = getFirstProperty(module).value
+        var propertyItem = element0.properties[2][0]
+        return propertyItem.key.primitive.numerator === 2
+               && propertyItem.value.primitive.numerator === 5
+    }},
+    doubleColonLiteralKey_object:    {content:'{2:: 5}', check: function(module) {
+        var element0 = getFirstProperty(module).value
+        var propertyItem = element0.properties[2][0]
+        return propertyItem.key.primitive.numerator === 2
+               && propertyItem.value.primitive.numerator === 5
+    }},
+    implicitVariableCreation_object: {content:'{a = 5}', check: function(module) {
+        var element0 = getFirstProperty(module).value
+        var member = element0.privileged['a']
+        return member.primitive.numerator === 5
+    }},
+    doubleColonVariableKey_object: {
+        content:'a=5 a::9',
+        check: function(module) {
+            var privilegedMember = module.privileged.a
+            var property = getFirstProperty(module)
+            return isSpecificInt(property.key, 5)
+                   && isSpecificInt(property.value, 9)
+                   && Object.keys(module.properties).length === 1 // only one property
+                   && isSpecificInt(privilegedMember, 5)
+                   && Object.keys(module.privileged).length === 1 // only one privileged member
+        }
+    },
 
     // general operators
 
@@ -345,38 +389,152 @@ var tests = exports.tests = {
     }},
 
 
-    // functions
+    // fn.raw
 
-    basicFunctionValue: {
-        content:'a = fn: ret 5\n' +
+    basicRawFunctionValue1: {
+        content:'a = rawFn\n'+
+                ' match: \n' +
+                '  ret {argInfo:true}\n'+
+                ' run:   \n' +
+                '  ret 5\n'+
                 'a[]',
         check: function(module) {
             var element0 = getFirstProperty(module).value
             return isSpecificInt(element0, 5)
         }
     },
-    basicFunctionValue2: {
-        content:'a = fn: ret 5\n' +
-                'wout[a[]]',
-        check: function(module) {
-            return true // todo: test console output
-        }
-    },
-    basicFunctionValue3: {
-        content:'a = fn: ret 5\n' +
-                'wout[ a[] ]',
-        check: function(module) {
-            return true // todo: test console output
-        }
-    },
-    functionWithParameter: {
-        content:'a = fn x: ret x\n' +
-                'a[4]',
+    // expressions on same line as marker
+    basicRawFunctionValue2: {
+        content:'a = rawFn\n'+
+                ' match: ret {argInfo:true}\n'+
+                ' run:   ret 5\n'+
+                'a[]',
         check: function(module) {
             var element0 = getFirstProperty(module).value
-            return isSpecificInt(element0, 4)
+            return isSpecificInt(element0, 5)
         }
     },
+    // expression on first-line
+    basicRawFunctionValue3: {
+        content:'a = rawFn match: ret {argInfo:true}\n'+
+                ' run:   ret 5\n'+
+                'a[]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 5)
+        }
+    },
+
+        // should fail:
+    basicRawFunctionValue4: {
+        shouldFail:true,
+        content:'a = rawFn match: ret true  run:   ret 5\n'+
+                'a[]'
+    },
+
+    // brackets:
+
+    basicRawFunctionValue1b: {
+        content:'a = rawFn[\n'+
+                ' match: \n' +
+                '  ret {argInfo:true}\n'+
+                ' run:   \n' +
+                '  ret 5\n' +
+                ']\n'+
+                'a[]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 5)
+        }
+    },
+    // expressions on same line as marker
+    basicRawFunctionValue2b: {
+        content:'a = rawFn[\n'+
+                ' match: ret {argInfo:true}\n'+
+                ' run:   ret 5\n'+
+                ']\n' +
+                'a[]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 5)
+        }
+    },
+    // expression on first-line
+    basicRawFunctionValue3b: {
+        content:'a = rawFn[match: ret {argInfo:true}\n'+
+                ' run:   ret 5\n' +
+                ']\n'+
+                'a[]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 5)
+        }
+    },
+
+    // TODO after implementing object bracket operator (since that's necessary to interact with ordered parameters
+    // parameters:
+
+//    basicRawFunctionValue1p: {
+//        content:'a = rawFn\n'+
+//                ' match a: ' +
+//                '  ret {argInfo:a[0]}\n'+
+//                ' run a:   \n' +
+//                '  ret a+4\n'+
+//                'a[1]',
+//        check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return isSpecificInt(element0, 5)
+//        }
+//    },
+//    // expressions on same line as marker
+//    basicRawFunctionValue2p: {
+//        content:'a = rawFn\n'+
+//                ' match: ret true\n'+
+//                ' run:   ret 5\n'+
+//                'a[]',
+//        check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return isSpecificInt(element0, 5)
+//        }
+//    },
+//    // expression on first-line
+//    basicRawFunctionValue3p: {
+//        content:'a = rawFn match: ret true\n'+
+//                ' run:   ret 5\n'+
+//                'a[]',
+//        check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return isSpecificInt(element0, 5)
+//        }
+//    },
+//
+
+    // TODO: TEST first line 3 nested macros
+    // TODO: test convention E for rawFn
+
+
+//    basicFunctionValue3: {
+//        content:'a = fn: ret 5\n' +
+//                'wout[a[]]',
+//        check: function(module) {
+//            return true // todo: test console output
+//        }
+//    },
+//    basicFunctionValue4: {
+//        content:'a = fn: ret 5\n' +
+//                'wout[ a[] ]',
+//        check: function(module) {
+//            return true // todo: test console output
+//        }
+//    },
+//    functionWithParameter: {
+//        content:'a = fn x: ret x\n' +
+//                'a[4]',
+//        check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return isSpecificInt(element0, 4)
+//        }
+//    },
 
 
     // other
@@ -406,8 +564,11 @@ function getFirstProperty(obj) {
 }
 
 function isSpecificInt(obj, integer) {
-    return obj.primitive.numerator === integer
-           && obj.primitive.denominator === 1
+    return isSpecificRatio(obj, integer, 1)
+}
+function isSpecificRatio(obj, numerator, denominator) {
+    return obj.primitive.numerator === numerator
+           && obj.primitive.denominator === denominator
 }
 function isTrue(obj) {
     return isSpecificInt(obj, 1) && obj.name === 'true'

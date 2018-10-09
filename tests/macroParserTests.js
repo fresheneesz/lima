@@ -1,39 +1,122 @@
 
-var P = require("parsimmon/src/parsimmon")
+var P = require("../src/limaParsimmon")
 var basicUtils = require("../src/basicUtils")
 var macroParsers = require("../src/macroParsers")
 
 // the following are set like this so i can block comment out the tests below
-var parameterSpaceTests=[]
+var macroBlockTests=[]
+var rawFnInnerBlockTests=[], rawFnInnerTests = [], indentedBlockTests = []
+var retStatementTests=[]
+
+
+
+
 
 
 
 //*
 
-parameterSpaceTests = [
-    {note: "no parameter", inputs: {
-        "": ""
-    }},
-    {note: "no parameter - whitespace", inputs: [
-        " "
-    ]},
-    {note: "single untyped parameter", inputs: [
+
+var testLanguage = P.createLanguage({scope:{}}, {
+    x: function() {
+        return P.str('x')
+    }
+})
+macroBlockTests = [
+    {args:[{state:'state'}, {language:testLanguage, parser: 'x'}], inputs: [
         "x"
     ]},
-    {note: "single untyped parameter - preceding whitespace", inputs: [
-        " x"
+    {args:[{state:'state'}, {language:testLanguage, parser: 'x'}], inputs: [
+        " x "
     ]},
-    {note: "single untyped parameter - following whitespace", inputs: [
-        "x "
+    {args:[{state:'state'}, {language:testLanguage, parser: 'x'}], inputs: [
+        "[x]"
+    ]},
+    {args:[{state:'state'}, {language:testLanguage, parser: 'x'}], inputs: [
+        " [x]"
+    ]},
+    {args:[{state:'state'}, {language:testLanguage, parser: 'x'}], inputs: [
+        " [x ]"
+    ]},
+    {args:[{state:'state'}, {language:testLanguage, parser: 'x'}], inputs: [
+        "[x\n" +
+        "]"
     ]},
 
     // should fail
+    {args:[{state:'state'}, {language:testLanguage, parser: 'x'}], shouldFail: true, inputs: [
+        "[ x]"
+    ]}
+]
 
-    {note: "colon in parameter space", shouldFail:true, inputs: [
-        "a:3"
-    ]},
+
+rawFnInnerBlockTests = [
+    {args:['name'], state: {indent: 0}, inputs: [
+        "name: whatever"
+    ]}
+]
+
+
+rawFnInnerTests = {inputs: {}, state: {indent: 0}}
+rawFnInnerTests.inputs[
+    "match: whatever\n"+
+    "run: whatever"
+] =
+    { match:
+       { body:
+          [ { type: 'superExpression',
+              parts:
+               [ { type: 'variable', name: 'whatever' },
+                 { type: 'rawExpression', expression: '' } ],
+              needsEndParen: false } ] },
+      run:
+       { body:
+          [ { type: 'superExpression',
+              parts:
+               [ { type: 'variable', name: 'whatever' },
+                 { type: 'rawExpression', expression: '' } ],
+              needsEndParen: false } ] } }
+
+rawFnInnerTests.inputs[
+    "match a: whatever\n"+
+    "run b: whatever"
+] =
+    { match:
+       { parameter: 'a',
+         body:
+          [ { type: 'superExpression',
+              parts:
+               [ { type: 'variable', name: 'whatever' },
+                 { type: 'rawExpression', expression: '' } ],
+              needsEndParen: false } ] },
+      run:
+       { parameter: 'b',
+         body:
+          [ { type: 'superExpression',
+              parts:
+               [ { type: 'variable', name: 'whatever' },
+                 { type: 'rawExpression', expression: '' } ],
+              needsEndParen: false } ] } }
+
+
+indentedBlockTests = [
+    {state: {indent: 1}, shouldFail: true, inputs: [
+        " whatever\n"+
+        "run b: whatever"
+    ]}
+]
+
+
+retStatementTests = [
+    {inputs: [
+        " true"
+    ]}
 ]
 
 //*/
 
-exports.parameterSpaceTests = parameterSpaceTests
+exports.macroBlockTests = macroBlockTests
+exports.rawFnInnerBlockTests = rawFnInnerBlockTests
+exports.rawFnInnerTests = rawFnInnerTests
+exports.retStatementTests = retStatementTests
+exports.indentedBlockTests = indentedBlockTests
