@@ -2,6 +2,7 @@ var fs = require("fs")
 var colors = require("colors/safe")
 
 var limaInterpreter = require("./src/interpreter")
+var testUtils = require("./tests/testUtils")
 var tests = require('./tests/interpreterTests').tests
 
 var normalizedTests = normalizeTests(tests)
@@ -44,7 +45,7 @@ for(var name in normalizedTests) {
 if(failures > 0) {
     console.log(colors.red("Got "+failures+" failures."))
 } else {
-    console.log(colors.green("---All green!---"))
+    console.log(colors.green("---"+testUtils.successMessage()+"---"))
 }
 
 function normalizeTests(tests) {

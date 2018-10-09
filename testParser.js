@@ -7,6 +7,7 @@ var limaParser = require("./src/parser")
 var macroParsers = require("./src/macroParsers")
 var tests = require("./tests/parserTests")
 var macroParserTests = require("./tests/macroParserTests")
+var testUtils = require("./tests/testUtils")
 
 var tests = {
     indentedWs: tests.indentedWsTests,
@@ -156,5 +157,5 @@ normalizedTests.forEach(function(testItem) {
 if(failures > 0) {
     console.log(colors.red("Got "+failures+" failures."))
 } else {
-    console.log(colors.green("---All green!---"))
+    console.log(colors.green("---"+testUtils.successMessage()+"---"))
 }
