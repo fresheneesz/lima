@@ -119,7 +119,6 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * number postfixes
   * operators
     * `+`
-    * `-`
     * `*`
     * `/`
     * `%`
@@ -288,6 +287,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 * numbers
   * operators
     * `==`
+    * `-`
 * strings
   * single quote strings
   * double quote strings
@@ -422,6 +422,9 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 
 ## Change log
 
+* 0.0.9 - 2018-10-09
+  * Adding `-` for numbers.
+  * Fixed bug with `+` for numbers.
 * 0.0.8 - 2018-09-15
 	* Adding a number of unit tests for string literals
 	* Adding unit tests for `??` and `==` on nil, numbers, and strings

@@ -4,11 +4,12 @@ var coreLevel1 = require("../src/coreLevel1")
 
 var tests = exports.tests = {
 
+   addTwoIntegers:    {content:'1.3+1', check: function(module) {
+        var element0 = getFirstProperty(module).value
+        return isSpecificRatio(element0, 23, 10)
+    }},
 
-
-
-
-    //*
+    /*
     emptySource:                    "",
     hello:                          "wout['hello world']\r\n",
     printInt:                       "wout[3]\r\n",
@@ -98,6 +99,17 @@ var tests = exports.tests = {
 //        var element0 = getFirstProperty(module).value
 //        return isSpecificRatio(element0, ?, ?)
 //    }},
+
+            // -
+
+    subractTwoIntegers:    {content:'1-1', check: function(module) {
+        var element0 = getFirstProperty(module).value
+        return isSpecificInt(element0, 0)
+    }},
+    subtractIntegerAndReal:    {content:'1-1.3', check: function(module) {
+        var element0 = getFirstProperty(module).value
+        return isSpecificRatio(element0, -3, 10)
+    }},
 
     
 
