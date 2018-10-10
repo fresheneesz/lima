@@ -29,12 +29,12 @@ var dotOperator = {
     }}])
 }
 
-// creates a binary operator where it does the same thing no matter which side the primary object is on
+// Creates a binary operator that does the same thing no matter which side the primary object is on.
 // options
     // order
     // scope
     // paramType
-// rawOperationFn - The function to run.
+// rawOperationFn(other) - The function to run. Gets a this-context with the calling object in the 'this' key.
 function symmetricalOperator(options, rawOperationFn) {
     return {
         order: options.order, scope: options.scope,
@@ -49,15 +49,17 @@ function symmetricalOperator(options, rawOperationFn) {
     }
 }
 
+// Creates a binary operator that cares what the left and right operands are (as opposed to symmetricalOperator above)
+// rawOperationFn(left, right) - The function to run. Gets a this-context with the calling object in the 'this' key.
 function nonSymmetricalOperator(options, rawOperationFn) {
     return {
         order: options.order, scope: options.scope,
         dispatch: makeParamInfo([
             {params: [{other: options.paramType}, {this: _}], fn: function (other) {
-                return rawOperationFn.call(other, this)
+                return rawOperationFn.call(this, other, this.this)
             }},
             {params: [{this: _}, {other: options.paramType}], fn: function (thisObj, other) {
-                return rawOperationFn.call(this, other)
+                return rawOperationFn.call(this, this.this, other)
             }}
         ])
     }
@@ -202,17 +204,17 @@ zero.operators['+'] = symmetricalOperator({order:4, scope:0, paramType: anyType}
         var commonDenominator = other.primitive.denominator * this.this.primitive.denominator
         var otherNumeratorScaled = this.this.primitive.denominator*other.primitive.numerator
         var thisNumeratorScaled = other.primitive.denominator*this.this.primitive.numerator
-        return NumberObj(otherNumeratorScaled+thisNumeratorScaled, commonDenominator)
+        return NumberObj(thisNumeratorScaled+otherNumeratorScaled, commonDenominator)
     }
 })
-zero.operators['-'] = nonSymmetricalOperator({order:4, scope:0, paramType: anyType}, function(other) {
-    if(other.primitive.denominator === this.this.primitive.denominator) {
-        return NumberObj(this.this.primitive.numerator-other.primitive.numerator)
+zero.operators['-'] = nonSymmetricalOperator({order:4, scope:0, paramType: anyType}, function(left, right) {
+    if(left.primitive.denominator === right.primitive.denominator) {
+        return NumberObj(left.primitive.numerator-right.primitive.numerator)
     } else {
-        var commonDenominator = other.primitive.denominator * this.this.primitive.denominator
-        var otherNumeratorScaled = this.this.primitive.denominator*other.primitive.numerator
-        var thisNumeratorScaled = other.primitive.denominator*this.this.primitive.numerator
-        return NumberObj(otherNumeratorScaled-thisNumeratorScaled, commonDenominator)
+        var commonDenominator = right.primitive.denominator * left.primitive.denominator
+        var leftNumeratorScaled = right.primitive.denominator*left.primitive.numerator
+        var rightNumeratorScaled = left.primitive.denominator*right.primitive.numerator
+        return NumberObj(leftNumeratorScaled-rightNumeratorScaled, commonDenominator)
     }
 })
 
@@ -531,8 +533,8 @@ rawFn.name = 'rawFn'
 
 
 var wout = FunctionObj({
-    match: function() {
-        return LimaObject({argInfo: True})
+    match: function(args) {
+        return LimaObject({argInfo: utils.getProperty({this:args}, NumberObj(0)) })
     },
     run: function(value) {
         console.log(utils.getPrimitiveStr(this, value))
