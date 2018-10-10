@@ -49,6 +49,20 @@ function symmetricalOperator(options, rawOperationFn) {
     }
 }
 
+function nonSymmetricalOperator(options, rawOperationFn) {
+    return {
+        order: options.order, scope: options.scope,
+        dispatch: makeParamInfo([
+            {params: [{other: options.paramType}, {this: _}], fn: function (other) {
+                return rawOperationFn.call(other, this)
+            }},
+            {params: [{this: _}, {other: options.paramType}], fn: function (thisObj, other) {
+                return rawOperationFn.call(this, other)
+            }}
+        ])
+    }
+}
+
 function toLimaBoolean(primitiveBoolean) {
     if(primitiveBoolean) {
         return True
@@ -177,18 +191,28 @@ var zero = exports.zero = basicUtils.copyValue(nil)
 zero.name = '0'
 zero.primitive = {numerator:0, denominator: 1}
 zero.operators['.'] = dotOperator
-zero.operators['=='] = symmetricalOperator({order:6, scope:0, paramType: anyType}, function(other) {
+zero.operators['=='] = symmetricalOperator({order:4, scope:0, paramType: anyType}, function(other) {
     return toLimaBoolean(other.primitive && other.primitive.numerator === this.this.primitive.numerator
                                          && other.primitive.denominator === this.this.primitive.denominator)
 })
-zero.operators['+'] = symmetricalOperator({order:6, scope:0, paramType: anyType}, function(other) {
+zero.operators['+'] = symmetricalOperator({order:4, scope:0, paramType: anyType}, function(other) {
     if(other.primitive.denominator === this.this.primitive.denominator) {
         return NumberObj(this.this.primitive.numerator+other.primitive.numerator)
     } else {
         var commonDenominator = other.primitive.denominator * this.this.primitive.denominator
         var otherNumeratorScaled = this.this.primitive.denominator*other.primitive.numerator
-        var thisNumeratorScaled = other.primitive.denominator*this.this.primitive.denominator
+        var thisNumeratorScaled = other.primitive.denominator*this.this.primitive.numerator
         return NumberObj(otherNumeratorScaled+thisNumeratorScaled, commonDenominator)
+    }
+})
+zero.operators['-'] = nonSymmetricalOperator({order:4, scope:0, paramType: anyType}, function(other) {
+    if(other.primitive.denominator === this.this.primitive.denominator) {
+        return NumberObj(this.this.primitive.numerator-other.primitive.numerator)
+    } else {
+        var commonDenominator = other.primitive.denominator * this.this.primitive.denominator
+        var otherNumeratorScaled = this.this.primitive.denominator*other.primitive.numerator
+        var thisNumeratorScaled = other.primitive.denominator*this.this.primitive.numerator
+        return NumberObj(otherNumeratorScaled-thisNumeratorScaled, commonDenominator)
     }
 })
 
