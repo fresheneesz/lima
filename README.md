@@ -56,6 +56,7 @@ These are all under the `src/` directory.
 
 **`{type:"superExpression", parts:_, needsEndParen:_}`** - Represents a block of code that may contain one or more actual expressions. The `parts` is a list of values nodes, operator nodes, or rawExpressions. Value nodes must be separated by one or more special operator nodes. It may contain rawExpressions, described below. `needsEndParen` will be true if the endbrace wasn't found in the expression block (and presumably exists in a `rawExpression` somewhere inside expressions), false if it was found.
 * **`{type:"rawExpression", expression:_, meta:_}`** - Represents a block of code that may contain one or more actual expressions. `expression` is the raw expression string. `meta` contains an object with an `index` representing the index in the source code the rawExpression starts at. `index` has the structure `{ offset: _, line: _, column: _ }`. *Note: this isn't a value node.*
+* **`{type:"macroConsumption", consume:_}`** - Indicates that the previous value is expected to consumes `consume` number of characters (eg because its consumption was evaluated as part of the first line of a block macro). Can also be inserted after values not expected to be a macro (with `consume:0`). This is intended to be used in evaluation to double-check that the macro consumes the expected number of characters when run for real, and facilitate throwing an error if the consumption doesn't match when run.
 
 ##### Operator Nodes:
 
@@ -119,6 +120,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * number postfixes
   * operators
     * `+`
+    * `-`
     * `*`
     * `/`
     * `%`
@@ -288,6 +290,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * operators
     * `==`
     * `-`
+    * `+`
 * strings
   * single quote strings
   * double quote strings
@@ -422,9 +425,18 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 
 ## Change log
 
-* 0.0.9 - 2018-10-09
+* 0.0.11 - 2018-10-10
+  * Adding tests for variable string @ operator
+  * Verifying doubleColonExpressionKey's result
+  * Adding a few tests for rawFn related to convention A and C
+  * Minor cleanup and bug fixes
+* 0.0.10 - 2018-10-09
   * Adding `-` for numbers.
   * Fixed bug with `+` for numbers.
+* 0.0.9 - 2018-10-06
+	* Adding fn.raw (rawFn in coreLevel1) and infrastructure for macros
+	* Changing the @ prefix and postfix operators for strings to actual operators (rather than part of string-literal syntax)
+	* Number addition operator (+)
 * 0.0.8 - 2018-09-15
 	* Adding a number of unit tests for string literals
 	* Adding unit tests for `??` and `==` on nil, numbers, and strings

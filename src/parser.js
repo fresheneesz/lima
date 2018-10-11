@@ -56,34 +56,57 @@ var L = P.createLanguage({scope:{}, consumeFirstlineMacros: false, firstLine:fal
                 operators.push(this.colonOperator().times(1))
             }
 
+            var middleOperator = alt.apply(null, operators).map(function(v) {
+                return v.map(function(o) {
+                    if(o.opType === undefined)
+                        o.opType = 'binary'
+                    return o
+                })
+            })
+            var operatorWithSurroundingWhitespace = function(operatorParser, requiredWhitespace) {
+                return seq(
+                    alt(this.indentedWs().atLeast(requiredWhitespace),
+                        this.expressionEndLine()),
+                    operatorParser,
+                    alt(this.indentedWs().atLeast(requiredWhitespace),
+                        this.expressionEndLine()
+                    )
+                ).map(function(v) {
+                    return v[1]
+                })
+            }.bind(this)
+
             return alt(
                 seq(this.openingBracket(), this.indentedWs().many(), this.closingBrackets()).map(function(v) {
                     return [v[0]].concat(v[2])
                 }),
                 seqObj(
-                    alt(this.indentedWs().many(),
-                        this.expressionEndLine()),
-                    ['operators', alt.apply(null, operators).map(function(v) {
-                        return v.map(function(o) {
-                            if(o.opType === undefined)
-                                o.opType = 'binary'
-                            return o
-                        })
-                    })],
-                    alt(this.indentedWs().many(),
-                        this.expressionEndLine()
-                    ),
+                    ['operators',alt(
+                        operatorWithSurroundingWhitespace(alt(
+                            this.equalsOperator(),
+                            this.colonOperator(),
+                            this.openingBracket(),
+                        ), 0).times(1).map(function(v) {
+                                return v
+                            }),
+                        middleOperator,
+                        operatorWithSurroundingWhitespace(middleOperator, 1)
+                    )],
                     ['operand', this.binaryOperand().map(function(v) {
                         return v
                     })],
-                    alt(this.indentedWs().many(),
-                        this.expressionEndLine()
-                    ),
-                    ['closingBBPs',this.closingBBPs(allowEndBracesAndParens).atMost(1)]
+                    ['closingBBPs',seq(
+                        alt(this.indentedWs().many(),
+                            this.expressionEndLine()
+                        ),
+                        this.closingBBPs(allowEndBracesAndParens)
+                    ).map(function(v) {
+                        return v[1]
+                    }).atMost(1)]
                 ).map(function(v){
                     var result = v.operators.concat(v.operand)
-                    if(v.closingBBPs.length > 0) {
-                        result = result.concat(v.closingBBPs[0])
+                    if(v.closingBBPs.length > 0 && v.closingBBPs[0].length > 0) {
+                        result = result.concat(v.closingBBPs[0][0])
                     }
 
                     return result
@@ -155,7 +178,8 @@ var L = P.createLanguage({scope:{}, consumeFirstlineMacros: false, firstLine:fal
                     this.basicOperator(),
                     notFollowedBy(this.expressionAtom()) // to prevent capturing a binary operator
                 ).map(function(v) {
-                    if(v[0].operator in {':':1, '::':1,'=':1})
+                    var specialBinaryOps = ['=','::',':','['] // operators that can be placed right after or right before a value without being treated like a unary operator
+                    if(specialBinaryOps.indexOf(v[0].operator) !== -1)
                         v[0].opType = 'binary'
                     else
                         v[0].opType = 'postfix'
@@ -163,6 +187,27 @@ var L = P.createLanguage({scope:{}, consumeFirstlineMacros: false, firstLine:fal
                     return v[0]
                 })
             },
+    // not sure why this version isn't working:
+//            binaryOperandPostfix: function() {
+//                return seq(
+//                    alt(alt(this.equalsOperator(),  // these two types of operators are always binary
+//                            this.colonOperator()
+//                        ).map(function(v) {
+//                            v.opType = 'binary'
+//                            return v
+//                        }),
+//                        alt(this.openingBracket(),
+//                            this.basicOperator()
+//                        ).map(function(v) {
+//                            v.opType = 'postfix'
+//                            return v
+//                        })
+//                    ),
+//                    notFollowedBy(this.expressionAtom()) // to prevent capturing a binary operator
+//                ).map(function(v) {
+//                    return v[0]
+//                })
+//            },
 
     // evaluates the string of a rawExpression once it has been determined that the previous item was not a macro
     // returns an object with the properties:
@@ -272,57 +317,55 @@ var L = P.createLanguage({scope:{}, consumeFirstlineMacros: false, firstLine:fal
     },
 
     colonOperator: function() {
-        return alt("::", ":").map(function(v) {
-            return {type:'operator', operator:v} // opType will get filled in upstream with 'prefix', 'postfix', or 'binary'
+        return this.rawOperator().chain(function(v) {
+            if(v.operator in {':':1,'::':1}) {
+                v.opType = 'binary' // always binary
+                return succeed(v)
+            } else {
+                return fail()
+            }
         })
     },
 
     // an operator that ends in equals
     equalsOperator: function() {
-        return seq(
-            this.basicOperatorWithoutEquals().many(),
-            '='
-        ).tie()
-        .desc("an equals operator (eg = or +=) ")
-        .map(function(v) {
-            return {type:'operator', operator:v} // opType will get filled in upstream with 'prefix', 'postfix', or 'binary'
+        return this.rawOperator().desc("an equals operator (eg = or +=) ").chain(function(v) {
+            if(v.operator.slice(-1) === '=' && v.operator.slice(-2) !== '==') {
+                v.opType = 'binary' // always binary
+                return succeed(v)
+            } else {
+                return fail()
+            }
         })
     },
 
     // any operator excluding ones that end in equals and brackets
     // returns an operator node
     basicOperator: function() {
-        return seq(
-            alt(
-                this.basicOperatorWithoutEquals(),
-                seq(
-                    str('=').atLeast(1),
-                    this.basicOperatorWithoutEquals()
-                ),
-                str('=').atLeast(2)
-            ).atLeast(1)
-        ).tie().chain(function(v) {
-            if(v in {':':1,'::':1})
+        return this.rawOperator().chain(function(v) {
+            if(v.operator in {':':1,'::':1}
+               || v.operator.slice(-1) === '='     // no operators that end in equals
+                  && v.operator.slice(-2) !== '==' // except operators that end in more than one equals
+            ) {
                 return fail()
-            else
+            } else {
                 return succeed(v)
+            }
         })
-        .desc("an operator")
-        .map(function(v) {
-            return {type:'operator', operator:v} // opType will get filled in upstream with 'prefix', 'postfix', or 'binary'
-        })
+        .desc("a basic operator")
     },
-        basicOperatorWithoutEquals: function() {
+        // returns an operator node
+        rawOperator: function() {
             return alt(
-                alt(
-                    one('!$@%^&*-+/|\\/<>.,?!:'),
-                    seq(one("#"),
-                        notFollowedBy(this.rawString()) // since strings are modified by the @ and # symbols
-                    ).map(function(v){
-                        return v[0]
-                    })
-                ).atLeast(1)
-            )
+                one('!$@%^&*-+/|\\/<>.,?!:='),
+                seq(one("#"),
+                    notFollowedBy(this.rawString()) // since strings are modified by the # symbol
+                ).map(function(v){
+                    return v[0]
+                })
+            ).atLeast(1).tie().map(function(v) {
+                return {type:'operator', operator:v} // opType will get filled in upstream with 'prefix', 'postfix', or 'binary'
+            })
         },
 
     // closing Braces, Brackets, and/or Parens

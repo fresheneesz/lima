@@ -19,6 +19,7 @@ var tests = {
     rawString: tests.stringTests,
     basicOperator: tests.operatorTests,
     binaryOperand: tests.binaryOperandTests,
+    binaryOperatorAndOperand: tests.binaryOperatorAndOperandTests,
     rawExpression: tests.rawExpressionTests,
     closingBrackets: tests.closingBrackets,
     superExpression: tests.superExpressionTests,

@@ -4,12 +4,9 @@ var coreLevel1 = require("../src/coreLevel1")
 
 var tests = exports.tests = {
 
-   addTwoIntegers:    {content:'1.3+1', check: function(module) {
-        var element0 = getFirstProperty(module).value
-        return isSpecificRatio(element0, 23, 10)
-    }},
 
-    /*
+
+    //*
     emptySource:                    "",
     hello:                          "wout['hello world']\r\n",
     printInt:                       "wout[3]\r\n",
@@ -91,6 +88,10 @@ var tests = exports.tests = {
         return isSpecificInt(element0, 2)
     }},
     addIntegerAndReal:    {content:'1+1.3', check: function(module) {
+        var element0 = getFirstProperty(module).value
+        return isSpecificRatio(element0, 23, 10)
+    }},    
+    addIntegerAndReal2:    {content:'1.3+1', check: function(module) {
         var element0 = getFirstProperty(module).value
         return isSpecificRatio(element0, 23, 10)
     }},
@@ -202,7 +203,9 @@ var tests = exports.tests = {
         }
     },
 
-        // strings containing newlines
+        // string operators
+
+            // string @ operator
 
     singleQuoteContainingNewline:
         {content:'@"a"', check: function(module) {
@@ -259,9 +262,18 @@ var tests = exports.tests = {
             return element0.primitive.string === 'a\n'
         }
     },
-
-        // operators
-
+    variableStringAndNewline:
+        {content:'a="hi" a@', check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return element0.primitive.string === 'hi\n'
+        }
+    },
+    variableStringAndNewline2:
+        {content:'a="hi" @a', check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return element0.primitive.string === '\nhi'
+        }
+    },
             // ==
 
     compareTwoDifferentStrings:    {content:'"a"=="b"', check: function(module) {
@@ -320,10 +332,14 @@ var tests = exports.tests = {
         return propertyItem.key.primitive.numerator === 2
                && propertyItem.value.primitive.numerator === 5
     }},
-    implicitVariableCreation: {content:'a = 5', check: function(module) {
-        var member = module.privileged['a']
-        return member.primitive.numerator === 5
-    }},
+    doubleColonExpressionKey: {
+        content:'2+2:: 5',
+        check: function(module) {
+            var element0 = getFirstProperty(module)
+            return isSpecificInt(element0.key, 4)
+                   && isSpecificInt(element0.value, 5)
+        }
+    },
     doubleColonVariableKey: {
         content:'a=5 a::9',
         check: function(module) {
@@ -333,6 +349,10 @@ var tests = exports.tests = {
                    && Object.keys(module.properties).length === 1 // only one property
         }
     },
+    implicitVariableCreation: {content:'a = 5', check: function(module) {
+        var member = module.privileged['a']
+        return member.primitive.numerator === 5
+    }},
 
     // A case where the end paren has to be resolved in a nonmacro expression continuation
     parenNonMacroContinuation: {content:'a=5 (a)', check: function(module) {
@@ -436,9 +456,69 @@ var tests = exports.tests = {
             return isSpecificInt(element0, 5)
         }
     },
+    basicRawFunctionValue4: {     // From convention A.
+        content:'a = rawFn \n' +
+                ' match: \n' +
+                '  ret {argInfo:true}\n'+
+                ' run:\n' +
+                '    ret 5\n'+
+                'a[]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 5)
+        }
+    },
 
         // should fail:
-    basicRawFunctionValue4: {
+    basicRawFunctionValueFail1: {
+        shouldFail:true,
+        content:'a = rawFn\n'+
+                ' match: \n' +
+                '  ret {argInfo:true}\n'+
+                ' run:   \n' +
+                ' ret 5\n'+
+                'a[]',
+    },
+    basicRawFunctionValueFail2: {     // From convention A.
+        shouldFail:true,
+        content:'a = rawFn \n' +
+                ' match: \n' +
+                '  ret {argInfo:true}\n'+
+                '  run:\n' +
+                '    ret 5\n'+
+                'a[]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 5)
+        }
+    },
+    basicRawFunctionValueFail3: {     // From convention A.
+        shouldFail:true,
+        content:'a = rawFn \n' +
+                ' match: \n' +
+                ' ret {argInfo:true}\n'+
+                ' run:\n' +
+                ' ret 5\n'+
+                'a[]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 5)
+        }
+    },
+    basicRawFunctionValueFail4: {     // From convention A.
+        shouldFail:true,
+        content:'a = rawFn \n' +
+                ' match: \n' +
+                '   ret {argInfo:true}\n'+
+                '  run:\n' +
+                '    ret 5\n'+
+                'a[]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 5)
+        }
+    },
+    basicRawFunctionValueFail5: {     // From convention C.
         shouldFail:true,
         content:'a = rawFn match: ret true  run:   ret 5\n'+
                 'a[]'
@@ -483,6 +563,13 @@ var tests = exports.tests = {
         }
     },
 
+        // should fail:
+    basicRawFunctionValue4b: {
+        shouldFail:true,
+        content:'a = rawFn[match: ret true  run:   ret 5]\n'+
+                'a[]'
+    },
+
     // TODO after implementing object bracket operator (since that's necessary to interact with ordered parameters
     // parameters:
 
@@ -521,7 +608,7 @@ var tests = exports.tests = {
 //    },
 //
 
-    // TODO: TEST first line 3 nested macros
+    // TODO: TEST first line 3 nested macros (for convention D)
     // TODO: test convention E for rawFn
 
 
@@ -551,8 +638,15 @@ var tests = exports.tests = {
 
     // other
 
-    printVariable:             'a = 5\n' +
-                               'wout[a]',
+
+    printVariable: {
+        content:'a = 5\n' +
+                'wout[a]',
+        // todo:
+//        check: function(module) {
+            // check that wout output 5
+//        }
+    },
 
     //should fail:
     tabs:           {shouldFail:true, content: "\t"},
@@ -562,7 +656,6 @@ var tests = exports.tests = {
 
     // todo:
 
-    // doubleColonExpressionKey:  '2+3:: 5',
     // colonChaining:             'a: b: 5',
     // colonChainingWithEquals:   'a: b = 5',
 }

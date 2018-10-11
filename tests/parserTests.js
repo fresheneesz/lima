@@ -4,10 +4,9 @@ var colors = require("colors/safe")
 var basicUtils = require("../src/basicUtils")
 
 // the following are set like this so i can block comment out the tests below
-var binaryOperands={}, binaryOperandsForSuperExpression={}
 var indentTests=[], indentedWsTests=[], commentTests=[]
 var validNumeralsTests=[], floatTests=[], numberTests=[], stringTests=[], operatorTests=[]
-var binaryOperandTests=[]
+var binaryOperands={}, binaryOperatorAndOperandTests={state: {indent: 0}, inputs:{}}
 var rawExpressionTests=[{state: {indent: 0}, inputs: {}}, {state: {indent: 1}, inputs: {}}]
 var closingBrackets = []
 var superExpressionTests=[], nonMacroExpressionContinuationTests=[]
@@ -15,7 +14,10 @@ var objectDefinitionSpaceTests = {}, objectTests = [], moduleTests=[]
 var macroTests=[]
 
 
-/*
+
+
+
+//*
 
 indentedWsTests = [
     {note: "0 indent", args: [0], inputs: [
@@ -151,6 +153,12 @@ binaryOperands = {
               { type: 'rawExpression', expression: '=1}' } ]
 }
 
+
+binaryOperatorAndOperandTests.inputs[' == nil'] =
+    [ { type: 'operator', operator: '==', opType: 'binary' },
+      { type: 'variable', name: 'nil' },
+      { type: 'rawExpression', expression: '' } ]
+
 rawExpressionTests[0].inputs[
      "=abcdef\n"+
     "] 1*2"
@@ -269,13 +277,6 @@ function getSuperExpressionTests() {
                       needsEndParen: false },
     }
 
-    binaryOperandsForSuperExpression = objectMap(binaryOperands, function(result) {
-        if(!(result instanceof Array) || result.length === 1)
-            return result[0]
-        else
-            return {type: 'superExpression', parts:result, needsEndParen:false}
-    })
-
     parenTests = {
         "(1)":  { type: 'number', numerator: 1, denominator: 1 } // should reduce down
     }
@@ -296,7 +297,6 @@ function getSuperExpressionTests() {
                parts:
                 [ { type: 'variable', name: 'b' },
                   { type: 'rawExpression', expression: '=4)' } ],
-               needsEndParen: false,
                needsEndParen: true },
              { type: 'rawExpression', expression: '' } ],
           needsEndParen: false }
@@ -569,6 +569,8 @@ function getSuperExpressionTests() {
         "a=awfjawiefijef\n"+
         "awijefiejawef",
 
+        "1 + 2 @a",
+
         "1 2 3 4",
 
         "1 2 g[\n" +
@@ -641,7 +643,7 @@ function getSuperExpressionTests() {
     // fails because the current indent is 4 while this construct is only indented by 3
 
     failureTestGroupIndent4.inputs.push("\n3")
-    
+
     failureTestGroupIndent4.inputs.push(
         "  j[\n" +
         "   1\n" +
@@ -658,7 +660,6 @@ function getSuperExpressionTests() {
         equalsTests,
         colonTests,
         variablesTests,
-        binaryOperandsForSuperExpression,
         parenTests,
         unfinishedParenTests,
         sameIndentEndLineTests,
@@ -682,7 +683,7 @@ function getNonMacroExpressionContinuationTests() {
 
     randomTests.inputs['["hello world"]'] =
             { current:
-               [ { type: 'operator', operator: '[', opType: 'postfix' },
+               [ { type: 'operator', operator: '[', opType: 'postfix' }, //  note that the opType of bracket operators doesn't matter
                  { type: 'string', string: 'hello world' },
                  { type: 'operator', operator: ']', opType: 'postfix' } ],
                  next: [] }
@@ -845,6 +846,7 @@ exports.numberTests = numberTests
 exports.stringTests = stringTests
 exports.operatorTests = operatorTests
 exports.binaryOperandTests = {state:{indent:0}, inputs: binaryOperands}
+exports.binaryOperatorAndOperandTests = binaryOperatorAndOperandTests
 exports.rawExpressionTests = rawExpressionTests
 exports.closingBrackets = closingBrackets
 exports.superExpressionTests = superExpressionTests
