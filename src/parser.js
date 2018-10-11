@@ -134,12 +134,12 @@ var L = P.createLanguage({scope:{}, consumeFirstlineMacros: false, firstLine:fal
         binaryOperand: function() {
             return seqObj(
                 ['binaryOperandPrefixAndAtom', this.binaryOperandPrefixAndAtom()],
-                ['binaryOperandPostfix', this.binaryOperandPostfix().atMost(1)],
+                ['postfixOperator', this.postfixOperator().atMost(1)],
                 ['closingBrackets', this.closingBrackets().atMost(1)]
             ).map(function(v) {
                 if(v.closingBrackets.length > 0)
                     v.closingBrackets = v.closingBrackets[0]
-                return v.binaryOperandPrefixAndAtom.concat(v.binaryOperandPostfix).concat(v.closingBrackets)
+                return v.binaryOperandPrefixAndAtom.concat(v.postfixOperator).concat(v.closingBrackets)
             })
         },
             // returns an array of superExpression parts
@@ -172,42 +172,19 @@ var L = P.createLanguage({scope:{}, consumeFirstlineMacros: false, firstLine:fal
                 })
             },
 
-            // returns an array of superExpression parts
-            binaryOperandPostfix: function() {
+            // Parses a postfix operator.
+            // Returns an array of superExpression parts.
+            postfixOperator: function() {
                 return seq(
-                    this.basicOperator(),
+                    this.basicOperator().map(function(v) {
+                        v.opType = 'postfix'
+                        return v
+                    }),
                     notFollowedBy(this.expressionAtom()) // to prevent capturing a binary operator
                 ).map(function(v) {
-                    var specialBinaryOps = ['=','::',':','['] // operators that can be placed right after or right before a value without being treated like a unary operator
-                    if(specialBinaryOps.indexOf(v[0].operator) !== -1)
-                        v[0].opType = 'binary'
-                    else
-                        v[0].opType = 'postfix'
-
                     return v[0]
                 })
             },
-    // not sure why this version isn't working:
-//            binaryOperandPostfix: function() {
-//                return seq(
-//                    alt(alt(this.equalsOperator(),  // these two types of operators are always binary
-//                            this.colonOperator()
-//                        ).map(function(v) {
-//                            v.opType = 'binary'
-//                            return v
-//                        }),
-//                        alt(this.openingBracket(),
-//                            this.basicOperator()
-//                        ).map(function(v) {
-//                            v.opType = 'postfix'
-//                            return v
-//                        })
-//                    ),
-//                    notFollowedBy(this.expressionAtom()) // to prevent capturing a binary operator
-//                ).map(function(v) {
-//                    return v[0]
-//                })
-//            },
 
     // evaluates the string of a rawExpression once it has been determined that the previous item was not a macro
     // returns an object with the properties:
@@ -216,7 +193,7 @@ var L = P.createLanguage({scope:{}, consumeFirstlineMacros: false, firstLine:fal
     nonMacroExpressionContinuation: function(allowColonOperators/*=true*/) {
         if(allowColonOperators === undefined) allowColonOperators = true
         return seqObj(
-            ['postfix', this.binaryOperandPostfix().atMost(1)],
+            ['postfix', this.postfixOperator().atMost(1)],
             ['closingBBPs', this.closingBBPs(true).atMost(1).map(function(v){
                 if(v.length > 0)
                     return v[0]
