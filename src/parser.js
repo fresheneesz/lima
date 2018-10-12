@@ -499,25 +499,30 @@ var L = P.createLanguage({scope:{}, consumeFirstlineMacros: false, firstLine:fal
     // numbers
 
     number: function() {
-        return alt(this.baseX(), this.float(10), this.integer(10))
+        return seq(
+            alt(this.real(10), this.integer(10)),
+            this.numberPostfix().atMost(1)
+        ).map(function(v) {
+            if(v[1].length === 1) {
+                v[0].postfix = v[1][0]
+            }
+
+            return v[0]
+        })
     },
-        baseX: function() {
+
+        numberPostfix: function() {
             return seq(
-                this.integer(10).chain(function(int) {     // check if the base is too large
-                    var base = int.numerator
-                    if(base > 36) {
-                        return fail("A base not greater than 36")
-                    } else {
-                        return succeed(base)
-                    }
-                }.bind(this)),
-                one('xX')
-            )
-            .map(function(header) {
-                return header[0]
-            }).chain(function(base) {
-                return this.float(base)
-            }.bind(this))
+                alt(range('a', 'z'),
+                    range('A', 'Z'),
+                    '_'
+                ),
+                alt(range('a', 'z'),
+                    range('A', 'Z'),
+                    '_','.',
+                    range('0','9')
+                ).many()
+            ).tie()
         },
 
         integer: function(base) {
@@ -527,7 +532,7 @@ var L = P.createLanguage({scope:{}, consumeFirstlineMacros: false, firstLine:fal
                 return number
             })
         },
-        float: function(base) {
+        real: function(base) {
             var whole = this.validNumerals(base)
             var frac = seq('.', this.validNumerals(base))
 

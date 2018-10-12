@@ -348,3 +348,24 @@ df itemsToLock item:
 //        meta[x].operators['['] = originalBracketOp
 //        callback[x]
 //        ret x
+
+
+//// number postfix for base 'x'
+//baseX: function() {
+//    return seq(
+//        this.integer(10).chain(function(int) {     // check if the base is too large
+//            var base = int.numerator
+//            if(base > 36) {
+//                return fail("A base not greater than 36")
+//            } else {
+//                return succeed(base)
+//            }
+//        }.bind(this)),
+//        one('xX')
+//    )
+//    .map(function(header) {
+//        return header[0]
+//    }).chain(function(base) {
+//        return this.real(base)
+//    }.bind(this))
+//},

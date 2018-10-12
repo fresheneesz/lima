@@ -46,7 +46,7 @@ These are all under the `src/` directory.
 
 ##### Value Nodes:
 
-**`{type:"number", numerator:_, denominator:_}`** - Represents a number literal.
+**`{type:"number", numerator:_, denominator:_, postfix:_}`** - Represents a number literal. The `postfix` property is optional, but if exists contains a string starting with a letter from a-z
 
 **`{type:"string", string:_}`** - Represents a string literal.
 
@@ -115,6 +115,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * `~>` (etc)
   * ...
 * numbers
+  * Migrate numbers to use some BigInteger module for its numerator and denominator rather than javascript "ints.
   * 00 (infinity)
   * error
   * number postfixes

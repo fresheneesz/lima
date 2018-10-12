@@ -2,10 +2,11 @@
 var P = require("parsimmon/src/parsimmon")
 var colors = require("colors/safe")
 var basicUtils = require("../src/basicUtils")
+var testUtils = require("./testUtils")
 
 // the following are set like this so i can block comment out the tests below
 var indentTests=[], indentedWsTests=[], commentTests=[]
-var validNumeralsTests=[], floatTests=[], numberTests=[], stringTests=[], operatorTests=[]
+var validNumeralsTests=[], realTests=[], numberTests=[], stringTests=[], operatorTests=[]
 var binaryOperands={}, binaryOperatorAndOperandTests={state: {indent: 0}, inputs:{}}
 var rawExpressionTests=[{state: {indent: 0}, inputs: {}}, {state: {indent: 1}, inputs: {}}]
 var closingBrackets = []
@@ -96,17 +97,30 @@ validNumeralsTests = [
        "g", "z", "Z", "AaezwfH", "ztT"
    ])}
 ]
-floatTests = [
+realTests = [
    {note:'base10', args:[10], inputs:[
        "2.3", "0.4", ".5", "000.7123", "88.1",
        "234'32.235'354"
    ]}
 ]
-numberTests = {inputs:[
+
+numberTests = {inputs:basicUtils.merge(testUtils.arrayToObject([
    "1", "2.3", "0.4", ".5", "6000", "000.7123", "88.1", "100000000234", "12344546790000000000",
-   "5x1422", "16xAA", "16xaa", "16xBB.B", "16xb.bb", "36xAaezwfH", "36xAzaZ.ztT",
-   "234'3453'64", "234'32.235'354"
-]}
+   "234'3453'64", "234'32.235'354"], testUtils.anything),
+    // numbers with postfixes
+    {   "5x1422": {type:'number', numerator:5, denominator:1, postfix: 'x1422'},
+        "16xAA": { numerator: 16, denominator: 1, type: 'number', postfix: 'xAA' },
+        "16xaa": { numerator: 16, denominator: 1, type: 'number', postfix: 'xaa' },
+        "16xBB.B": { numerator: 16,denominator: 1,type: 'number',postfix: 'xBB.B' },
+        "16xb.bb": { numerator: 16,denominator: 1,type: 'number',postfix: 'xb.bb' },
+        "36xAaezwfH": { numerator: 36,denominator: 1,type: 'number',postfix: 'xAaezwfH' },
+        "36xAzaZ.ztT": { numerator: 36,denominator: 1,type: 'number',postfix: 'xAzaZ.ztT' },
+
+        "16.5xBB.B": { numerator: 165,denominator: 10,type: 'number',postfix: 'xBB.B' },
+        "0.4xAaezwfH": { numerator: 4,denominator: 10,type: 'number',postfix: 'xAaezwfH' },
+        ".5xAzaZ.ztT": { numerator: 5,denominator: 10,type: 'number',postfix: 'xAzaZ.ztT' }
+    }
+)}
 
 stringTests = {
     state: {indent:0},
@@ -841,7 +855,7 @@ exports.indentedWsTests = indentedWsTests
 exports.indentTests = indentTests
 exports.commentTests = commentTests
 exports.validNumeralsTests = validNumeralsTests
-exports.floatTests = floatTests
+exports.realTests = realTests
 exports.numberTests = numberTests
 exports.stringTests = stringTests
 exports.operatorTests = operatorTests

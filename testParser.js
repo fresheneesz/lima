@@ -14,7 +14,7 @@ var tests = {
     indent: tests.indentTests,
     comment: tests.commentTests,
     validNumerals: tests.validNumeralsTests,
-    float: tests.floatTests,
+    real: tests.realTests,
     number: tests.numberTests,
     rawString: tests.stringTests,
     basicOperator: tests.operatorTests,
@@ -57,7 +57,8 @@ for(var method in tests) {
                         args: subtest.args,
                         state:subtest.state,
                         shouldFail:subtest.shouldFail,
-                        content: input
+                        content: input,
+                        expectedResult: testUtils.anything
                     })
                 })
             } else {
@@ -80,7 +81,8 @@ for(var method in tests) {
                     method: method,
                     args: subtest.args,
                     content:fs.readFileSync(__dirname+'/tests/testModules/'+file+'.test.lima', {encoding: 'utf8'}).toString()
-                        .replace(/\t/g, "    ") // lima doesn't accept tabs
+                        .replace(/\t/g, "    "), // lima doesn't accept tabs
+                    expectedResult: testUtils.anything
                 })
 
             })
@@ -88,7 +90,7 @@ for(var method in tests) {
             for(var title in subtest.content) {
                 var item = subtest.content[title]
                 normalizedTests.push({title:title})
-                normalizedTests.push({method: method,args: subtest.args,content:item})
+                normalizedTests.push({method: method,args: subtest.args,content:item, expectedResult: testUtils.anything})
             }
         } else {
             throw new Error("womp womp")
@@ -127,7 +129,7 @@ normalizedTests.forEach(function(testItem) {
                                         +util.inspect(result, {depth: null})
                 ))
             } else {
-                if(testItem.expectedResult !== undefined) {
+                if('expectedResult' in testItem && testItem.expectedResult !== testUtils.anything) {
                     if(deepEqual(result,testItem.expectedResult, {strict:true})) {
                         console.log('./ - '+util.inspect(result, {depth:null}))
                     } else {
