@@ -422,7 +422,7 @@ var tests = exports.tests = {
         var a = utils.getProperty({this:object}, coreLevel1.StringObj("a"))
         var b = utils.getProperty({this:a}, coreLevel1.StringObj("b"))
         var a2 = utils.getProperty({this:a}, coreLevel1.StringObj("a"))
-        return  b.meta.primitive.numerator === 1
+        return  isSpecificInt(b, 1)
                 && a2.meta.primitive.string === 'b'
     }},
     nestedObjectsWithWeirdParens: {content:'{a:{(b:"c")}}', check: function(module) {
@@ -434,14 +434,26 @@ var tests = exports.tests = {
     objectWithAllTheAs: {content:'a=5 {a:a}', check: function(module) {
         var object = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
         var a = utils.getProperty({this:object}, coreLevel1.StringObj("a"))
-        return a.meta.primitive.numerator === 5
+        return isSpecificInt(a, 5)
     }},
     objectWithAllTheAs2: {content:'a=5 {a:{a:a}}', check: function(module) {
         var object = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
         var a = utils.getProperty({this:object}, coreLevel1.StringObj("a"))
         var innerA = utils.getProperty({this:a}, coreLevel1.StringObj("a"))
-        return innerA.meta.primitive.numerator === 5
+        return isSpecificInt(innerA, 5)
     }},
+
+        // object operators
+
+            // Bracket operator
+
+                // Single-argument [
+
+    basicBracketOperator: {content:'x = {a:1}  x["a"]', check: function(module) {
+        var value = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
+        return isSpecificInt(value, 1)
+    }},
+
 
     // general operators
 
@@ -659,6 +671,31 @@ var tests = exports.tests = {
 //        }
 //    },
 //
+//    rawFunctionAsClosure: {
+//        content:'x = 6\n' +
+//                'a = rawFn \n' +
+//                ' match: \n' +
+//                '  ret {argInfo:x}\n'+
+//                ' run arg:\n' +
+//                '    ret arg\n'+
+//                'a[]',
+//        check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return isSpecificInt(element0, 6)
+//        }
+//    },
+//    nestedRawFunctionValue: {
+//        content:'a = rawFn \n' +
+//                ' match: \n' +
+//                '  ret {argInfo:true}\n'+
+//                ' run:\n' +
+//                '    ret 5\n'+
+//                'a[]',
+//        check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return isSpecificInt(element0, 5)
+//        }
+//    },
 
     // TODO: TEST first line 3 nested macros (for convention D)
     // TODO: test convention E for rawFn

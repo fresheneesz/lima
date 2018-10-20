@@ -112,7 +112,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 * general operators
   * `~` (etc)
   * `~>` (etc)
-  * ...
+  * `...`
 * numbers
   * Migrate numbers to use some BigInteger module for its numerator and denominator rather than javascript numbers.
   * 00 (infinity)
@@ -133,8 +133,6 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   	* hashcode (partially implemented but not testable yet)
 * strings
   * Migrate strings to use LimaEncoding format with full unicode support for character indexing and counting
-  * move `#` quote to be an operator rather than a parser construct
-  * move `@` newline operator to use the fallback operator to support any number of `@` signs
   * % extended space
   * ! LimaEncoding codepoint
   * code
@@ -150,7 +148,6 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * operators
     * `.`
     * ! (interface operator)
-    * `[ ]`
     * [[ ]]
   * members
     * len
@@ -178,13 +175,8 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 	* paramType
 	* condType
 	* error about undeclared variables in functions
-* macro `startColumn` parameter
-* types
-  * &
-  * $
-  * !$
-  * ?
-  * values
+* macro
+    * `startColumn` parameter
 * interfaces
   * automatic interface promotion
   * cast
@@ -301,6 +293,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * grave accent strings (`)
   * operators
     * `==`
+    * basic single-argument bracket operator `[ ]`
   * members
   	* str
 * object literals
@@ -311,6 +304,15 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * implicitly declared privileged members (with var type)
 * fn.raw function creation
 * macro
+
+#### Migrations from Core Level 1 to Level 2
+
+These are things that were done in Core Level 1, but should be moved to Core Level 2.
+
+* strings
+  * move `#` quote to be an operator rather than a parser construct
+  * move `@` newline operator to use the fallback operator to support any number of `@` signs
+
 
 #### Core Level 2 Todo:
 
@@ -331,6 +333,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * [[ ]]
 * object literals
   * operators
+    * Full multi-argument bracket operator `[ ]`
     * ==
     * `+` (matrix and vector addition)
     * `-` (matrix and vector subtraction)
@@ -414,7 +417,12 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
     * `..`
 * core library
   * types
-    * bits
+     * &
+     * $
+     * !$
+     * ?
+     * values
+     * bits
 * core objects
   * chan
 
@@ -429,6 +437,9 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 
 ## Change log
 
+* 0.0.13 - 2018-10-20
+  * Basic single-argument bracket
+  * Added a debug value _d to help debug easier.
 * 0.0.12 - 2018-10-20
   * Implemented `macro` (the macro that creates macros). Note that the `startColumn` parameter is not implemented.
   * Prevent duplicate properties in an object in the (special) case that the first value was nil.

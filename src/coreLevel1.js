@@ -147,7 +147,6 @@ function getFromJsPrimitive(infoObject) {
     //  unboxed and the value it contains passed as the operand.
 // Boxed is used to help the `~` operator do its job.
 // The `tildeOperator` is optional.
-// TODO: Combine this with the new way of defining values (with meta) to make things more consistent.
 var Boxed = function(value, tildeOperator) {
     var box = {meta:{primitive:{boxed:value}}}
     if(tildeOperator)
@@ -159,8 +158,11 @@ var Boxed = function(value, tildeOperator) {
 // literals
 
 var nil = exports.nil = {
-    //type: undefined,      // will be filled in later
+    //type: undefined,          // Will be filled in later.
     name: 'nil',
+    get _d() {                  // Value that makes it easier to debug (shows the lima value).
+        return utils.getName(this)
+    },
     meta: {
         const: false,           // Will be set to true in coreLevel2.lima
         scopes: [{}],           // Each scope has the structure:
@@ -295,6 +297,12 @@ var emptyObj = exports.emptyObj = basicUtils.copyValue(nil)
 delete emptyObj.meta.primitive
 // emptyObj.type = utils.hasInterface(emptyObj)     // what was this?
 emptyObj.meta.operators['.'] = dotOperator
+emptyObj.meta.operators['['] = { // Basic single-operand bracket operator (multi-operand will be in coreLevel2).
+    order:0, scope: 0,
+    dispatch: makeParamInfo([{params: [{key:anyType}], fn: function(key) {
+        return utils.getProperty(this, key)
+    }}])
+}
 
 
 // functions used to create privileged members

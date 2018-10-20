@@ -1,6 +1,7 @@
 
 var copyValue = exports.copyValue = function(value) {
     var containerCopy = {type:'any',const:false, meta:{}}
+    Object.defineProperty(containerCopy,'_d',Object.getOwnPropertyDescriptor(value,'_d'));
     overwriteValue(containerCopy.meta, value.meta)
 
     return containerCopy
@@ -15,10 +16,14 @@ var overwriteValue = exports.overwriteValue = function(destination, source) {
     destination.privileged = copyScope(source.privileged, destination, source)
     destination.properties = {}
     for(var hashcode in source.properties) {
-        var prop = source.properties[hashcode]
-        var newValue = copyValue(prop.value)
-        rebindFunctions(newValue, destination, source)
-        destination.properties[hashcode] = {key:copyValue(prop.key), value:newValue}
+        var props = source.properties[hashcode]
+        var newProps = props.map(function(item) {
+            var newKey = copyValue(item.key)
+            var newValue = copyValue(item.value)
+            rebindFunctions(newValue, destination, source)
+            return {key:newKey, value:newValue}
+        })
+        destination.properties[hashcode] = newProps
     }
     copyOperators(destination, source, 'operators')
     copyOperators(destination, source, 'preOperators')

@@ -370,7 +370,8 @@ exports.appendElement = function(context, value, allowNil) {
 }
 
 // Gets a human readable name for a value - either its variable name or a name based on its value.
-var getName = exports.getName = function(value) {
+// isKey - When true, strings won't be wrapped in quotes.
+var getName = exports.getName = function(value, isKey) {
     if(value.name !== undefined) {
         return value.name
     } else if(value.meta.primitive !== undefined) {
@@ -380,12 +381,27 @@ var getName = exports.getName = function(value) {
                 name += '/'+value.meta.primitive.denominator
             return name
         } else if(value.meta.primitive.string !== undefined) {
-            return '"'+value.meta.primitive.string+'"'
+            if(isKey) {
+                return value.meta.primitive.string
+            } else {
+                return '"'+value.meta.primitive.string+'"'
+            }
         }
     } else {
-        return "object literal or expression"
-    }
+        var propertyStrings = []
+        for(var hashcode in value.meta.properties) {
+            var propertyList = value.meta.properties[hashcode]
+            propertyList.forEach(function(propertyInfo) {
+                propertyStrings.push(getName(propertyInfo.key, true)+":"+getName(propertyInfo.value))
+            })
+        }
+        for(var key in value.meta.privileged) {
+            var privilegedProperty = value.meta.privileged[key]
+            propertyStrings.push(key+":"+getName(privilegedProperty))
+        }
 
+        return '{'+propertyStrings.join(' ')+'}'
+    }
 }
 
 var limaEquals = exports.limaEquals = function(scope, a,b) {
