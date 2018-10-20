@@ -98,7 +98,6 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 #### Core Level 1 Todo
 
 * variable declaration with a type
-* prevent _ from being declared or used outside the context of an object member initialization
 * Const hoisting - Add a new initial step for each function scope, which looks for any hoistable const expressions to evaluate first.
 * destructuring assignment
 * operators
@@ -108,7 +107,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * resolveOperatorConflict
   * resolveWeakOperatorConflict
 * nil
-  * `=`  (created, but can't be tested until the var? exists and is usable)
+  * `=`  (created, but can't be tested until `var?` exists and is usable)
   * `~>`
 * general operators
   * `~` (etc)
@@ -116,7 +115,6 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * ...
 * numbers
   * Migrate numbers to use some BigInteger module for its numerator and denominator rather than javascript numbers.
-  * Migrate strings to use LimaEncoding format with full unicode support for character indexing and counting
   * 00 (infinity)
   * error
   * number postfixes
@@ -134,6 +132,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   	* str (partially implemented but not testable yet)
   	* hashcode (partially implemented but not testable yet)
 * strings
+  * Migrate strings to use LimaEncoding format with full unicode support for character indexing and counting
   * move `#` quote to be an operator rather than a parser construct
   * move `@` newline operator to use the fallback operator to support any number of `@` signs
   * % extended space
@@ -146,6 +145,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 * object literals
   * override
   * `_`
+	* prevent _ from being declared or used outside the context of an object member initialization
   * require self for members that alias a variable from an upper scope
   * operators
     * `.`
@@ -164,7 +164,6 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * methods
     * tslice
 * functions
-	* function creation
 	* self member access
     * destructuring assignment in parameters
 	* ==
@@ -310,6 +309,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * `:` with named keys
   * `::` with expression keys
   * implicitly declared privileged members (with var type)
+* fn.raw function creation
 * macro
 
 #### Core Level 2 Todo:
@@ -323,6 +323,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
     * `|` (the nil-coalescence operator)
     * !??
 * functions
+  * fn function creation
   * default parameter values
   * self.x parameters
   * destructuring assignment in parameters
