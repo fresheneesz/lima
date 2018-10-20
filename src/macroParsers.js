@@ -35,9 +35,74 @@ module.exports = P.createLanguage({scope:{}}, {
         // match
             // parameter - Same as above.
             // body - Same as above.
-    rawFnInner: function() {
+    macroInner: function() {
+        return seqObj(
+            ['match', this.macroInnerBlock("match")],
+            ['run',this.macroInnerBlock("run")]
+        )
+    },
+        macroInnerBlock: function(name) {
+            var parser = getParser()
+            var parserState = parser.withState(this.state)
+            return this.innerBlock(name, seq(
+                parserState.variable(),
+                seq(parserState.indentedWs(),
+                    parserState.variable()
+                ).map(function(v) {
+                    return v[1]
+                }).atMost(1)
+            ).atMost(1).map(function(v) {
+                var parameters = []
+                if(v.length === 1) {
+                    parameters.push(v[0][0].name)
+                    if(v[0][1].length === 1) {
+                        parameters.push(v[0][1][0].name)
+                    }
+                }
+                return parameters
+            }))
+        },
+
+    innerBlock: function(name, parametersParser) {
         var parser = getParser()
         var parserState = parser.withState(this.state)
+        var that = this
+        return parserState.indent(function() {
+            var macroParserState = that.withState(this.state)
+            return seqObj(
+                parserState.indentedWs().many(),
+                name,
+                this.indentedWs().many(),
+                ['parameters', parametersParser],
+                this.indentedWs().many(),
+                ":",
+                this.indentedWs().many()
+            ).chain(function(v) {
+                if(this.state.indent < 2) {
+                    var newState = basicUtils.merge({},this.state, {indent:2})
+                    macroParserState = macroParserState.withState(newState)
+                }
+                return macroParserState.indentedBlock().map(function(indentedBlock) {
+                    var result = {
+                        body: this.superExpression(false).many().tryParse(indentedBlock)
+                    }
+                    if(v.parameters) {
+                        result.parameters = v.parameters
+                    }
+                    return result
+                }.bind(this))
+            }.bind(this))
+        })
+    },
+
+    // returns an object with the properties:
+        // run
+            // parameter - The name of the parameter.
+            // body - A list of value nodes.
+        // match
+            // parameter - Same as above.
+            // body - Same as above.
+    rawFnInner: function() {
         return seqObj(
             ['match', this.rawFnInnerBlock("match")],
             ['run',this.rawFnInnerBlock("run")]
@@ -45,36 +110,13 @@ module.exports = P.createLanguage({scope:{}}, {
     },
         rawFnInnerBlock: function(name) {
             var parser = getParser()
-            var parserState = parser.withState(this.state)
-            var that = this
-            return parserState.indent(function() {
-                var macroParserState = that.withState(this.state)
-                return seqObj(
-                    parserState.indentedWs().many(),
-                    name,
-                    this.indentedWs().many(),
-                    ['parameter', parserState.variable().atMost(1)],
-                    this.indentedWs().many(),
-                    ":",
-                    this.indentedWs().many()
-                ).chain(function(v) {
-                    if(this.state.indent < 2) {
-                        var newState = basicUtils.merge({},this.state, {indent:2})
-                        macroParserState = macroParserState.withState(newState)
-                    }
-
-                    return macroParserState.indentedBlock().map(function(indentedBlock) {
-                        var result = {
-                            body: this.superExpression(false).many().tryParse(indentedBlock)
-                        }
-                        if(v.parameter[0]) {
-                            result.parameter = v.parameter[0].name
-                        }
-
-                        return result
-                    }.bind(this))
-                }.bind(this))
-            })
+            return this.innerBlock(name, parser.variable().atMost(1).map(function(v) {
+                var parameters = []
+                if(v.length === 1) {
+                    parameters.push(v[0].name)
+                }
+                return parameters
+            }))
         },
             // gets a block of indented stuff which ends when there's a line with non-whitespace indented less than the current indent
             indentedBlock: function() {
@@ -106,7 +148,6 @@ module.exports = P.createLanguage({scope:{}}, {
                 } else {
                     var value = {type:'superExpression', parts:[node]}
                 }
-
                 return {expression: value, consumed: v.expression.end.offset- v.ws.start.offset}
             }
         })

@@ -1,5 +1,6 @@
 
 var coreLevel1 = require("../src/coreLevel1")
+var utils = require("../src/utils")
 
 
 var tests = exports.tests = {
@@ -120,19 +121,19 @@ var tests = exports.tests = {
 
     singleQuoteString:    {content:"'hi'", check: function(module) {
         var element0 = getFirstProperty(module).value
-        return element0.primitive.string === 'hi'
+        return element0.meta.primitive.string === 'hi'
     }},
     doubleQuoteString:    {content:'"hi"', check: function(module) {
         var element0 = getFirstProperty(module).value
-        return element0.primitive.string === 'hi'
+        return element0.meta.primitive.string === 'hi'
     }},
     tripleSingleQuoteString:    {content:"'''hi'''", check: function(module) {
         var element0 = getFirstProperty(module).value
-        return element0.primitive.string === 'hi'
+        return element0.meta.primitive.string === 'hi'
     }},
     tripleDoubleQuoteString:    {content:'"""hi"""', check: function(module) {
         var element0 = getFirstProperty(module).value
-        return element0.primitive.string === 'hi'
+        return element0.meta.primitive.string === 'hi'
     }},
     tripleQuoteStringWithNewlines: {
         content:
@@ -140,7 +141,7 @@ var tests = exports.tests = {
             ' ho"""',
         check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.primitive.string === 'hey\nho'
+            return element0.meta.primitive.string === 'hey\nho'
         }
     },
         // triple quotes with extra non-triple quotes
@@ -150,56 +151,56 @@ var tests = exports.tests = {
     singleQuoteContainingSingleQuotes:
         {content:'#"a"', check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.primitive.string === '"a'
+            return element0.meta.primitive.string === '"a'
         }
     },
     doubleQuoteContainingDoubleQuotes:
         {content:"#'a'", check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.primitive.string === "'a"
+            return element0.meta.primitive.string === "'a"
         }
     },
     graveQuoteContainingGraveQuotes:
         {content:'#`a`', check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.primitive.string === '`a'
+            return element0.meta.primitive.string === '`a'
         }
     },
 
     tripleDoubleQuoteContainingTripleQuotes:
         {content:'#"""a"""', check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.primitive.string === '"""a'
+            return element0.meta.primitive.string === '"""a'
         }
     },
     tripleDoubleQuoteContainingTripleQuotes2:
         {content:'"""a"""#', check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.primitive.string === 'a"""'
+            return element0.meta.primitive.string === 'a"""'
         }
     },
     tripleSingleQuoteContainingTripleQuotes:
         {content:"#'''a'''", check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.primitive.string === "'''a"
+            return element0.meta.primitive.string === "'''a"
         }
     },
     tripleSingleQuoteContainingTripleQuotes2:
         {content:"'''a'''#", check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.primitive.string === "a'''"
+            return element0.meta.primitive.string === "a'''"
         }
     },
     tripleGraveQuoteContainingTripleQuotes:
         {content:'#```a```', check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.primitive.string === '```a'
+            return element0.meta.primitive.string === '```a'
         }
     },
     tripleGraveQuoteContainingTripleQuotes2:
         {content:'```a```#', check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.primitive.string === 'a```'
+            return element0.meta.primitive.string === 'a```'
         }
     },
 
@@ -210,68 +211,68 @@ var tests = exports.tests = {
     singleQuoteContainingNewline:
         {content:'@"a"', check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.primitive.string === '\na'
+            return element0.meta.primitive.string === '\na'
         }
     },
     doubleQuoteContainingNewline:
         {content:"@'a'", check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.primitive.string === '\na'
+            return element0.meta.primitive.string === '\na'
         }
     },
     graveQuoteContainingNewline:
         {content:'@`a`', check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.primitive.string === '\na'
+            return element0.meta.primitive.string === '\na'
         }
     },
 
     tripleDoubleQuoteContainingNewline:
         {content:'@"""a"""', check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.primitive.string === '\na'
+            return element0.meta.primitive.string === '\na'
         }
     },
     tripleDoubleQuoteContainingNewline2:
         {content:'"""a"""@', check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.primitive.string === 'a\n'
+            return element0.meta.primitive.string === 'a\n'
         }
     },
     tripleSingleQuoteContainingNewline:
         {content:"@'''a'''", check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.primitive.string === "\na"
+            return element0.meta.primitive.string === "\na"
         }
     },
     tripleSingleQuoteContainingNewline2:
         {content:"'''a'''@", check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.primitive.string === "a\n"
+            return element0.meta.primitive.string === "a\n"
         }
     },
     tripleGraveQuoteContainingNewline:
         {content:'@```a```', check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.primitive.string === '\na'
+            return element0.meta.primitive.string === '\na'
         }
     },
     tripleGraveQuoteContainingNewline2:
         {content:'```a```@', check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.primitive.string === 'a\n'
+            return element0.meta.primitive.string === 'a\n'
         }
     },
     variableStringAndNewline:
         {content:'a="hi" a@', check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.primitive.string === 'hi\n'
+            return element0.meta.primitive.string === 'hi\n'
         }
     },
     variableStringAndNewline2:
         {content:'a="hi" @a', check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.primitive.string === '\nhi'
+            return element0.meta.primitive.string === '\nhi'
         }
     },
             // ==
@@ -316,21 +317,21 @@ var tests = exports.tests = {
     varsWithFirstLetterCaseDif2:    "abc=1 Abc=2",
 
     singleColonLiteralKey:    {content:'2: 5', check: function(module) {
-        var propertyItem = module.properties[2][0]
-        return propertyItem.key.primitive.numerator === 2
-               && propertyItem.value.primitive.numerator === 5
+        var propertyItem = module.meta.properties[2][0]
+        return propertyItem.key.meta.primitive.numerator === 2
+               && propertyItem.value.meta.primitive.numerator === 5
     }},
     singleColonNameKey:       {content:'a: 5', check: function(module) {
-        for(var hashcode in module.properties) {
-            var propertyItem = module.properties[hashcode][0]
-            return propertyItem.key.primitive.string === 'a'
-               && propertyItem.value.primitive.numerator === 5
+        for(var hashcode in module.meta.properties) {
+            var propertyItem = module.meta.properties[hashcode][0]
+            return propertyItem.key.meta.primitive.string === 'a'
+               && propertyItem.value.meta.primitive.numerator === 5
         }
     }},
     doubleColonLiteralKey:    {content:'2:: 5', check: function(module) {
-        var propertyItem = module.properties[2][0]
-        return propertyItem.key.primitive.numerator === 2
-               && propertyItem.value.primitive.numerator === 5
+        var propertyItem = module.meta.properties[2][0]
+        return propertyItem.key.meta.primitive.numerator === 2
+               && propertyItem.value.meta.primitive.numerator === 5
     }},
     doubleColonExpressionKey: {
         content:'2+2:: 5',
@@ -344,64 +345,103 @@ var tests = exports.tests = {
         content:'a=5 a::9',
         check: function(module) {
             var property = getFirstProperty(module)
-            return isSpecificInt(property.key, 5)
-                   && isSpecificInt(property.value, 9)
-                   && Object.keys(module.properties).length === 1 // only one property
+            var privilegedMember = module.meta.privileged.a
+            return Object.keys(module.meta.properties).length === 1 // only one property
+                && Object.keys(module.meta.privileged).length === 1 // only one additional privileged member
+                && isSpecificInt(privilegedMember, 5)
+                && isSpecificInt(property.key, 5)
+                && isSpecificInt(property.value, 9)
         }
     },
     implicitVariableCreation: {content:'a = 5', check: function(module) {
-        var member = module.privileged['a']
-        return member.primitive.numerator === 5
+        var member = module.meta.privileged['a']
+        return member.meta.primitive.numerator === 5
     }},
 
     // A case where the end paren has to be resolved in a nonmacro expression continuation
     parenNonMacroContinuation: {content:'a=5 (a)', check: function(module) {
         var element0 = getFirstProperty(module).value
-        return element0.primitive.numerator === 5
+        return element0.meta.primitive.numerator === 5
     }},
 
         //should fail:
 
     dupeProperties:          {shouldFail:true, content: "a:4 a:5"},
+    dupePropertiesWithNil:   {shouldFail:true, content: "a:nil a:5"}, // Multiple object properties should throw an error even if the first object property was set to nil.
     privilegedRedeclaration: {shouldFail:true, content: "x=4 x='hello world'"},
     nonFirstLetterCaseDif:   {shouldFail:true, content: "abc=1 abC=2"},
+    dupePrivilegedWithNil:   {shouldFail:true, content: "abc=nil abc=nil"}, // todo: fix this once var? isn't the default type (var will be the default type eventuallly)
 
     propertyWithUndeclaredVariable:  {shouldFail:true, content: "a:x"},
     propertyWithUndeclaredVariable2: {shouldFail:true, content: "3::x"},
     propertyWithUndeclaredVariable3: {shouldFail:true, content: "x::3"},
 
 
+
+
     // object literal creation:
 
     singleColonLiteralKey_object:    {content:'{2: 5}', check: function(module) {
         var element0 = getFirstProperty(module).value
-        var propertyItem = element0.properties[2][0]
-        return propertyItem.key.primitive.numerator === 2
-               && propertyItem.value.primitive.numerator === 5
+        var propertyItem = element0.meta.properties[2][0]
+        return propertyItem.key.meta.primitive.numerator === 2
+               && propertyItem.value.meta.primitive.numerator === 5
     }},
     doubleColonLiteralKey_object:    {content:'{2:: 5}', check: function(module) {
         var element0 = getFirstProperty(module).value
-        var propertyItem = element0.properties[2][0]
-        return propertyItem.key.primitive.numerator === 2
-               && propertyItem.value.primitive.numerator === 5
+        var propertyItem = element0.meta.properties[2][0]
+        return propertyItem.key.meta.primitive.numerator === 2
+               && propertyItem.value.meta.primitive.numerator === 5
     }},
     implicitVariableCreation_object: {content:'{a = 5}', check: function(module) {
         var element0 = getFirstProperty(module).value
-        var member = element0.privileged['a']
-        return member.primitive.numerator === 5
+        var member = element0.meta.privileged['a']
+        return member.meta.primitive.numerator === 5
     }},
     doubleColonVariableKey_object: {
-        content:'a=5 a::9',
+        content:'{a=5 a::9}',
         check: function(module) {
-            var privilegedMember = module.privileged.a
-            var property = getFirstProperty(module)
-            return isSpecificInt(property.key, 5)
-                   && isSpecificInt(property.value, 9)
-                   && Object.keys(module.properties).length === 1 // only one property
-                   && isSpecificInt(privilegedMember, 5)
-                   && Object.keys(module.privileged).length === 1 // only one privileged member
+            var object = getFirstProperty(module).value
+            var privilegedMember = object.meta.privileged.a
+            var property = getFirstProperty(object)
+            return Object.keys(object.meta.properties).length === 1 // only one property
+                && Object.keys(object.meta.privileged).length === 1 // only one additional privileged member
+                && isSpecificInt(privilegedMember, 5)
+                && isSpecificInt(property.key, 5)
+                && isSpecificInt(property.value, 9)
         }
     },
+    nestedObjects: {content:'{a:{b:"c"}}', check: function(module) {
+        var object = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
+        var a = utils.getProperty({this:object}, coreLevel1.StringObj("a"))
+        var b = utils.getProperty({this:a}, coreLevel1.StringObj("b"))
+        return b.meta.primitive.string === 'c'
+    }},
+    nestedObjectsSamePropertyNames: {content:'{a:{b:1 a:"b"}}', check: function(module) {
+        var object = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
+        var a = utils.getProperty({this:object}, coreLevel1.StringObj("a"))
+        var b = utils.getProperty({this:a}, coreLevel1.StringObj("b"))
+        var a2 = utils.getProperty({this:a}, coreLevel1.StringObj("a"))
+        return  b.meta.primitive.numerator === 1
+                && a2.meta.primitive.string === 'b'
+    }},
+    nestedObjectsWithWeirdParens: {content:'{a:{(b:"c")}}', check: function(module) {
+        var object = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
+        var a = utils.getProperty({this:object}, coreLevel1.StringObj("a"))
+        var b = utils.getProperty({this:a}, coreLevel1.StringObj("b"))
+        return b.meta.primitive.string === 'c'
+    }},
+    objectWithAllTheAs: {content:'a=5 {a:a}', check: function(module) {
+        var object = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
+        var a = utils.getProperty({this:object}, coreLevel1.StringObj("a"))
+        return a.meta.primitive.numerator === 5
+    }},
+    objectWithAllTheAs2: {content:'a=5 {a:{a:a}}', check: function(module) {
+        var object = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
+        var a = utils.getProperty({this:object}, coreLevel1.StringObj("a"))
+        var innerA = utils.getProperty({this:a}, coreLevel1.StringObj("a"))
+        return innerA.meta.primitive.numerator === 5
+    }},
 
     // general operators
 
@@ -446,7 +486,7 @@ var tests = exports.tests = {
             return isSpecificInt(element0, 5)
         }
     },
-    // expression on first-line
+    // expression on first-line (with macro)
     basicRawFunctionValue3: {
         content:'a = rawFn match: ret {argInfo:true}\n'+
                 ' run:   ret 5\n'+
@@ -551,7 +591,7 @@ var tests = exports.tests = {
             return isSpecificInt(element0, 5)
         }
     },
-    // expression on first-line
+    // expression on first-line (with macro)
     basicRawFunctionValue3b: {
         content:'a = rawFn[match: ret {argInfo:true}\n'+
                 ' run:   ret 5\n' +
@@ -562,6 +602,18 @@ var tests = exports.tests = {
             return isSpecificInt(element0, 5)
         }
     },
+    // todo: after you implement macro so you can create test macros inline
+//    // doubly nested macro on first-line
+//    basicRawFunctionValue3c: {
+//        content:'a = rawFn[match: ret {argInfo:true, fakeRet: ret {0:ret "fake"}}\n'+
+//                ' run:   ret 5\n' +
+//                ']\n'+
+//                'a[]',
+//        check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return isSpecificInt(element0, 5)
+//        }
+//    },
 
         // should fail:
     basicRawFunctionValue4b: {
@@ -636,6 +688,49 @@ var tests = exports.tests = {
 //    },
 
 
+    // macro
+
+    consumeZeroMacroNoParams: {
+        content:'a = macro\n'+
+                ' match: \n' +
+                '  ret {consume: 0}\n'+
+                ' run:   \n' +
+                '  ret 5\n'+
+                'a',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 5)
+        }
+    },
+    consumeOneMacroNoParams: {
+        content:'a = macro\n'+
+                ' match: \n' +
+                '  ret {consume: 1}\n'+
+                ' run:   \n' +
+                '  ret 5\n'+
+                'a ',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 5)
+        }
+    },
+    // todo: test startColumn when that's implemented
+    macroParamsTest: {
+        content:'a = macro\n'+
+                ' match rawInput startColumn: \n' +
+                '  ret {consume:2 info:{rawInput:rawInput startColumn:startColumn}}\n'+
+                ' run info:   \n' +
+                '  ret info\n'+
+                'a 2',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            var rawInput = utils.getProperty({this:element0}, coreLevel1.StringObj("rawInput"))
+//            var startColumn = utils.getProperty({this:element0}, coreLevel1.StringObj("startColumn"))
+            return rawInput.meta.primitive.string === " 2"
+        }
+    },
+
+
     // other
 
 
@@ -663,8 +758,8 @@ var tests = exports.tests = {
 // gets the first property (key and value) found in the object's property list (no guaranteed order)
 // this is mostly good for getting a property from an object when you know if only contains one property
 function getFirstProperty(obj) {
-    for(var hashcode in obj.properties) {
-        return obj.properties[hashcode][0]
+    for(var hashcode in obj.meta.properties) {
+        return obj.meta.properties[hashcode][0]
     }
 }
 
@@ -672,8 +767,8 @@ function isSpecificInt(obj, integer) {
     return isSpecificRatio(obj, integer, 1)
 }
 function isSpecificRatio(obj, numerator, denominator) {
-    return obj.primitive.numerator === numerator
-           && obj.primitive.denominator === denominator
+    return obj.meta.primitive.numerator === numerator
+           && obj.meta.primitive.denominator === denominator
 }
 function isTrue(obj) {
     return isSpecificInt(obj, 1) && obj.name === 'true'

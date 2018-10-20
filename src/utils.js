@@ -59,7 +59,22 @@ var callOperator = exports.callOperator = function(callingScope, operator, opera
     if(operatorType === 'prefix') operatorsKey = 'preOperators'
     else if(operatorType === 'postfix') operatorsKey = 'postOperators'
 
-    var operatorInfo1 = operands[0][operatorsKey][operator]
+    // Unbox if necessary.
+    function unboxOperand(operand, unboxedOperands) {
+        if(operand === undefined) return
+
+        if(operand.meta.primitive && operand.meta.primitive.boxed) {
+            unboxedOperands.push(operand.meta.primitive.boxed)
+        } else {
+            unboxedOperands.push(operand)
+        }
+    }
+    var unboxedOperands = []
+    unboxOperand(operands[0], unboxedOperands)
+    unboxOperand(operands[1], unboxedOperands)
+    operands = unboxedOperands
+
+    var operatorInfo1 = operands[0].meta[operatorsKey][operator]
     if(operatorType !== undefined) { // unary
         if(operatorInfo1 === undefined)
             throw new Error("Object doesn't have a '"+operator+"' "+operatorType+" operator")
@@ -69,7 +84,7 @@ var callOperator = exports.callOperator = function(callingScope, operator, opera
         var thisContext = operands[0]
     } else if(operator === '.') {            // dot operator
         if(operatorInfo1 === undefined)
-            throw new Error("Object "+operands[0].name+" doesn't have a '"+operator+"' operator")
+            throw new Error("Object "+getName(operands[0])+" doesn't have a '"+operator+"' operator")
 
         var name = coreLevel1.StringObj(getPrimitiveStr(blockCallingScope, operands[1]))
         var args = coreLevel1.LimaObject([name])
@@ -111,7 +126,7 @@ var callOperator = exports.callOperator = function(callingScope, operator, opera
 
         } else { // normal binary operator
             var dispatchInfo = getBinaryDispatch(operands[0], operator, operands[1])
-            if(dispatchInfo.operatorInfo === operands[0].operators[operator]) {
+            if(dispatchInfo.operatorInfo === operands[0].meta.operators[operator]) {
                 var thisContext = operands[0]
             } else { 
                 var thisContext = operands[1]
@@ -131,9 +146,9 @@ var callOperator = exports.callOperator = function(callingScope, operator, opera
 
         var matchResult = applyOperator(match, context, args)
         if(isNil(matchResult)) throw new Error("Arguments don't match.")
-        var runArgs = getProperty({this:matchResult, scope:blockCallingScope}, coreLevel1.StringObj('argInfo'))
-        if(runArgs === undefined) {
-            throw new Error("No argInfo property found in non-nil return value from `match` in the '"+operator+"' operator of "+thisContext.this.name+"")
+        var runArgs = getProperty({this:matchResult, scope:blockCallingScope}, coreLevel1.StringObj('info'))
+        if(runArgs === coreLevel1.nil) {
+            throw new Error("No `info` property found in non-nil return value from `match` in the '"+operator+"' operator of "+thisContext.name+"")
         }
     }
 
@@ -196,15 +211,19 @@ var getBinaryDispatch = exports.getBinaryDispatch = function(operand1, operator,
         // argInfo - The args normalized by the function's match call
         // weak - True if the matching parameters are weak dispatch.
     function getOperatorDispatch(object, operator, args) {
-        var operatorInfo = object.operators[operator]
+        var operatorInfo = object.meta.operators[operator]
         var context = {this:object}
         var matchResult = operatorInfo.dispatch.match.call(context, args)
-        if(matchResult) {
-            return {
+        if(matchResult !== coreLevel1.nil) {
+            var result = {
                 operatorInfo: operatorInfo,
                 argInfo: getRunArgsFromMatchResult(context, matchResult, operator),
                 weak: getProperty({this:matchResult, scope:blockCallingScope}, coreLevel1.StringObj('weak'))
             }
+            var weak = getProperty({this:matchResult, scope:blockCallingScope}, coreLevel1.StringObj('weak'))
+            if(weak !== coreLevel1.nil)
+                result.weak = weak
+            return result
         }
     }
 
@@ -214,11 +233,11 @@ var getBinaryDispatch = exports.getBinaryDispatch = function(operand1, operator,
             return getRunArgsFromMatchResult(context, matchResult, operator)
         }
         function getRunArgsFromMatchResult(context, matchResult, operator) {
-            var runArgs = getProperty({this:matchResult, scope:blockCallingScope}, coreLevel1.StringObj('argInfo'))
-            if(runArgs === undefined) {
-                throw new Error("No argInfo property found in non-nil return value from `match` " +
-                                "in the '"+operator+"' operator of `"+context.this.name+"`")
-            }
+            var runArgs = getProperty({this:matchResult, scope:blockCallingScope}, coreLevel1.StringObj('info'))
+//            if(runArgs === coreLevel1.nil) {
+//                throw new Error("No `info` property found in non-nil return value from `match` " +
+//                                "in the '"+operator+"' operator of `"+context.this.name+"`")
+//            }
             return runArgs
         }
 
@@ -231,14 +250,15 @@ var getBinaryDispatch = exports.getBinaryDispatch = function(operand1, operator,
             var argsToUse = [], paramIndex=0
             for(var n=0; n<parameters.length; n++) {
               var param = parameters[n]
-              if(paramIndex < args.elements) {
+              if(paramIndex < args.meta.elements) {
                 var arg = getProperty({this:args,scope:blockCallingScope}, coreLevel1.NumberObj(paramIndex))
                 paramIndex++
               } else {  // into named parameters
                 var arg = getProperty({this:args,scope:blockCallingScope}, coreLevel1.StringObj(param.name))
               }
 
-              if(arg === undefined) {
+              // some special handling for when nil is 'this' because its a value that disappears when added to lists like an argument list.
+              if(arg === coreLevel1.nil && param.name !== 'this') {
                 if(param.default !== undefined)
                   arg = param.default
                 else
@@ -258,7 +278,7 @@ var getBinaryDispatch = exports.getBinaryDispatch = function(operand1, operator,
               }
             }
 
-            var numberOfArgs = Object.keys(args.properties).length
+            var numberOfArgs = Object.keys(args.meta.properties).length
             if(parameters.length < numberOfArgs)
               return // doesn't match the dispatch list
             // else
@@ -290,7 +310,13 @@ var consumeMacro = exports.consumeMacro = function(context, obj, rawInput, start
     var rawInputLima = coreLevel1.StringObj(rawInput)
     var startColumnLima // todo: support startColumn
     try {
-        return obj.macro.apply(context, [rawInputLima, startColumnLima])
+        var matchArgs = coreLevel1.LimaObject([rawInputLima])//, startColumnLima])
+        var matchResult = callOperator(context.scope, '[', [obj.meta.macro.match, matchArgs])
+        var consumedCharsLimaValue = getProperty({this:matchResult}, coreLevel1.StringObj('consume'))
+        if(consumedCharsLimaValue.meta.primitive.denominator !== 1) {
+            throw new Error("The 'consume' property returned from the macro '"+obj.name+"' isn't an integer.")
+        }
+        return matchResult
     } catch(e) {
         var macroName = "macro"
         if(obj.name) macroName += ' "'+obj.name+'"'
@@ -302,26 +328,29 @@ var consumeMacro = exports.consumeMacro = function(context, obj, rawInput, start
 // key and value are both lima values
 var setProperty = exports.setProperty = function(context, key, value, allowNilValue) {
     var hashcode = getHashCode(key)
-    var items = context.this.properties[hashcode]
+    var items = context.this.meta.properties[hashcode]
     if(!allowNilValue && isNil(value)) {
         if(items !== undefined) {
             delete items[key]
+            if(items.length === 0) {
+                delete context.this.meta.properties[hashcode]
+            }
         }
     } else {
         if(items === undefined) {
-            items = context.this.properties[hashcode] = []
+            items = context.this.meta.properties[hashcode] = []
         }
 
         items.push({key:key, value:value})
     }
 }
 
-// returns the value at the passed key in the obj or undefined if no value exists at that key
+// returns the value at the passed key in the obj or nil if no value exists at that key
 // key is a lima value
 var getProperty = exports.getProperty = function(context, key) {
-    var items = context.this.properties[getHashCode(key)]
+    var items = context.this.meta.properties[getHashCode(key)]
     if(items === undefined)
-        return undefined
+        return coreLevel1.nil
 
     for(var n=0; n<items.length; n++) {
         var itemKey = items[n].key
@@ -329,21 +358,42 @@ var getProperty = exports.getProperty = function(context, key) {
             return items[n].value
         }
     }
+    // else
+    return coreLevel1.nil
 }
 
 exports.appendElement = function(context, value, allowNil) {
-    setProperty(context, coreLevel1.NumberObj(context.this.elements, 1), value, allowNil)
+    setProperty(context, coreLevel1.NumberObj(context.this.meta.elements, 1), value, allowNil)
     if(allowNil || !isNil(value)) {
-        context.this.elements++
+        context.this.meta.elements++
     }
 }
 
+// Gets a human readable name for a value - either its variable name or a name based on its value.
+var getName = exports.getName = function(value) {
+    if(value.name !== undefined) {
+        return value.name
+    } else if(value.meta.primitive !== undefined) {
+        if(value.meta.primitive.numerator !== undefined) {
+            var name = value.meta.primitive.numerator+""
+            if(value.meta.primitive.denominator !== 1)
+                name += '/'+value.meta.primitive.denominator
+            return name
+        } else if(value.meta.primitive.string !== undefined) {
+            return '"'+value.meta.primitive.string+'"'
+        }
+    } else {
+        return "object literal or expression"
+    }
+
+}
+
 var limaEquals = exports.limaEquals = function(scope, a,b) {
-    if(a.primitive !== undefined && b.primitive !== undefined) {
-        if(a.primitive.denominator !== undefined) {
-            return a.primitive.denominator === b.primitive.denominator && a.primitive.numerator === b.primitive.numerator
-        } else if(a.primitive.string !== undefined) {
-            return a.primitive.string === b.primitive.string
+    if(a.meta.primitive !== undefined && b.meta.primitive !== undefined) {
+        if(a.meta.primitive.denominator !== undefined) {
+            return a.meta.primitive.denominator === b.meta.primitive.denominator && a.meta.primitive.numerator === b.meta.primitive.numerator
+        } else if(a.meta.primitive.string !== undefined) {
+            return a.meta.primitive.string === b.meta.primitive.string
         }
     }
     // else
@@ -365,11 +415,11 @@ var normalizedVariableName = exports.normalizedVariableName = function(name) {
 // gets the primitive hashcode for a lima object
 var getHashCode = exports.getHashCode = function(obj) {
     while(true) {
-        if(obj.primitive !== undefined) {
-            if(obj.primitive.denominator === 1) {
-                return obj.primitive.numerator
-            } else if(obj.primitive.string !== undefined) {
-                return getJsStringKeyHash(obj.primitive.string)
+        if(obj.meta.primitive !== undefined) {
+            if(obj.meta.primitive.denominator === 1) {
+                return obj.meta.primitive.numerator
+            } else if(obj.meta.primitive.string !== undefined) {
+                return getJsStringKeyHash(obj.meta.primitive.string)
             }
         }
 
@@ -377,7 +427,7 @@ var getHashCode = exports.getHashCode = function(obj) {
         obj = callOperator(blockCallingScope, '[', [hashcodeFunction])
     }
 
-    return obj.primitive.numerator // now a primitive
+    return obj.meta.primitive.numerator // now a primitive
 }
 
 // returns a primitive integer hash from a js string
@@ -395,9 +445,9 @@ var getJsStringKeyHash = exports.getJsStringKeyHash = function(string) {
 // gets the primitive string representation of an object, via the 'str' member if its not a primitive
 var getPrimitiveStr = exports.getPrimitiveStr = function(context, obj) {
     while(true) {
-        if(obj.primitive !== undefined && 'string' in obj.primitive) {
-            if(obj.primitive.string === undefined) throw new Error("undefined primitive string : (")
-            return obj.primitive.string
+        if(obj.meta.primitive !== undefined && 'string' in obj.meta.primitive) {
+            if(obj.meta.primitive.string === undefined) throw new Error("undefined primitive string : (")
+            return obj.meta.primitive.string
         }
 
         var hashcodeFunction = getThisPrivilegedMember(blockCallingScope, obj, coreLevel1.StringObj('str'))
@@ -407,19 +457,19 @@ var getPrimitiveStr = exports.getPrimitiveStr = function(context, obj) {
 
 // returns true of the obj's primitive representation equals the passed in integer
 function primitiveEqualsInteger(obj, integer) {
-    return obj.primitive && obj.primitive.numerator === integer && obj.primitive.denominator === 1
+    return obj.meta.primitive && obj.meta.primitive.numerator === integer && obj.meta.primitive.denominator === 1
 }
 
 var isNil = exports.isNil = function(x) {
-    return x.primitive !== undefined && x.primitive.nil === true
+    return x.meta.primitive !== undefined && x.meta.primitive.nil === true
 }
 
 exports.isMacro = function(x) {
-    return x.macro !== undefined
+    return x.meta.macro !== undefined
 }
 
 exports.hasProperties = function(obj) {
-    return Object.keys(obj.properties).length > 0
+    return Object.keys(obj.meta.properties).length > 0
 }
 
 
@@ -442,7 +492,7 @@ var hasOperatorOfType = exports.hasOperatorOfType = function(valueObject, operat
     else if(opType === 'prefix') var operatorKey = 'preOperators'
     else if(opType === 'postfix') var operatorKey = 'postOperators'
 
-    var opInfo = valueObject[operatorKey][operator.operator]
+    var opInfo = valueObject.meta[operatorKey][operator.operator]
     return opInfo !== undefined
 }
 var isOperatorOfType = exports.isOperatorOfType = function(x, opType) {

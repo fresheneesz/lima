@@ -1,14 +1,16 @@
 
 var copyValue = exports.copyValue = function(value) {
-    var metaCopy = {type:'any',const:false}
-    overwriteValue(metaCopy, value)
+    var containerCopy = {type:'any',const:false, meta:{}}
+    overwriteValue(containerCopy.meta, value.meta)
 
-    return metaCopy
+    return containerCopy
 }
+// Source and destination should both be the meta property of a lima object.
 var overwriteValue = exports.overwriteValue = function(destination, source) {
     //destination.interfaces = value.interfaces
     destination.primitive = source.primitive
     destination.elements = source.elements
+    destination.macro = source.macro
     destination.destructors = source.destructors.slice(0)
     destination.privileged = copyScope(source.privileged, destination, source)
     destination.properties = {}

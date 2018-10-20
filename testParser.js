@@ -34,6 +34,7 @@ var tests = {
     "macroParsers.rawFnInner": macroParserTests.rawFnInnerTests,
     "macroParsers.indentedBlock": macroParserTests.indentedBlockTests,
     "macroParsers.retStatement": macroParserTests.retStatementTests,
+    "macroParsers.macroInner": macroParserTests.macroInnerTests,
 }
 
 

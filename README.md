@@ -54,7 +54,7 @@ These are all under the `src/` directory.
 
 **`{type:"object", expressions:_, needsEndBrace:_}`** - Represents an object literal. The `expressions` is a list of value nodes. `needsEndBrace` will be true if the endbrace wasn't found in the expression block (and presumably exists in a `rawExpression` somewhere inside expressions), false if it was found.
 
-**`{type:"superExpression", parts:_, needsEndParen:_}`** - Represents a block of code that may contain one or more actual expressions. The `parts` is a list of values nodes, operator nodes, or rawExpressions. Value nodes must be separated by one or more special operator nodes. It may contain rawExpressions, described below. `needsEndParen` will be true if the endbrace wasn't found in the expression block (and presumably exists in a `rawExpression` somewhere inside expressions), false if it was found.
+**`{type:"superExpression", parts:_, parens:_, needsEndParen:_}`** - Represents a block of code that may contain one or more actual expressions. The `parts` is a list of values nodes, operator nodes, or rawExpressions. Value nodes must be separated by one or more special operator nodes. It may contain rawExpressions, described below. If `parens` is true, it means the superExpression represents an expression surrounded by parens, otherwise the `parens` property won't exist. `needsEndParen` will be true if the endbrace wasn't found in the expression block (and presumably exists in a `rawExpression` somewhere inside expressions), false if it was found.
 * **`{type:"rawExpression", expression:_, meta:_}`** - Represents a block of code that may contain one or more actual expressions. `expression` is the raw expression string. `meta` contains an object with an `index` representing the index in the source code the rawExpression starts at. `index` has the structure `{ offset: _, line: _, column: _ }`. *Note: this isn't a value node.*
 * **`{type:"macroConsumption", consume:_}`** - Indicates that the previous value is expected to consumes `consume` number of characters (eg because its consumption was evaluated as part of the first line of a block macro). Can also be inserted after values not expected to be a macro (with `consume:0`). This is intended to be used in evaluation to double-check that the macro consumes the expected number of characters when run for real, and facilitate throwing an error if the consumption doesn't match when run.
 
@@ -115,7 +115,8 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * `~>` (etc)
   * ...
 * numbers
-  * Migrate numbers to use some BigInteger module for its numerator and denominator rather than javascript "ints.
+  * Migrate numbers to use some BigInteger module for its numerator and denominator rather than javascript numbers.
+  * Migrate strings to use LimaEncoding format with full unicode support for character indexing and counting
   * 00 (infinity)
   * error
   * number postfixes
@@ -133,6 +134,8 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   	* str (partially implemented but not testable yet)
   	* hashcode (partially implemented but not testable yet)
 * strings
+  * move `#` quote to be an operator rather than a parser construct
+  * move `@` newline operator to use the fallback operator to support any number of `@` signs
   * % extended space
   * ! LimaEncoding codepoint
   * code
@@ -176,7 +179,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 	* paramType
 	* condType
 	* error about undeclared variables in functions
-* macro
+* macro `startColumn` parameter
 * types
   * &
   * $
@@ -297,8 +300,6 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * double quote strings
   * triple quote strings
   * grave accent strings (`)
-  * `#` quote
-  * @ newline
   * operators
     * `==`
   * members
@@ -309,6 +310,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * `:` with named keys
   * `::` with expression keys
   * implicitly declared privileged members (with var type)
+* macro
 
 #### Core Level 2 Todo:
 
@@ -426,6 +428,12 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 
 ## Change log
 
+* 0.0.12 - 2018-10-20
+  * Implemented `macro` (the macro that creates macros). Note that the `startColumn` parameter is not implemented.
+  * Prevent duplicate properties in an object in the (special) case that the first value was nil.
+  * Fixing bug when a value was set on an object with a single-colon and the key-name had an in-scope value.
+  * A change to the `macro` interface (return structure) to match with `rawFn`.
+  * Fixing a parsing bug that happened with nested objects (related to two ending braces).
 * 0.0.11 - 2018-10-10
   * Adding tests for variable string @ operator
   * Verifying doubleColonExpressionKey's result

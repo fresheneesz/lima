@@ -311,6 +311,7 @@ function getSuperExpressionTests() {
                parts:
                 [ { type: 'variable', name: 'b' },
                   { type: 'rawExpression', expression: '=4)' } ],
+               parens:true,
                needsEndParen: true },
              { type: 'rawExpression', expression: '' } ],
           needsEndParen: false }
@@ -471,6 +472,7 @@ function getSuperExpressionTests() {
                parts:
                 [ { type: 'variable', name: 'B' },
                   { type: 'rawExpression', expression: '\n))' } ],
+               parens:true,
                needsEndParen: true },
              { type: 'rawExpression', expression: '' } ],
           needsEndParen: false }
@@ -754,6 +756,13 @@ function getNonMacroExpressionContinuationTests() {
             { current:
                [ { type: 'operator', operator: ')', opType: 'postfix' } ],
                  next: [] }
+   randomTests.inputs[':"c"}}'] = // two end braces
+           { current:
+               [ { type: 'operator', operator: ':', opType: 'binary' },
+                 { type: 'string', string: 'c' },
+                 { type: 'operator', operator: '}', opType: 'postfix' },
+                 { type: 'operator', operator: '}', opType: 'postfix' } ],
+              next: [] }
 
 
     tests.push(randomTests)

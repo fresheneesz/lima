@@ -7,6 +7,7 @@ var macroParsers = require("../src/macroParsers")
 var macroBlockTests=[]
 var rawFnInnerBlockTests=[], rawFnInnerTests = [], indentedBlockTests = []
 var retStatementTests=[]
+var macroInnerTests=[]
 
 
 
@@ -63,14 +64,16 @@ rawFnInnerTests.inputs[
     "run: whatever"
 ] =
     { match:
-       { body:
+       { parameters: [],
+         body:
           [ { type: 'superExpression',
               parts:
                [ { type: 'variable', name: 'whatever' },
                  { type: 'rawExpression', expression: '' } ],
               needsEndParen: false } ] },
       run:
-       { body:
+       { parameters: [],
+         body:
           [ { type: 'superExpression',
               parts:
                [ { type: 'variable', name: 'whatever' },
@@ -82,7 +85,7 @@ rawFnInnerTests.inputs[
     "run b: whatever"
 ] =
     { match:
-       { parameter: 'a',
+       { parameters: ['a'],
          body:
           [ { type: 'superExpression',
               parts:
@@ -90,7 +93,7 @@ rawFnInnerTests.inputs[
                  { type: 'rawExpression', expression: '' } ],
               needsEndParen: false } ] },
       run:
-       { parameter: 'b',
+       { parameters: ['b'],
          body:
           [ { type: 'superExpression',
               parts:
@@ -113,6 +116,30 @@ retStatementTests = [
     ]}
 ]
 
+
+macroInnerTests = {inputs: {}, state: {indent: 0}}
+macroInnerTests.inputs[
+    "match a b: whatever\n"+
+    "run a: whatever"
+] =
+     { match:
+       { parameters: ['a', 'b'],
+         body:
+          [ { type: 'superExpression',
+              parts:
+               [ { type: 'variable', name: 'whatever' },
+                 { type: 'rawExpression', expression: '' } ],
+              needsEndParen: false } ] },
+       run:
+       { parameters: ['a'],
+         body:
+          [ { type: 'superExpression',
+              parts:
+               [ { type: 'variable', name: 'whatever' },
+                 { type: 'rawExpression', expression: '' } ],
+              needsEndParen: false } ] } }
+
+
 //*/
 
 exports.macroBlockTests = macroBlockTests
@@ -120,3 +147,4 @@ exports.rawFnInnerBlockTests = rawFnInnerBlockTests
 exports.rawFnInnerTests = rawFnInnerTests
 exports.retStatementTests = retStatementTests
 exports.indentedBlockTests = indentedBlockTests
+exports.macroInnerTests = macroInnerTests

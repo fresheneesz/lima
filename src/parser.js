@@ -85,10 +85,10 @@ var L = P.createLanguage({scope:{}, consumeFirstlineMacros: false, firstLine:fal
                         operatorWithSurroundingWhitespace(alt(
                             this.equalsOperator(),
                             this.colonOperator(),
-                            this.openingBracket(),
+                            this.openingBracket()
                         ), 0).times(1).map(function(v) {
-                                return v
-                            }),
+                            return v
+                        }),
                         middleOperator,
                         operatorWithSurroundingWhitespace(middleOperator, 1)
                     )],
@@ -105,8 +105,8 @@ var L = P.createLanguage({scope:{}, consumeFirstlineMacros: false, firstLine:fal
                     }).atMost(1)]
                 ).map(function(v){
                     var result = v.operators.concat(v.operand)
-                    if(v.closingBBPs.length > 0 && v.closingBBPs[0].length > 0) {
-                        result = result.concat(v.closingBBPs[0][0])
+                    if(v.closingBBPs.length > 0) {
+                        result = result.concat(v.closingBBPs[0])
                     }
 
                     return result
@@ -234,6 +234,10 @@ var L = P.createLanguage({scope:{}, consumeFirstlineMacros: false, firstLine:fal
                     str(')')
                 ).atMost(1)]
             ).map(function(v) {
+                if(v.superExpression.type === 'superExpression') {
+                    v.superExpression.parens = true
+                }
+
                 if(v.end.length !== 1) {// if the end paren hasn't been found
                     v.superExpression.needsEndParen = true
                 }
@@ -251,12 +255,9 @@ var L = P.createLanguage({scope:{}, consumeFirstlineMacros: false, firstLine:fal
         macro: function(macro) {
             return P(function(input, i) {
                 var context = {scope:this.state.scope}
-                var result = utils.consumeMacro(context, macro, input.slice(i))
-                var consumedCharsLimaValue = utils.getProperty({this:result}, coreLevel1.StringObj('consume'))
-                if(consumedCharsLimaValue.primitive.denominator !== 1) {
-                    throw new Error("The 'consume' property returned from the macro '"+macro.name+"' isn't an integer.")
-                }
-                var consumedChars = consumedCharsLimaValue.primitive.numerator
+                var consumeResult = utils.consumeMacro(context, macro, input.slice(i))
+                var consumedCharsLimaValue = utils.getProperty({this:consumeResult}, coreLevel1.StringObj('consume'))
+                var consumedChars = consumedCharsLimaValue.meta.primitive.numerator
                 var consumedString = input.slice(i, i+consumedChars)
                 if(consumedString.indexOf('\n')) {
                     this.state.firstLine = false
