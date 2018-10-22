@@ -44,17 +44,22 @@ var blockCallingScope = exports.blockCallingScope = {
 
 // calls an operator on its operands (ie operandArgs)
 // parameters:
-    // callingScope - An object representing the calling scope. It has the properties:
-        // get(name) - Gets a value from the scope.
-        // set(name, value, private) - Declares and/or sets a variable in the scope.
+    // context
+        // consumeFirstlineMacros
+        // scope - An object representing the calling scope. It has the properties:
+            // get(name) - Gets a value from the scope.
+            // set(name, value, private) - Declares and/or sets a variable in the scope.
+        // this - Not used by this method nor passed through.
     // operator - A string representing the operator.
     // operands - Will have one element for unary operations, and two for binary operations.
         // Each element is a lima object, with the following exception:
             // For non-macro bracket operators, the first operand should be the main object, and the second operand should be
                 // an `arguments` object of the same type `getOperatorDispatch` takes.
     // operatorType - Either 'prefix', 'postfix', or undefined (for binary)
-var callOperator = exports.callOperator = function(callingScope, operator, operands, operatorType) {
+var callOperator = exports.callOperator = function(context, operator, operands, operatorType) {
     // todo: implement chaining and multiple dispatch
+    var callingScope = context.scope
+    var consumeFirstlineMacros = context.consumeFirstlineMacros
     var operatorsKey = 'operators'
     if(operatorType === 'prefix') operatorsKey = 'preOperators'
     else if(operatorType === 'postfix') operatorsKey = 'postOperators'
@@ -106,7 +111,7 @@ var callOperator = exports.callOperator = function(callingScope, operator, opera
         } else if(isAssignmentOperator({type:'operator', operator:operator})) {
             if(operator !== '=') {
                 var baseOperator = operator.slice(0, -1)
-                var baseResult = callOperator(callingScope, baseOperator, operands) // execute operator1
+                var baseResult = callOperator(context, baseOperator, operands) // execute operator1
                 operands = [operands[0], baseResult]
             }
 
@@ -140,7 +145,7 @@ var callOperator = exports.callOperator = function(callingScope, operator, opera
         var run = dispatchInfo.operatorInfo.dispatch.run
     }
 
-    var context = {this: thisContext, scope: callingScope}
+    var context = {this: thisContext, scope: callingScope, consumeFirstlineMacros:consumeFirstlineMacros}
     if(args !== undefined) {
         var runArgs = getRunArgsFromMatch(context, match, args, operator)
 
@@ -311,7 +316,7 @@ var consumeMacro = exports.consumeMacro = function(context, obj, rawInput, start
     var startColumnLima // todo: support startColumn
     try {
         var matchArgs = coreLevel1.LimaObject([rawInputLima])//, startColumnLima])
-        var matchResult = callOperator(context.scope, '[', [obj.meta.macro.match, matchArgs])
+        var matchResult = callOperator(context, '[', [obj.meta.macro.match, matchArgs])
         var consumedCharsLimaValue = getProperty({this:matchResult}, coreLevel1.StringObj('consume'))
         if(consumedCharsLimaValue.meta.primitive.denominator !== 1) {
             throw new Error("The 'consume' property returned from the macro '"+obj.name+"' isn't an integer.")
@@ -413,15 +418,15 @@ var limaEquals = exports.limaEquals = function(scope, a,b) {
         }
     }
     // else
-    var equalsComparisonResult = callOperator(scope, '==', [a,b])
+    var equalsComparisonResult = callOperator({scope:scope}, '==', [a,b])
     return primitiveEqualsInteger(equalsComparisonResult, 1)
-           || primitiveEqualsInteger(callOperator(scope, '==', [equalsComparisonResult,coreLevel1.one]), 1)
+           || primitiveEqualsInteger(callOperator({scope:scope}, '==', [equalsComparisonResult,coreLevel1.one]), 1)
 }
 
 // gets a privileged member as if it was accessed like this.member
 // thisObj and memberName must both be lima objects
 var getThisPrivilegedMember = exports.getThisPrivilegedMember = function(callingScope, thisObj, memberName) {
-    return callOperator(callingScope, '.', [thisObj, memberName])
+    return callOperator({scope:callingScope}, '.', [thisObj, memberName])
 }
 
 var normalizedVariableName = exports.normalizedVariableName = function(name) {
@@ -440,7 +445,7 @@ var getHashCode = exports.getHashCode = function(obj) {
         }
 
         var hashcodeFunction = getThisPrivilegedMember(blockCallingScope, obj, coreLevel1.StringObj('hashcode'))
-        obj = callOperator(blockCallingScope, '[', [hashcodeFunction])
+        obj = callOperator({scope:blockCallingScope}, '[', [hashcodeFunction])
     }
 
     return obj.meta.primitive.numerator // now a primitive
@@ -467,7 +472,7 @@ var getPrimitiveStr = exports.getPrimitiveStr = function(context, obj) {
         }
 
         var hashcodeFunction = getThisPrivilegedMember(blockCallingScope, obj, coreLevel1.StringObj('str'))
-        obj = callOperator(blockCallingScope, '[', [hashcodeFunction])
+        obj = callOperator({scope:blockCallingScope}, '[', [hashcodeFunction])
     }
 }
 
@@ -485,7 +490,7 @@ exports.isMacro = function(x) {
 }
 
 exports.hasProperties = function(obj) {
-    return Object.keys(obj.meta.properties).length > 0
+    return Object.keys(obj.meta.properties).length > obj.meta.elements
 }
 
 

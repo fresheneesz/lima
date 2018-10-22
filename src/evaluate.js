@@ -74,12 +74,15 @@ var resolveObjectSpace = exports.resolveObjectSpace = function(context, curState
         // get - Gets a variable from the scope.
         // set - Sets a variable onto the scope.
 // parts - An array of lima AST nodes.
-// allowProperties - If true, colon assignments can create properties.
-// implicitDeclarations - If true, undeclared variables that are set on the scope are declared as var typed variables.
+// options
+    // allowProperties - If true, colon assignments can create properties.
+    // implicitDeclarations - If true, undeclared variables that are set on the scope are declared as var typed variables.
 // returns an object with the properties:
     // value - the resulting value of the expression
     // remainingParts - The parts of any additional expressions in this superExpression
-var superExpression = exports.superExpression = function(context, parts, allowProperties, implicitDeclarations) {
+var superExpression = exports.superExpression = function(context, parts, options) {
+    if(!options) options = {}
+
     // curState can contain AST node parts *and* lima object values
     var curState = parts.map(function(x) { // shallow copy of the parts
         return x
@@ -88,11 +91,11 @@ var superExpression = exports.superExpression = function(context, parts, allowPr
     // resolve parens, dereference operators, and unary operators
     var curIndex = 0
     while(curIndex !== undefined) {
-        curIndex = resolveBinaryOperandFrom(context, curState, curIndex, allowProperties, implicitDeclarations)
+        curIndex = resolveBinaryOperandFrom(context, curState, curIndex, options.allowProperties, options.implicitDeclarations)
     }
 
     // resolve binary operators
-    resolveBinaryOperations(context, curState, allowProperties, implicitDeclarations)
+    resolveBinaryOperations(context, curState, options.allowProperties, options.implicitDeclarations)
 
     return {
         value: curState[0],
@@ -193,7 +196,7 @@ function resolveBinaryOperations(context, curState, allowProperties, implicitDec
                         throw new Error("Variable "+operand1.name+" can't be redefined.")
                     }
 
-                    var returnValue = utils.callOperator(context.scope, operator1.operator, [operand1, operand2]) // execute operator1
+                    var returnValue = utils.callOperator(context, operator1.operator, [operand1, operand2]) // execute operator1
                 }
                 
                 curState.splice(curIndex,3, returnValue)
@@ -336,7 +339,7 @@ function resolveBinaryOperandFrom(context, curState, index, allowProperties, imp
         var operand = curState[valueItemIndex]
         var operator = curState[operatorIndex].operator
 
-        var returnValue = utils.callOperator(callingScope, operator, [operand], type)
+        var returnValue = utils.callOperator({scope: callingScope}, operator, [operand], type)
         curState.splice(spliceIndex, 2, returnValue)
     }
 
@@ -362,7 +365,7 @@ function resolveBinaryOperandFrom(context, curState, index, allowProperties, imp
                 var operand = curState[valueItemIndex+2]
             }
 
-            var returnValue = utils.callOperator(context.scope, operator, [valueItem, operand])
+            var returnValue = utils.callOperator(context, operator, [valueItem, operand])
             curState.splice(valueItemIndex, 2, returnValue)
         } else { // bracket operator
             if(operatorInfo.macro !== undefined) {
@@ -375,7 +378,7 @@ function resolveBinaryOperandFrom(context, curState, index, allowProperties, imp
             } else {
                 var argumentContext = resolveBracketArguments(context, curState, valueItemIndex+2, closeBracketOperator(operator))
 //                var args = utils.getArgsFromObject(argumentContext.this)
-                var returnValue = utils.callOperator(context.scope, operator, [valueItem, argumentContext.this])
+                var returnValue = utils.callOperator(context, operator, [valueItem, argumentContext.this])
                 curState.splice(valueItemIndex, 2, returnValue)
             }
         }
@@ -395,7 +398,7 @@ function resolveBinaryOperandFrom(context, curState, index, allowProperties, imp
 
         var rawExpressionIndex = valueItemIndex+1
         var rawExpression = curState[rawExpressionIndex]
-        var macroInput = rawExpression.expression // for any item that is a macro, its expected that a rawExpression follows it
+        var macroInput = rawExpression.expression // For any item that is a macro, its expected that a rawExpression follows it.
         var consumeResult = utils.consumeMacro(context, macroObject, macroInput)
         var consumedCharsLimaValue = utils.getProperty({this:consumeResult}, coreLevel1.StringObj('consume'))
         var consumedChars = consumedCharsLimaValue.meta.primitive.numerator
@@ -404,10 +407,13 @@ function resolveBinaryOperandFrom(context, curState, index, allowProperties, imp
         }
 
         var matchInfo = utils.getProperty({this:consumeResult}, coreLevel1.StringObj('info'))
-        var runResult = utils.callOperator(context.scope, '[', [macroObject.meta.macro.run, matchInfo])
+        var runResult = utils.callOperator(context, '[', [macroObject.meta.macro.run, matchInfo])
 
         curState[valueItemIndex] = runResult
-        curState.splice(valueItemIndex+1, 1)
+        rawExpression.expression = rawExpression.expression.slice(consumedChars)
+        if(rawExpression.expression === '') {
+            curState.splice(rawExpressionIndex, 1)
+        }
     }
 
     // resolves the node curState[n] into a single lima value
@@ -424,20 +430,19 @@ function resolveBinaryOperandFrom(context, curState, index, allowProperties, imp
             var limaObjectContext = coreLevel1.limaObjectContext(context.scope)
             var isObjectEnd = function(node) {return utils.isSpecificOperator(node, '}')}
             resolveObjectSpace(limaObjectContext, objectNode.expressions, 0, isObjectEnd, true)
+            curState.splice.apply(curState, [n, 1, limaObjectContext.this].concat(objectNode.expressions))
 
-            var numberToReplace = 1
             if(objectNode.needsEndBrace) {
-                numberToReplace++ // need to replace the end bracket too
-                if(objectNode.expressions.length === 0 || !utils.isSpecificOperator(objectNode.expressions[0], "}")) {
+                if(curState.length-1 < n+1 || !utils.isSpecificOperator(curState[n+1], "}")) {
                     throw new Error("Missing '}' in object literal.")
                 }
 
-                objectNode.expressions.splice(0,1)
+                curState.splice(n+1,1)
             }
-
-            curState.splice.apply(curState, [n, numberToReplace, limaObjectContext.this].concat(objectNode.expressions))
         } else { // if its not a basic value, variable, or object, it must be a superExpression
-            var result = superExpression(context, item.parts, allowProperties, implicitDeclarations)
+            var result = superExpression(context, item.parts, {
+                allowProperties:allowProperties, implicitDeclarations:implicitDeclarations
+            })
             if(item.needsEndParen) {
                 if(utils.isSpecificOperator(result.remainingParts[0], ')')) {
                     result.remainingParts.splice(0, 1)

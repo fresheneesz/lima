@@ -554,7 +554,7 @@ rawFn.name = 'rawFn'
             }
 
             while(parts.length > 0) {
-                var result = evaluate.superExpression(functionContext, parts, false, false)
+                var result = evaluate.superExpression(functionContext, parts, {allowProperties:false, implicitDeclarations:false})
                 parts = result.remainingParts
                 if(retPtr.returnValue !== undefined) {
                     return retPtr.returnValue
@@ -566,6 +566,7 @@ rawFn.name = 'rawFn'
     function createFunctionContext(context, retPtr, functionScope, setFn) {
         var functionContext = {
             this: context.this,
+            consumeFirstlineMacros: context.consumeFirstlineMacros,
             scope: utils.ContextScope(
                 function get(name) {
                     if(name in functionScope) {
@@ -596,7 +597,11 @@ rawFn.name = 'rawFn'
         var retMacro = macro({
             match: function(rawInputLima) {
                 var rawInput = utils.getPrimitiveStr(this, rawInputLima)
-                var statementInfo = macroParsers.retStatement().tryParse(rawInput)
+                var statementInfo = macroParsers.withState({
+                    scope:functionContext.scope,
+                    consumeFirstlineMacros: true
+                }).retStatement().tryParse(rawInput)
+
                 if(statementInfo !== undefined) {
                     var parts = statementInfo.expression.parts
                     var consumed = statementInfo.consumed
@@ -612,7 +617,7 @@ rawFn.name = 'rawFn'
             },
             run: function(infoObject) {
                 var parts = getFromJsPrimitive(infoObject)
-                var result = evaluate.superExpression(functionContext, parts, false, false)
+                var result = evaluate.superExpression(functionContext, parts, {allowProperties:false, implicitDeclarations:false})
                 retPtr.returnValue = result.value
                 return nil
             }
@@ -707,7 +712,8 @@ var limaArgumentContext = exports.limaArgumentContext = function(upperScope) {
     var object = basicUtils.copyValue(emptyObj)
     return {
         this: object,
-        scope: upperScope
+        scope: upperScope,
+        consumeFirstlineMacros:false
     }
 }
 

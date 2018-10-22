@@ -11,9 +11,8 @@ module.exports = P.createLanguage({scope:{}}, {
     // The if, while, and fn constructs are examples of parsers that use this.
     // returns whatever innerParserBlock returns
     macroBlock: function(context, innerBlockParser) {
-        var parser = getParser()
-        var state = {scope: context.scope, consumeFirstlineMacros: true, indent: 0, firstLine:true}
-        var parserState = parser.withState(state)
+        var state = {scope: context.scope, consumeFirstlineMacros: true, indent: 0}
+        var parserState = getParser().withState(state)
         return seq(
             parserState.indentedWs().many(),
             str('[').atMost(1)
@@ -42,8 +41,7 @@ module.exports = P.createLanguage({scope:{}}, {
         )
     },
         macroInnerBlock: function(name) {
-            var parser = getParser()
-            var parserState = parser.withState(this.state)
+            var parserState = getParser().withState(this.state)
             return this.innerBlock(name, seq(
                 parserState.variable(),
                 seq(parserState.indentedWs(),
@@ -64,8 +62,7 @@ module.exports = P.createLanguage({scope:{}}, {
         },
 
     innerBlock: function(name, parametersParser) {
-        var parser = getParser()
-        var parserState = parser.withState(this.state)
+        var parserState = getParser().withState(this.state)
         var that = this
         return parserState.indent(function() {
             var macroParserState = that.withState(this.state)
@@ -109,8 +106,8 @@ module.exports = P.createLanguage({scope:{}}, {
         )
     },
         rawFnInnerBlock: function(name) {
-            var parser = getParser()
-            return this.innerBlock(name, parser.variable().atMost(1).map(function(v) {
+            var parserState = getParser().withState(this.state)
+            return this.innerBlock(name, parserState.variable().atMost(1).map(function(v) {
                 var parameters = []
                 if(v.length === 1) {
                     parameters.push(v[0].name)
@@ -120,8 +117,7 @@ module.exports = P.createLanguage({scope:{}}, {
         },
             // gets a block of indented stuff which ends when there's a line with non-whitespace indented less than the current indent
             indentedBlock: function() {
-            var parser = getParser()
-                var parserState = parser.withState(this.state)
+                var parserState = getParser().withState(this.state)
                 return seq(
                     parserState.indentedWs().map(function(v) {
                         return v.ws
@@ -134,12 +130,12 @@ module.exports = P.createLanguage({scope:{}}, {
         // expression - a superExpression node
         // consume - how many characters of input the superExpression node consumed
     retStatement: function() {
-        var parser = getParser()
+        var parserState = getParser().withState(this.state)
         return seqObj(
-            ['ws',parser.indentedWs(0).many().mark()], // breaking with convention because the ret macro was already parsed,
-                                        // but any trailing whitespace won't have been
-            ['expression', parser.superExpression().atMost(1).mark()],
-            any.many() // eat anything else, since parsimmon requires the whole input to be matched
+            ['ws',parserState.indentedWs(0).many().mark()], // Breaking with convention because the ret macro was already parsed,
+                                                            // but any trailing whitespace won't have been.
+            ['expression', parserState.superExpression().atMost(1).mark()],
+            any.many() // Eat anything else, since parsimmon requires the whole input to be matched.
         ).map(function(v) {
             if(v.expression.value.length > 0) {
                 var node = v.expression.value[0]

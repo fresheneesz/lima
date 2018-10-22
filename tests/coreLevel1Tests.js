@@ -144,20 +144,19 @@ var tests = exports.tests = {
             return element0.meta.primitive.string === 'hey\nho'
         }
     },
-        // triple quotes with extra non-triple quotes
 
-        // strings containing quotes
+        // string # pseudo-operator
 
     singleQuoteContainingSingleQuotes:
-        {content:'#"a"', check: function(module) {
-            var element0 = getFirstProperty(module).value
-            return element0.meta.primitive.string === '"a'
-        }
-    },
-    doubleQuoteContainingDoubleQuotes:
         {content:"#'a'", check: function(module) {
             var element0 = getFirstProperty(module).value
             return element0.meta.primitive.string === "'a"
+        }
+    },
+    doubleQuoteContainingDoubleQuotes:
+        {content:'#"a"', check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return element0.meta.primitive.string === '"a'
         }
     },
     graveQuoteContainingGraveQuotes:
@@ -167,18 +166,6 @@ var tests = exports.tests = {
         }
     },
 
-    tripleDoubleQuoteContainingTripleQuotes:
-        {content:'#"""a"""', check: function(module) {
-            var element0 = getFirstProperty(module).value
-            return element0.meta.primitive.string === '"""a'
-        }
-    },
-    tripleDoubleQuoteContainingTripleQuotes2:
-        {content:'"""a"""#', check: function(module) {
-            var element0 = getFirstProperty(module).value
-            return element0.meta.primitive.string === 'a"""'
-        }
-    },
     tripleSingleQuoteContainingTripleQuotes:
         {content:"#'''a'''", check: function(module) {
             var element0 = getFirstProperty(module).value
@@ -189,6 +176,18 @@ var tests = exports.tests = {
         {content:"'''a'''#", check: function(module) {
             var element0 = getFirstProperty(module).value
             return element0.meta.primitive.string === "a'''"
+        }
+    },
+    tripleDoubleQuoteContainingTripleQuotes:
+        {content:'#"""a"""', check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return element0.meta.primitive.string === '"""a'
+        }
+    },
+    tripleDoubleQuoteContainingTripleQuotes2:
+        {content:'"""a"""#', check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return element0.meta.primitive.string === 'a"""'
         }
     },
     tripleGraveQuoteContainingTripleQuotes:
@@ -204,61 +203,107 @@ var tests = exports.tests = {
         }
     },
 
+    singleQuoteContainingMultipleSingleStartQuotes:
+        {content:"####'a'", check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return element0.meta.primitive.string === "''''a"
+        }
+    },
+    singleQuoteContainingMultipleSingleEndQuotes:
+        {content:"'a'####", check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return element0.meta.primitive.string === "a''''"
+        }
+    },
+    singleQuoteContainingMultipleSingleQuotesOnBothSides:
+        {content:"###'a'###", check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return element0.meta.primitive.string === "'''a'''"
+        }
+    },
+
+            // todo
+            // String # pseudo-operator concatenation
+
+//    singleQuoteContainingSingleQuotesConcatenation:
+//        {content:"'a'#'b'", check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return element0.meta.primitive.string === "a'b"
+//        }
+//    },
+//    doubleQuoteContainingDoubleQuotesConcatenation:
+//        {content:'"a"#"b"', check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return element0.meta.primitive.string === 'a"b'
+//        }
+//    },
+//    graveQuoteContainingGraveQuotesConcatenation:
+//        {content:'`a`#`b`', check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return element0.meta.primitive.string === 'a`b'
+//        }
+//    },
+//    singleTripleQuoteContainingSingleTripleQuotesConcatenation:
+//        {content:"'''a'''#'''b'''", check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return element0.meta.primitive.string === "a'''b"
+//        }
+//    },
+//    doubleQuoteContainingDoubleQuotesConcatenation:
+//        {content:'"""a"""#"""b"""', check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return element0.meta.primitive.string === 'a"""b'
+//        }
+//    },
+//    graveTripleQuoteContainingGraveTripleQuotesConcatenation:
+//        {content:'```a```#```b```', check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return element0.meta.primitive.string === 'a```b'
+//        }
+//    },
+//
+//    singleQuoteContainingMultipleSingleQuotesConcatenation:
+//        {content:"'a'###'b'", check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return element0.meta.primitive.string === "a'''b"
+//        }
+//    },
+//    singleQuoteContainingMultipleSingleQuotesConcatenation:
+//        {content:"#'a'###'b'#'c'#", check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return element0.meta.primitive.string === "'a'''b'c'"
+//        }
+//    },
+
+            // todo
+        // # pseudo-operator concatenation errors
+
+//    quoteConcatenationError1: {content:"'a'#\"b\"", shouldFail: true},
+//    quoteConcatenationError2: {content:"\"a\"#'b'", shouldFail: true},
+//    quoteConcatenationError3: {content:"'a'#`b`", shouldFail: true},
+//    quoteConcatenationError4: {content:"`a`#\"b\"", shouldFail: true},
+//    quoteConcatenationError5: {content:"'''a'''#\"b\"", shouldFail: true},
+//    quoteConcatenationError6: {content:"'''a'''#'b'", shouldFail: true},
+//    quoteConcatenationError7: {content:"'''a'''#`b`", shouldFail: true},
+//    quoteConcatenationError8: {content:'\'a\'#"""b"""', shouldFail: true},
+//    quoteConcatenationError9: {content:'\'a\'#```b```', shouldFail: true},
+//
+//    quoteConcatenationError10: {content:"'a'##\"b\"", shouldFail: true},
+
+        // triple quotes with extra non-triple quotes
+
         // string operators
 
             // string @ operator
 
-    singleQuoteContainingNewline:
+    stringContainingStartNewline:
         {content:'@"a"', check: function(module) {
             var element0 = getFirstProperty(module).value
             return element0.meta.primitive.string === '\na'
         }
     },
-    doubleQuoteContainingNewline:
-        {content:"@'a'", check: function(module) {
-            var element0 = getFirstProperty(module).value
-            return element0.meta.primitive.string === '\na'
-        }
-    },
-    graveQuoteContainingNewline:
-        {content:'@`a`', check: function(module) {
-            var element0 = getFirstProperty(module).value
-            return element0.meta.primitive.string === '\na'
-        }
-    },
-
-    tripleDoubleQuoteContainingNewline:
-        {content:'@"""a"""', check: function(module) {
-            var element0 = getFirstProperty(module).value
-            return element0.meta.primitive.string === '\na'
-        }
-    },
-    tripleDoubleQuoteContainingNewline2:
-        {content:'"""a"""@', check: function(module) {
-            var element0 = getFirstProperty(module).value
-            return element0.meta.primitive.string === 'a\n'
-        }
-    },
-    tripleSingleQuoteContainingNewline:
-        {content:"@'''a'''", check: function(module) {
-            var element0 = getFirstProperty(module).value
-            return element0.meta.primitive.string === "\na"
-        }
-    },
-    tripleSingleQuoteContainingNewline2:
-        {content:"'''a'''@", check: function(module) {
-            var element0 = getFirstProperty(module).value
-            return element0.meta.primitive.string === "a\n"
-        }
-    },
-    tripleGraveQuoteContainingNewline:
-        {content:'@```a```', check: function(module) {
-            var element0 = getFirstProperty(module).value
-            return element0.meta.primitive.string === '\na'
-        }
-    },
-    tripleGraveQuoteContainingNewline2:
-        {content:'```a```@', check: function(module) {
+    stringContainingEndNewline:
+        {content:'"a"@', check: function(module) {
             var element0 = getFirstProperty(module).value
             return element0.meta.primitive.string === 'a\n'
         }
@@ -275,6 +320,14 @@ var tests = exports.tests = {
             return element0.meta.primitive.string === '\nhi'
         }
     },
+      // todo
+//    stringsConcatenatedWithNewline:
+//        {content:'"a"@"b"', check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return element0.meta.primitive.string === 'a\nb'
+//        }
+//    },
+
             // ==
 
     compareTwoDifferentStrings:    {content:'"a"=="b"', check: function(module) {
@@ -381,17 +434,26 @@ var tests = exports.tests = {
 
     // object literal creation:
 
+    oneElement_object:    {content:'{5}', check: function(module) {
+        var object = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
+        var element0 = utils.getProperty({this:object}, coreLevel1.NumberObj(0))
+        return isSpecificInt(element0, 5)
+    }},
+    multipleElements_object:    {content:'{5 6}', check: function(module) {
+        var object = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
+        var element0 = utils.getProperty({this:object}, coreLevel1.NumberObj(0))
+        var element1 = utils.getProperty({this:object}, coreLevel1.NumberObj(1))
+        return isSpecificInt(element0, 5) && isSpecificInt(element1, 6)
+    }},
     singleColonLiteralKey_object:    {content:'{2: 5}', check: function(module) {
         var element0 = getFirstProperty(module).value
         var propertyItem = element0.meta.properties[2][0]
-        return propertyItem.key.meta.primitive.numerator === 2
-               && propertyItem.value.meta.primitive.numerator === 5
+        return isSpecificInt(propertyItem.key, 2) && isSpecificInt(propertyItem.value, 5)
     }},
     doubleColonLiteralKey_object:    {content:'{2:: 5}', check: function(module) {
         var element0 = getFirstProperty(module).value
         var propertyItem = element0.meta.properties[2][0]
-        return propertyItem.key.meta.primitive.numerator === 2
-               && propertyItem.value.meta.primitive.numerator === 5
+        return isSpecificInt(propertyItem.key, 2) && isSpecificInt(propertyItem.value, 5)
     }},
     implicitVariableCreation_object: {content:'{a = 5}', check: function(module) {
         var element0 = getFirstProperty(module).value
@@ -614,18 +676,28 @@ var tests = exports.tests = {
             return isSpecificInt(element0, 5)
         }
     },
-    // todo: after you implement macro so you can create test macros inline
-//    // doubly nested macro on first-line
-//    basicRawFunctionValue3c: {
-//        content:'a = rawFn[match: ret {argInfo:true, fakeRet: ret {0:ret "fake"}}\n'+
-//                ' run:   ret 5\n' +
-//                ']\n'+
-//                'a[]',
-//        check: function(module) {
-//            var element0 = getFirstProperty(module).value
-//            return isSpecificInt(element0, 5)
-//        }
-//    },
+    // doubly nested macro on first-line
+    rawFunctionValueWithNestedMacros: {
+        content:'a = rawFn[match: ret {argInfo:true fakeRet: ret {0:ret "fake"}}\n'+
+                ' run:   ret 5\n' +
+                ']\n'+
+                'a[]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 5)
+        }
+    },
+    rawFunctionValueWithNestedMacros2: {
+        content:'a = rawFn[match: ret {argInfo:true fakeRet: ret {0:ret x}}\n'+
+                ' run:   ret 5\n' +
+                ']\n' +
+                'x = 5\n'+
+                'a[]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 5)
+        }
+    },
 
         // should fail:
     basicRawFunctionValue4b: {

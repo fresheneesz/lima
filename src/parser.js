@@ -20,7 +20,11 @@ var emptyScope = {get: function() {}}
     // No parsers start with whitespace except superExpression
     // All parsers consume some input. If you want to optionally consume input,
         // the calling parser should specify `many`, `atMost`, etc.
-var L = P.createLanguage({scope:{}, consumeFirstlineMacros: false, firstLine:false}, {
+// state
+    // scope - A lima scope object with `get` and `set`. Only used when consumeFirstlineMacros is true.
+    // consumeFirstlineMacros - If true, macros will be consumed on the first line of the construct being parsed.
+    //                          Also, if true, macros that aren't found in scope will be assumed not to be macros.
+var L = P.createLanguage({/*scope:{}, */consumeFirstlineMacros: false}, {
 
 	// expressions
 
@@ -147,8 +151,8 @@ var L = P.createLanguage({scope:{}, consumeFirstlineMacros: false, firstLine:fal
                 return seqObj(
                     ['basicOperators', this.basicOperator().atMost(1)],
                     ['expressionAtom', this.expressionAtom().chain(function(v) {
-                        //var unknownMacrosAllowed = !this.state.consumeFirstlineMacros
-                        if(/*unknownMacrosAllowed && */v[0].type in {variable:1, superExpression:1}) {
+                        var unknownMacrosAllowed = !this.state.consumeFirstlineMacros
+                        if(unknownMacrosAllowed && v[0].type in {variable:1, superExpression:1}) {
                             return this.rawExpression().atMost(1).map(function(rawExpressions) {
                                 if(rawExpressions.length === 1) {
                                     return v.concat([rawExpressions[0]])
@@ -216,7 +220,7 @@ var L = P.createLanguage({scope:{}, consumeFirstlineMacros: false, firstLine:fal
             this.value().chain(function(v) {
                 if(this.state.consumeFirstlineMacros && v.type === 'variable') {
                     var value = this.state.scope.get(v.name)
-                    if(value !== undefined && value.macro !== undefined) {
+                    if(value !== undefined && value.meta.macro !== undefined) {
                         // evaluate macro consumption
                         return this.macro(value).map(function(parts) {
                             return [v].concat(parts)
@@ -254,13 +258,13 @@ var L = P.createLanguage({scope:{}, consumeFirstlineMacros: false, firstLine:fal
         // returns a macroConsumption node
         macro: function(macro) {
             return P(function(input, i) {
-                var context = {scope:this.state.scope}
+                var context = {scope:this.state.scope, consumeFirstlineMacros:this.state.consumeFirstlineMacros}
                 var consumeResult = utils.consumeMacro(context, macro, input.slice(i))
                 var consumedCharsLimaValue = utils.getProperty({this:consumeResult}, coreLevel1.StringObj('consume'))
                 var consumedChars = consumedCharsLimaValue.meta.primitive.numerator
                 var consumedString = input.slice(i, i+consumedChars)
-                if(consumedString.indexOf('\n')) {
-                    this.state.firstLine = false
+                if(consumedString.indexOf('\n') !== -1) {
+                    this.state.consumeFirstlineMacros = false
                 }
 
                 var nextIndex = i+consumedChars
@@ -478,7 +482,8 @@ var L = P.createLanguage({scope:{}, consumeFirstlineMacros: false, firstLine:fal
             sequence.push(
                 alt(
                     str(delimiter),
-                    seq(str('\n'),                            // this is so the end quote can end on the same line as the open quote
+                    // This is so the end quote can end on the same line as the open quote:
+                    seq(str('\n'),
                         str(' ').times(this.state.indent),
                         str(delimiter)
                     )
@@ -487,7 +492,7 @@ var L = P.createLanguage({scope:{}, consumeFirstlineMacros: false, firstLine:fal
             )
 
             return seqObj.apply(seqObj, sequence).map(function(v) {
-                maybeUnsetFirstline(this, v)
+                maybeUnsetFirstline(this, v.preChars+v.mainBody+v.postChars)
                 var trailing = v.trailingQuotes || ''
                 return {type:'string', string:v.preChars+v.mainBody+trailing+v.postChars}
             }.bind(this))
@@ -635,7 +640,7 @@ var L = P.createLanguage({scope:{}, consumeFirstlineMacros: false, firstLine:fal
     // a newline with indentation consumed and stripped away
     indentedNewline: function(indent) {
         return str('\n').skip(str(' ').times(indent)).map(function(v) {
-            this.state.firstLine = false
+            this.state.consumeFirstlineMacros = false
             return v
         }.bind(this))
     },
@@ -740,8 +745,8 @@ module.exports.tryParse = function(content) {
 }
 
 function maybeUnsetFirstline(that, v) {
-    var optimization = that.state.firstLine
-    if(optimization && v.indexOf('\n')) {
-        that.state.firstLine = false
+    var optimization = that.state.consumeFirstlineMacros
+    if(optimization && v.indexOf('\n') !== -1) {
+        that.state.consumeFirstlineMacros = false
     }
 }

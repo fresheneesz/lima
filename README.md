@@ -115,6 +115,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * `...`
 * numbers
   * Migrate numbers to use some BigInteger module for its numerator and denominator rather than javascript numbers.
+  	* https://www.npmjs.com/package/decimal.js
   * 00 (infinity)
   * error
   * number postfixes
@@ -132,7 +133,10 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   	* str (partially implemented but not testable yet)
   	* hashcode (partially implemented but not testable yet)
 * strings
-  * Migrate strings to use LimaEncoding format with full unicode support for character indexing and counting
+  * Migrate strings to use LimaEncoding format with full unicode support for character indexing and counting.
+  	* https://mathiasbynens.be/notes/javascript-unicode
+  	* https://github.com/bestiejs/punycode.js
+  	* https://dmitripavlutin.com/what-every-javascript-developer-should-know-about-unicode/#22unicodeplanes
   * % extended space
   * ! LimaEncoding codepoint
   * code
@@ -437,6 +441,12 @@ These are things that were done in Core Level 1, but should be moved to Core Lev
 
 ## Change log
 
+* 0.0.14 - 2018-10-21
+  * Fixing macros so they can nest properly on the first line.
+  * Fixing a bug that prevented having multiple elements in an object literal.
+  * Adding some string # tests and some todos around that.
+  * Simplifying by removing the `firstLine` parser context property in favor for just using `consumeFirstlineMacros`
+  * Passing through `consumeFirstlineMacros` from `parser` to `evaluate` and back so that context is retained over multiple constructs in the same line.
 * 0.0.13 - 2018-10-20
   * Basic single-argument bracket
   * Added a debug value _d to help debug easier.

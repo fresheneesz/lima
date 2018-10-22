@@ -268,7 +268,7 @@ df itemsToLock item:
 //                    }
 //
 //                    while(parts.length > 0) {
-//                        var result = evaluate.superExpression(functionContext, parts, false, false)
+//                        var result = evaluate.superExpression(functionContext, parts, {allowProperties:false, implicitDeclarations:false})
 //                        parts = result.remainingParts
 //                        if(retPtr.returnValue !== undefined) {
 //                            return retPtr.returnValue
@@ -313,7 +313,7 @@ df itemsToLock item:
 //    function createRetMacro(retPtr, functionContext) {
 //        return macro(function(input) {
 //            var ast = macroParsers.retStatement().tryParse(input)
-//            var result = evaluate.superExpression(functionContext, [ast[0]], false, false)
+//            var result = evaluate.superExpression(functionContext, [ast[0]], {allowProperties:false, implicitDeclarations:false})
 //            retPtr.returnValue = result.value
 //            return {
 //                consume: input.length - ast[1].length,
