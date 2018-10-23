@@ -219,7 +219,7 @@ var L = P.createLanguage({/*scope:{}, */consumeFirstlineMacros: false}, {
         return alt(
             this.value().chain(function(v) {
                 if(this.state.consumeFirstlineMacros && v.type === 'variable') {
-                    var value = this.state.scope.get(v.name)
+                    var value = utils.scopeGet(this.state.scope, v.name)
                     if(value !== undefined && value.meta.macro !== undefined) {
                         // evaluate macro consumption
                         return this.macro(value).map(function(parts) {

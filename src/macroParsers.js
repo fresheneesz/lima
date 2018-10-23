@@ -7,20 +7,21 @@ for(var name in P.getBasicParsers()) {
 
 module.exports = P.createLanguage({scope:{}}, {
 
-    // parses a construct that is either delimited by whitespace or by brackets
+    // Parses a construct that is either delimited by whitespace or by brackets.
     // The if, while, and fn constructs are examples of parsers that use this.
-    // returns whatever innerParserBlock returns
+    // innerBlockParser - The parser that parses whatever comes after the macro, potentially within brackets.
+    // Returns whatever innerParserBlock returns.
     macroBlock: function(context, innerBlockParser) {
         var state = {scope: context.scope, consumeFirstlineMacros: true, indent: 0}
         var parserState = getParser().withState(state)
         return seq(
             parserState.indentedWs().many(),
-            str('[').atMost(1)
-        ).chain(function(v) {
+            str('[')
+        ).atMost(1).chain(function(v) {
             return seq(
                 innerBlockParser.language.withState(state)[innerBlockParser.parser](),
                 parserState.indentedWs().many(),
-                str(']').times(v[1].length)
+                str(']').times(v.length)
             ).map(function(v) {
                 return v[0]
             })
@@ -72,16 +73,16 @@ module.exports = P.createLanguage({scope:{}}, {
                 this.indentedWs().many(),
                 ['parameters', parametersParser],
                 this.indentedWs().many(),
-                ":",
-                this.indentedWs().many()
+                ":"//,
+                //this.indentedWs().many()
             ).chain(function(v) {
-                if(this.state.indent < 2) {
-                    var newState = basicUtils.merge({},this.state, {indent:2})
+                if(that.state.indent < 2) {
+                    var newState = basicUtils.merge({},that.state, {indent:2})
                     macroParserState = macroParserState.withState(newState)
                 }
                 return macroParserState.indentedBlock().map(function(indentedBlock) {
                     var result = {
-                        body: this.superExpression(false).many().tryParse(indentedBlock)
+                        body: parserState.superExpression(false).many().tryParse(indentedBlock)
                     }
                     if(v.parameters) {
                         result.parameters = v.parameters

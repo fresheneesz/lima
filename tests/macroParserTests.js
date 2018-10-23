@@ -28,7 +28,7 @@ macroBlockTests = [
         "x"
     ]},
     {args:[{state:'state'}, {language:testLanguage, parser: 'x'}], inputs: [
-        " x "
+        "x "
     ]},
     {args:[{state:'state'}, {language:testLanguage, parser: 'x'}], inputs: [
         "[x]"
@@ -46,8 +46,11 @@ macroBlockTests = [
 
     // should fail
     {args:[{state:'state'}, {language:testLanguage, parser: 'x'}], shouldFail: true, inputs: [
-        "[ x]"
-    ]}
+        "[ x]" // Fails because the inner parser doesn't consume that space.
+    ]},
+    {args:[{state:'state'}, {language:testLanguage, parser: 'x'}], shouldFail: true, inputs: [
+        " x "  // Fails because the inner parser doesn't consume that space.
+    ]},
 ]
 
 

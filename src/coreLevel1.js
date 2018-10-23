@@ -533,7 +533,7 @@ rawFn.name = 'rawFn'
         var retPtr = {}
         var functionScope = {}
         var functionContext = createFunctionContext(context, retPtr, functionScope, function(name, value, isPrivate, functionContext) {
-            if(functionContext.scope.get(name) === undefined)
+            if(utils.scopeGet(functionContext.scope,name) === undefined)
                 throw new Error("Variable "+name+" undeclared!")
 
             functionScope[name] = value
@@ -572,7 +572,7 @@ rawFn.name = 'rawFn'
                     if(name in functionScope) {
                         return functionScope[name]
                     } else {
-                        return context.scope.get(name)
+                        return utils.scopeGet(context.scope,name)
                     }
                 },
                 function set(name, value, isPrivate) {
@@ -690,7 +690,7 @@ var limaObjectContext = exports.limaObjectContext = function(upperScope) {
                 if(name in object.meta.scopes[0]) {
                     return object.meta.scopes[0][name]
                 } else {
-                    return upperScope.get(name)
+                    return utils.scopeGet(upperScope,name)
                 }
             },
             function set(name, value, isPrivate) {

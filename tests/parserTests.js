@@ -552,6 +552,7 @@ function getSuperExpressionTests() {
              { type: 'rawExpression', expression: '[\n 1\n]' } ],
           needsEndParen: false }
 
+
     var otherTestGroup = {inputs:[
         // inadvisable things that probably shouldn't necessarily be parser errors:
         "f[\n" +

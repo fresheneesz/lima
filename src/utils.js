@@ -40,6 +40,12 @@ var blockCallingScope = exports.blockCallingScope = {
     }
 }
 
+// Gets a scope using the normalization of the name passed in.
+// This should always be used instead of grabbing the name from the scope directly.
+var scopeGet = exports.scopeGet = function(scope, name) {
+    return scope.get(normalizedVariableName(name))
+}
+
 // Utils for interacting with lima objects
 
 // calls an operator on its operands (ie operandArgs)

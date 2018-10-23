@@ -28,7 +28,7 @@ var resolveObjectSpace = exports.resolveObjectSpace = function(context, curState
             break // found the end of the object space
         } else {
             if(utils.isNodeType(node, "variable")) {
-                var value = context.scope.get(node.name)
+                var value = utils.scopeGet(context.scope,node.name)
                 if(value === undefined) {
                     throw new Error("Variable "+node.name+" not declared.")
                 } else {
@@ -273,8 +273,7 @@ function resolveBinaryOperandFrom(context, curState, index, allowProperties, imp
         } else if(!utils.isNodeType(item, 'operator')) {
             var nextItem = curState[n+1], nextItemExists = n+1 < curState.length
             if(utils.isNodeType(item, 'variable')) {
-                var normalizedVarName = utils.normalizedVariableName(item.name)
-                var variableValue = context.scope.get(normalizedVarName)
+                var variableValue = utils.scopeGet(context.scope, item.name)
                 if(variableValue === undefined) {
                     if(nextItemExists && utils.isNodeType(nextItem, 'rawExpression')) { // previously unevaluted stuff because the variable might have been a macro
                         resolveNonmacroRawExpression(context, curState, n+1)
