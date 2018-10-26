@@ -441,6 +441,10 @@ These are things that were done in Core Level 1, but should be moved to Core Lev
 
 ## Change log
 
+* 0.0.16 - 2018-10-26
+  * Fixing more bugs with nested `rawFn`s and multi-line statements on the same line as the macro.
+* 0.0.15 - 2018-10-23
+  * Fixing bug with nested `rawFn`s.
 * 0.0.14 - 2018-10-21
   * Fixing macros so they can nest properly on the first line.
   * Fixing a bug that prevented having multiple elements in an object literal.
