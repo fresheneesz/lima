@@ -632,6 +632,18 @@ var tests = exports.tests = {
             return isSpecificInt(element0, 5)
         }
     },
+    rawFunctionWithFirstlineParamAndParam4Indented: {    // From convention A.
+        shouldFail:true,
+        content:'a = rawFn match: \n' +
+                '     ret {argInfo:true}\n'+
+                '    run:\n' +
+                '     ret 5\n'+
+                'a[]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 5)
+        }
+    },
     basicRawFunctionValueFail5: {     // From convention C.
         shouldFail:true,
         content:'a = rawFn match: ret true  run:   ret 5\n'+
@@ -713,34 +725,36 @@ var tests = exports.tests = {
             return isSpecificInt(element0, 7)
         }
     },
-    // todo:
     // Also tests multi-line return statements:
-//    rawFunctionNesting2: {
-//        content:'a = rawFn[\n' +
-//                ' match: ret {argInfo:true}\n'+
-//                ' run: ret rawFn\n' +
-//                '       match: ret {argInfo:true}\n' +
-//                '       run:   ret 7\n' +
-//                ']\n' +
-//                'a[][]',
-//        check: function(module) {
-//            var element0 = getFirstProperty(module).value
-//            return isSpecificInt(element0, 7)
-//        }
-//    },
+    rawFunctionNesting2: {
+        content:'a = rawFn[\n' +
+                ' match: ret {argInfo:true}\n'+
+                ' run: ret rawFn\n' +
+                '  match: ret {argInfo:true}\n' +
+                '  run:   ret 7\n' +
+                ']\n' +
+                'a[][]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 7)
+        }
+    },
+    // Also tests multi-line return statements:
+    rawFunctionNesting3: {
+        content:'a = rawFn[\n' +
+                ' match: ret {argInfo:true}\n'+
+                ' run: \n' +
+                '  ret rawFn\n' +
+                '   match: ret {argInfo:true}\n' +
+                '   run:   ret 7\n' +
+                ']\n' +
+                'a[][]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 7)
+        }
+    },
 
-//    // Test of Convention E:
-//    rawFunctionWithFirstlineParamAndParam4Indented: {
-//        content:'a = rawFn match: \n' +
-//                '     ret {argInfo:true}\n'+
-//                '    run:\n' +
-//                '     ret 5\n'+
-//                'a[]',
-//        check: function(module) {
-//            var element0 = getFirstProperty(module).value
-//            return isSpecificInt(element0, 5)
-//        }
-//    },
 
         // should fail:
     basicRawFunctionValue4b: {
@@ -755,6 +769,19 @@ var tests = exports.tests = {
 //    basicRawFunctionValue1p: {
 //        content:'a = rawFn\n'+
 //                ' match a: ' +
+//                '  ret {argInfo:a[0]}\n'+
+//                ' run a:   \n' +
+//                '  ret a+4\n'+
+//                'a[1]',
+//        check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return isSpecificInt(element0, 5)
+//        }
+//    },
+//    basicRawFunctionValue1p2: {                // From convention A.
+//        content:'a = rawFn\n'+
+//                ' match \n' +
+//                '  a: ' +
 //                '  ret {argInfo:a[0]}\n'+
 //                ' run a:   \n' +
 //                '  ret a+4\n'+
@@ -786,6 +813,20 @@ var tests = exports.tests = {
 //        }
 //    },
 //
+//    basicRawFunctionValue1p2: {                // From convention A.
+//        shouldFail:true,
+//        content:'a = rawFn\n'+
+//                ' match \n' +
+//                ' a: ' + // Because this isn't indented from the start of the parameter set.
+//                '  ret {argInfo:a[0]}\n'+
+//                ' run a:   \n' +
+//                '  ret a+4\n'+
+//                'a[1]',
+//        check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return isSpecificInt(element0, 5)
+//        }
+//    },
 //    rawFunctionAsClosure: {
 //        content:'x = 6\n' +
 //                'a = rawFn \n' +
@@ -813,7 +854,6 @@ var tests = exports.tests = {
 //    },
 
     // TODO: TEST first line 3 nested macros (for convention D)
-    // TODO: test convention E for rawFn
 
 
 //    basicFunctionValue3: {

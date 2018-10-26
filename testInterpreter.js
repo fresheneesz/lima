@@ -43,7 +43,7 @@ for(var name in normalizedTests) {
 }
 
 if(failures > 0) {
-    console.log(colors.red("Got "+failures+" failures."))
+    console.log(colors.red("Got "+failures+" failure"+(failures===1?'':'s')+"."))
 } else {
     console.log(colors.green("---"+testUtils.successMessage()+"---"))
 }

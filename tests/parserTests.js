@@ -18,7 +18,7 @@ var macroTests=[]
 
 
 
-//*
+/*
 
 indentedWsTests = [
     {note: "0 indent", args: [0], inputs: [

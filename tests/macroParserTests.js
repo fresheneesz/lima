@@ -4,6 +4,7 @@ var basicUtils = require("../src/basicUtils")
 var macroParsers = require("../src/macroParsers")
 
 // the following are set like this so i can block comment out the tests below
+var innerBlockTests = []
 var macroBlockTests=[]
 var rawFnInnerBlockTests=[], rawFnInnerTests = [], indentedBlockTests = []
 var retStatementTests=[]
@@ -12,10 +13,44 @@ var macroInnerTests=[]
 
 
 
-
-
-
 //*
+
+
+innerBlockTests = {args: ['someName', P.str("param")], state: {}, inputs:{}}
+
+innerBlockTests.inputs[
+    "someName param: whatever"
+] =
+ { body:
+   [ { type: 'superExpression',
+       parts:
+        [ { type: 'variable', name: 'whatever' },
+          { type: 'rawExpression', expression: '' } ],
+       needsEndParen: false } ],
+   parameters: 'param' }
+
+innerBlockTests.inputs[
+    "\n someName param: whatever"
+] =
+ { body:
+   [ { type: 'superExpression',
+       parts:
+        [ { type: 'variable', name: 'whatever' },
+          { type: 'rawExpression', expression: '' } ],
+       needsEndParen: false } ],
+   parameters: 'param' }
+
+innerBlockTests.inputs[
+    "\n someName param:"+
+    "\n  whatever"
+] =
+ { body:
+   [ { type: 'superExpression',
+       parts:
+        [ { type: 'variable', name: 'whatever' },
+          { type: 'rawExpression', expression: '' } ],
+       needsEndParen: false } ],
+   parameters: 'param' }
 
 
 var testLanguage = P.createLanguage({scope:{}}, {
@@ -63,8 +98,8 @@ rawFnInnerBlockTests = [
 
 rawFnInnerTests = {inputs: {}, state: {indent: 0}}
 rawFnInnerTests.inputs[
-    "match: whatever\n"+
-    "run: whatever"
+    "match: whatever\n"+ // on the first line of the macro
+    " run: whatever"
 ] =
     { match:
        { parameters: [],
@@ -84,8 +119,8 @@ rawFnInnerTests.inputs[
               needsEndParen: false } ] } }
 
 rawFnInnerTests.inputs[
-    "match a: whatever\n"+
-    "run b: whatever"
+    "match a: whatever\n"+  // on the first line of the macro
+    " run b: whatever"
 ] =
     { match:
        { parameters: ['a'],
@@ -122,8 +157,8 @@ retStatementTests = [
 
 macroInnerTests = {inputs: {}, state: {indent: 0}}
 macroInnerTests.inputs[
-    "match a b: whatever\n"+
-    "run a: whatever"
+    "\n match a b: whatever"+
+    "\n run a: whatever"
 ] =
      { match:
        { parameters: ['a', 'b'],
@@ -145,6 +180,7 @@ macroInnerTests.inputs[
 
 //*/
 
+exports.innerBlockTests = innerBlockTests
 exports.macroBlockTests = macroBlockTests
 exports.rawFnInnerBlockTests = rawFnInnerBlockTests
 exports.rawFnInnerTests = rawFnInnerTests

@@ -29,6 +29,7 @@ var tests = {
     module: tests.moduleTests,
     macro: tests.macroTests,
 
+    "macroParsers.innerBlock": macroParserTests.innerBlockTests,
     "macroParsers.macroBlock": macroParserTests.macroBlockTests,
     "macroParsers.rawFnInnerBlock": macroParserTests.rawFnInnerBlockTests,
     "macroParsers.rawFnInner": macroParserTests.rawFnInnerTests,
@@ -159,7 +160,7 @@ normalizedTests.forEach(function(testItem) {
 })
 
 if(failures > 0) {
-    console.log(colors.red("Got "+failures+" failures."))
+    console.log(colors.red("Got "+failures+" failure"+(failures===1?'':'s')+"."))
 } else {
     console.log(colors.green("---"+testUtils.successMessage()+"---"))
 }
