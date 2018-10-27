@@ -540,7 +540,7 @@ var tests = exports.tests = {
     basicRawFunctionValue1: {
         content:'a = rawFn\n'+
                 ' match: \n' +
-                '  ret {argInfo:true}\n'+
+                '  ret {arg:true}\n'+
                 ' run:   \n' +
                 '  ret 5\n'+
                 'a[]',
@@ -552,7 +552,7 @@ var tests = exports.tests = {
     // expressions on same line as marker
     basicRawFunctionValue2: {
         content:'a = rawFn\n'+
-                ' match: ret {argInfo:true}\n'+
+                ' match: ret {arg:true}\n'+
                 ' run:   ret 5\n'+
                 'a[]',
         check: function(module) {
@@ -562,7 +562,7 @@ var tests = exports.tests = {
     },
     // expression on first-line (with macro)
     basicRawFunctionValue3: {
-        content:'a = rawFn match: ret {argInfo:true}\n'+
+        content:'a = rawFn match: ret {arg:true}\n'+
                 ' run:   ret 5\n'+
                 'a[]',
         check: function(module) {
@@ -573,7 +573,7 @@ var tests = exports.tests = {
     basicRawFunctionValue4: {     // From convention A.
         content:'a = rawFn \n' +
                 ' match: \n' +
-                '  ret {argInfo:true}\n'+
+                '  ret {arg:true}\n'+
                 ' run:\n' +
                 '    ret 5\n'+
                 'a[]',
@@ -588,7 +588,7 @@ var tests = exports.tests = {
         shouldFail:true,
         content:'a = rawFn\n'+
                 ' match: \n' +
-                '  ret {argInfo:true}\n'+
+                '  ret {arg:true}\n'+
                 ' run:   \n' +
                 ' ret 5\n'+
                 'a[]',
@@ -597,7 +597,7 @@ var tests = exports.tests = {
         shouldFail:true,
         content:'a = rawFn \n' +
                 ' match: \n' +
-                '  ret {argInfo:true}\n'+
+                '  ret {arg:true}\n'+
                 '  run:\n' +
                 '    ret 5\n'+
                 'a[]',
@@ -610,7 +610,7 @@ var tests = exports.tests = {
         shouldFail:true,
         content:'a = rawFn \n' +
                 ' match: \n' +
-                ' ret {argInfo:true}\n'+
+                ' ret {arg:true}\n'+
                 ' run:\n' +
                 ' ret 5\n'+
                 'a[]',
@@ -623,7 +623,7 @@ var tests = exports.tests = {
         shouldFail:true,
         content:'a = rawFn \n' +
                 ' match: \n' +
-                '   ret {argInfo:true}\n'+
+                '   ret {arg:true}\n'+
                 '  run:\n' +
                 '    ret 5\n'+
                 'a[]',
@@ -635,7 +635,7 @@ var tests = exports.tests = {
     rawFunctionWithFirstlineParamAndParam4Indented: {    // From convention A.
         shouldFail:true,
         content:'a = rawFn match: \n' +
-                '     ret {argInfo:true}\n'+
+                '     ret {arg:true}\n'+
                 '    run:\n' +
                 '     ret 5\n'+
                 'a[]',
@@ -655,7 +655,7 @@ var tests = exports.tests = {
     basicRawFunctionValue1b: {
         content:'a = rawFn[\n'+
                 ' match: \n' +
-                '  ret {argInfo:true}\n'+
+                '  ret {arg:true}\n'+
                 ' run:   \n' +
                 '  ret 5\n' +
                 ']\n'+
@@ -668,7 +668,7 @@ var tests = exports.tests = {
     // expressions on same line as marker
     basicRawFunctionValue2b: {
         content:'a = rawFn[\n'+
-                ' match: ret {argInfo:true}\n'+
+                ' match: ret {arg:true}\n'+
                 ' run:   ret 5\n'+
                 ']\n' +
                 'a[]',
@@ -679,7 +679,7 @@ var tests = exports.tests = {
     },
     // expression on first-line (with macro)
     basicRawFunctionValue3b: {
-        content:'a = rawFn[match: ret {argInfo:true}\n'+
+        content:'a = rawFn[match: ret {arg:true}\n'+
                 ' run:   ret 5\n' +
                 ']\n'+
                 'a[]',
@@ -690,7 +690,7 @@ var tests = exports.tests = {
     },
     // doubly nested macro on first-line
     rawFunctionValueWithNestedMacros: {
-        content:'a = rawFn[match: ret {argInfo:true fakeRet: ret {0:ret "fake"}}\n'+
+        content:'a = rawFn[match: ret {arg:true fakeRet: ret {0:ret "fake"}}\n'+
                 ' run:   ret 5\n' +
                 ']\n'+
                 'a[]',
@@ -700,7 +700,7 @@ var tests = exports.tests = {
         }
     },
     rawFunctionValueWithNestedMacros2: {
-        content:'a = rawFn[match: ret {argInfo:true fakeRet: ret {0:ret x}}\n'+
+        content:'a = rawFn[match: ret {arg:true fakeRet: ret {0:ret x}}\n'+
                 ' run:   ret 5\n' +
                 ']\n' +
                 'x = 5\n'+
@@ -713,10 +713,10 @@ var tests = exports.tests = {
     // Also tests multi-line return statements:
     rawFunctionNesting: {
         content:'a = rawFn[\n' +
-                ' match: ret {argInfo:true}\n'+
+                ' match: ret {arg:true}\n'+
                 ' run:\n' +
                 '  ret rawFn\n' +
-                '   match: ret {argInfo:true}\n' +
+                '   match: ret {arg:true}\n' +
                 '   run:   ret 7\n' +
                 ']\n' +
                 'a[][]',
@@ -728,9 +728,9 @@ var tests = exports.tests = {
     // Also tests multi-line return statements:
     rawFunctionNesting2: {
         content:'a = rawFn[\n' +
-                ' match: ret {argInfo:true}\n'+
+                ' match: ret {arg:true}\n'+
                 ' run: ret rawFn\n' +
-                '  match: ret {argInfo:true}\n' +
+                '  match: ret {arg:true}\n' +
                 '  run:   ret 7\n' +
                 ']\n' +
                 'a[][]',
@@ -742,10 +742,10 @@ var tests = exports.tests = {
     // Also tests multi-line return statements:
     rawFunctionNesting3: {
         content:'a = rawFn[\n' +
-                ' match: ret {argInfo:true}\n'+
+                ' match: ret {arg:true}\n'+
                 ' run: \n' +
                 '  ret rawFn\n' +
-                '   match: ret {argInfo:true}\n' +
+                '   match: ret {arg:true}\n' +
                 '   run:   ret 7\n' +
                 ']\n' +
                 'a[][]',
@@ -763,95 +763,82 @@ var tests = exports.tests = {
                 'a[]'
     },
 
-    // TODO after implementing object bracket operator (since that's necessary to interact with ordered parameters
     // parameters:
 
-//    basicRawFunctionValue1p: {
-//        content:'a = rawFn\n'+
-//                ' match a: ' +
-//                '  ret {argInfo:a[0]}\n'+
-//                ' run a:   \n' +
-//                '  ret a+4\n'+
-//                'a[1]',
-//        check: function(module) {
-//            var element0 = getFirstProperty(module).value
-//            return isSpecificInt(element0, 5)
-//        }
-//    },
-//    basicRawFunctionValue1p2: {                // From convention A.
-//        content:'a = rawFn\n'+
-//                ' match \n' +
-//                '  a: ' +
-//                '  ret {argInfo:a[0]}\n'+
-//                ' run a:   \n' +
-//                '  ret a+4\n'+
-//                'a[1]',
-//        check: function(module) {
-//            var element0 = getFirstProperty(module).value
-//            return isSpecificInt(element0, 5)
-//        }
-//    },
-//    // expressions on same line as marker
-//    basicRawFunctionValue2p: {
-//        content:'a = rawFn\n'+
-//                ' match: ret true\n'+
-//                ' run:   ret 5\n'+
-//                'a[]',
-//        check: function(module) {
-//            var element0 = getFirstProperty(module).value
-//            return isSpecificInt(element0, 5)
-//        }
-//    },
-//    // expression on first-line
-//    basicRawFunctionValue3p: {
-//        content:'a = rawFn match: ret true\n'+
-//                ' run:   ret 5\n'+
-//                'a[]',
-//        check: function(module) {
-//            var element0 = getFirstProperty(module).value
-//            return isSpecificInt(element0, 5)
-//        }
-//    },
-//
-//    basicRawFunctionValue1p2: {                // From convention A.
-//        shouldFail:true,
-//        content:'a = rawFn\n'+
-//                ' match \n' +
-//                ' a: ' + // Because this isn't indented from the start of the parameter set.
-//                '  ret {argInfo:a[0]}\n'+
-//                ' run a:   \n' +
-//                '  ret a+4\n'+
-//                'a[1]',
-//        check: function(module) {
-//            var element0 = getFirstProperty(module).value
-//            return isSpecificInt(element0, 5)
-//        }
-//    },
-//    rawFunctionAsClosure: {
-//        content:'x = 6\n' +
-//                'a = rawFn \n' +
-//                ' match: \n' +
-//                '  ret {argInfo:x}\n'+
-//                ' run arg:\n' +
-//                '    ret arg\n'+
-//                'a[]',
-//        check: function(module) {
-//            var element0 = getFirstProperty(module).value
-//            return isSpecificInt(element0, 6)
-//        }
-//    },
-//    nestedRawFunctionValue: {
-//        content:'a = rawFn \n' +
-//                ' match: \n' +
-//                '  ret {argInfo:true}\n'+
-//                ' run:\n' +
-//                '    ret 5\n'+
-//                'a[]',
-//        check: function(module) {
-//            var element0 = getFirstProperty(module).value
-//            return isSpecificInt(element0, 5)
-//        }
-//    },
+    basicRawFunctionValue1p: {
+        content:'a = rawFn\n'+
+                ' match a: ' +
+                '  ret {arg:a[0]}\n'+
+                ' run a:   \n' +
+                '  ret a+4\n'+
+                'a[1]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 5)
+        }
+    },
+    basicRawFunctionValue1p2: {                // From convention A.
+        content:'a = rawFn\n'+
+                ' match \n' +
+                '  a: ' +
+                '  ret {arg:a[0]}\n'+
+                ' run a:   \n' +
+                '  ret a+4\n'+
+                'a[1]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 5)
+        }
+    },
+    // expressions on same line as marker
+    basicRawFunctionValue2p: {
+        content:'a = rawFn\n'+
+                ' match x: ret {arg:x[0]}\n'+
+                ' run x:   ret x\n'+
+                'a[5]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 5)
+        }
+    },
+    // expression on first-line
+    basicRawFunctionValue3p: {
+        content:'a = rawFn match x: ret true\n'+
+                ' run y:   ret 5\n'+
+                'a[]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 5)
+        }
+    },
+
+    basicRawFunctionValue1p2WithWrongIndent: {                // From convention A.
+        shouldFail:true,
+        content:'a = rawFn\n'+
+                ' match \n' +
+                ' a: ' + // Because this isn't indented from the start of the parameter set.
+                '  ret {arg:a[0]}\n'+
+                ' run a:   \n' +
+                '  ret a+4\n'+
+                'a[1]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 5)
+        }
+    },
+    rawFunctionAsClosure: {
+        content:'x = 6\n' +
+                'a = rawFn \n' +
+                ' match: \n' +
+                '  ret {arg:x}\n'+
+                ' run arg:\n' +
+                '    ret arg\n'+
+                'a[]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 6)
+        }
+    },
 
     // TODO: TEST first line 3 nested macros (for convention D)
 
@@ -910,9 +897,9 @@ var tests = exports.tests = {
     macroParamsTest: {
         content:'a = macro\n'+
                 ' match rawInput startColumn: \n' +
-                '  ret {consume:2 info:{rawInput:rawInput startColumn:startColumn}}\n'+
-                ' run info:   \n' +
-                '  ret info\n'+
+                '  ret {consume:2 arg:{rawInput:rawInput startColumn:startColumn}}\n'+
+                ' run arg:   \n' +
+                '  ret arg\n'+
                 'a 2',
         check: function(module) {
             var element0 = getFirstProperty(module).value

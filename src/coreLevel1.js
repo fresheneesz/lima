@@ -93,11 +93,11 @@ function makeParamInfo(parameterSets) {
                 if(normalizedArgs !== undefined) {
                     for(var j=0; j<expandedParams.length; j++) {
                         if(expandedParams[j].type !== anyType && expandedParams[j].type !== undefined) {
-                            return LimaObject({info: createJsPrimitive({args: normalizedArgs, paramIndex: n})}, true) // not weak
+                            return LimaObject({arg: createJsPrimitive({args: normalizedArgs, paramIndex: n})}, true) // not weak
                         }
                     }
                     // else
-                    return LimaObject({info: createJsPrimitive({args: normalizedArgs, paramIndex: n}), weak: True}, true)
+                    return LimaObject({arg: createJsPrimitive({args: normalizedArgs, paramIndex: n}), weak: True}, true)
                 }
             }
             // else
@@ -184,8 +184,8 @@ var nil = exports.nil = {
         // If `macro` is defined, it is an object representing a macro operation. It has the following properties:
             // match(rawInput, startColumn) - A function that parses the input and returns an object with the properties:
                 // consumed - The number of characters consumed (as a lima value)
-                // matchInfo - A lima object containing info to be passed to the `run` function
-            // run(matchInfo) - A function to be run when the macro is actually executed.
+                // arg - A lima object containing info to be passed to the `run` function
+            // run(arg) - A function to be run when the macro is actually executed.
         macro: undefined,
         // //inherit: undefined,
         destructors: [],
@@ -199,9 +199,9 @@ var nil = exports.nil = {
                 // match - Defines how parameters match and are normalized.
                 //         If the arguments don't match should return nil, and if the arguments do match it should return
                 //         an object with the following properties:
-                    // argInfo - A value to be passed to `run`
+                    // arg - A value to be passed to `run`
                     // weak - True if the matching should be considered weak for operator dispatch.
-                // run - The raw function to call if the parameters match. Takes in `argInfo` from the return value of match.
+                // run - The raw function to call if the parameters match. Takes in `info` from the return value of match.
         operators: {},
         preOperators:{}, // same form as operators, except won't have the order, backward, or chain properties
         postOperators:{} // same form as preOperators
@@ -329,7 +329,7 @@ function FunctionObj(/*boundObject=undefined, bracketOperatorDispatch*/) {
 function FunctionObjThatMatches(runFn) {
     return FunctionObj({
         match: function(args) {
-            return LimaObject({info: args})
+            return LimaObject({arg: args})
         },
         run: runFn
     })
@@ -471,8 +471,8 @@ False.name = 'false'
             // startColumn - a lima number
         // returns a lima object with the properties:
             // consume
-            // matchInfo
-    // run(matchInfo)
+            // arg
+    // run(arg)
 function macro(macroFns) {
     var macroObject = basicUtils.copyValue(nil)
     delete macroObject.meta.primitive
@@ -509,7 +509,7 @@ var rawFn = macro({
 
         return LimaObject({
             consume: NumberObj(javascriptRawInput.length),
-            info: createJsPrimitive(ast)
+            arg: createJsPrimitive(ast)
         })
     },
     run: function(astLimaObject) {
@@ -612,7 +612,7 @@ rawFn.name = 'rawFn'
 
                 return LimaObject({
                     consume: NumberObj(consumed),
-                    info:  createJsPrimitive(parts)
+                    arg:  createJsPrimitive(parts)
                 })
             },
             run: function(infoObject) {
@@ -642,7 +642,7 @@ var macroMacro = macro({
 
         return LimaObject({
             consume: NumberObj(javascriptRawInput.length),
-            info: createJsPrimitive(ast)
+            arg: createJsPrimitive(ast)
         })
     },
     run: function(astObject) {
@@ -669,7 +669,7 @@ macroMacro.name = 'macro'
 
 var wout = FunctionObj({
     match: function(args) {
-        return LimaObject({info: utils.getProperty({this:args}, NumberObj(0)) })
+        return LimaObject({arg: utils.getProperty({this:args}, NumberObj(0)) })
     },
     run: function(value) {
         console.log(utils.getPrimitiveStr(this, value))

@@ -441,6 +441,7 @@ These are things that were done in Core Level 1, but should be moved to Core Lev
 
 ## Change log
 
+* 0.0.17 - 2018-10-27 - Testing rawFn with parameters.
 * 0.0.16 - 2018-10-26
   * Fixing more bugs with nested `rawFn`s and multi-line statements on the same line as the macro.
 * 0.0.15 - 2018-10-23

@@ -125,10 +125,10 @@ var callOperator = exports.callOperator = function(context, operator, operands, 
             var rvalueContext = {this:operands[1], callingScope: callingScope}
 
             // get rvalue's copy value
-            var runArgs = getRunArgsFromMatch(
+            var rvalueRunArgs = getRunArgsFromMatch(
                 rvalueContext, rvalueDispatchInfo.operatorInfo.dispatch.match, coreLevel1.LimaObject([])
             )
-            var rvalue = applyOperator(rvalueDispatchInfo.operatorInfo.dispatch.run, rvalueContext, runArgs)
+            var rvalue = applyOperator(rvalueDispatchInfo.operatorInfo.dispatch.run, rvalueContext, rvalueRunArgs)
 
             // setup lvalue for assignment
             var lvalueDispatchInfo = getOperatorDispatch(operands[0], operator, coreLevel1.LimaObject([rvalue]))
@@ -147,7 +147,7 @@ var callOperator = exports.callOperator = function(context, operator, operands, 
         if(dispatchInfo.operatorInfo.boundObject !== undefined)
             thisContext = dispatchInfo.operatorInfo.boundObject
 
-        var runArgs = dispatchInfo.argInfo
+        var runArgs = dispatchInfo.arg
         var run = dispatchInfo.operatorInfo.dispatch.run
     }
 
@@ -157,9 +157,9 @@ var callOperator = exports.callOperator = function(context, operator, operands, 
 
         var matchResult = applyOperator(match, context, args)
         if(isNil(matchResult)) throw new Error("Arguments don't match.")
-        var runArgs = getProperty({this:matchResult, scope:blockCallingScope}, coreLevel1.StringObj('info'))
+        var runArgs = getProperty({this:matchResult, scope:blockCallingScope}, coreLevel1.StringObj('arg'))
         if(runArgs === coreLevel1.nil) {
-            throw new Error("No `info` property found in non-nil return value from `match` in the '"+operator+"' operator of "+thisContext.name+"")
+            throw new Error("No `arg` property found in non-nil return value from `match` in the '"+operator+"' operator of "+thisContext.name+"")
         }
     }
 
@@ -219,16 +219,16 @@ var getBinaryDispatch = exports.getBinaryDispatch = function(operand1, operator,
     // returns an object with the following properties:
         // operatorInfo - The full meta information for the operator in the object
         // dispatchItem - The matching dispatch item
-        // argInfo - The args normalized by the function's match call
+        // arg - The args normalized by the function's match call
         // weak - True if the matching parameters are weak dispatch.
     function getOperatorDispatch(object, operator, args) {
         var operatorInfo = object.meta.operators[operator]
         var context = {this:object}
         var matchResult = operatorInfo.dispatch.match.call(context, args)
-        if(matchResult !== coreLevel1.nil) {
+        if(!isNil(matchResult)) {
             var result = {
                 operatorInfo: operatorInfo,
-                argInfo: getRunArgsFromMatchResult(context, matchResult, operator),
+                arg: getRunArgsFromMatchResult(context, matchResult, operator),
                 weak: getProperty({this:matchResult, scope:blockCallingScope}, coreLevel1.StringObj('weak'))
             }
             var weak = getProperty({this:matchResult, scope:blockCallingScope}, coreLevel1.StringObj('weak'))
@@ -244,11 +244,18 @@ var getBinaryDispatch = exports.getBinaryDispatch = function(operand1, operator,
             return getRunArgsFromMatchResult(context, matchResult, operator)
         }
         function getRunArgsFromMatchResult(context, matchResult, operator) {
-            var runArgs = getProperty({this:matchResult, scope:blockCallingScope}, coreLevel1.StringObj('info'))
-//            if(runArgs === coreLevel1.nil) {
-//                throw new Error("No `info` property found in non-nil return value from `match` " +
-//                                "in the '"+operator+"' operator of `"+context.this.name+"`")
-//            }
+            var runArgs = getProperty({this:matchResult, scope:blockCallingScope}, coreLevel1.StringObj('arg'))
+            if(!isNil(matchResult)) {
+                for(var k in matchResult.meta.properties) {
+                    var key = matchResult.meta.properties[k][0].key
+                    var primitiveKey = getPrimitiveStr(context, key)
+                    // Note: this is a bit hacky, since there can be multiple keys at a given hashcode.
+                    if(!(primitiveKey in {arg:1,weak:1})) {
+                        throw new Error("The non-nil return value from `match` contains invalid property `"+primitiveKey+"` "+
+                                "in the '"+operator+"' operator of `"+context.this.name+"`")
+                    }
+                }
+            }
             return runArgs
         }
 

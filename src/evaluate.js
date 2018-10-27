@@ -405,8 +405,8 @@ function resolveBinaryOperandFrom(context, curState, index, allowProperties, imp
             throw new Error("Macro "+macroObject.name+" had an inconsistent number of consumed characters between parsing ("+expectedConsumption+" characters) and dynamic execution ("+consumedChars+" characters). Make sure that any macro that needs to be known at parse time (eg a macro within the first line of another macro like `fn` or `if`) is known before that outer macro executes (at very least, some macro of the same name that consumes the exact same number of characters must be in scope before that outer macro executes).")
         }
 
-        var matchInfo = utils.getProperty({this:consumeResult}, coreLevel1.StringObj('info'))
-        var runResult = utils.callOperator(context, '[', [macroObject.meta.macro.run, matchInfo])
+        var arg = utils.getProperty({this:consumeResult}, coreLevel1.StringObj('arg'))
+        var runResult = utils.callOperator(context, '[', [macroObject.meta.macro.run, arg])
 
         curState[valueItemIndex] = runResult
         rawExpression.expression = rawExpression.expression.slice(consumedChars)
