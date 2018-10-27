@@ -326,9 +326,9 @@ var getBinaryDispatch = exports.getBinaryDispatch = function(operand1, operator,
     // run - a lima function to run when the macro is called
 var consumeMacro = exports.consumeMacro = function(context, obj, rawInput, startColumn) {
     var rawInputLima = coreLevel1.StringObj(rawInput)
-    var startColumnLima // todo: support startColumn
+    var startColumnLima = coreLevel1.NumberObj(startColumn)
     try {
-        var matchArgs = coreLevel1.LimaObject([rawInputLima])//, startColumnLima])
+        var matchArgs = coreLevel1.LimaObject([rawInputLima, startColumnLima])
         var matchResult = callOperator(context, '[', [obj.meta.macro.match, matchArgs])
         var consumedCharsLimaValue = getProperty({this:matchResult}, coreLevel1.StringObj('consume'))
         if(consumedCharsLimaValue.meta.primitive.denominator !== 1) {
@@ -392,7 +392,14 @@ exports.appendElement = function(context, value, allowNil) {
 var getName = exports.getName = function(value, isKey) {
     if(value.name !== undefined) {
         return value.name
-    } else if(value.meta.primitive !== undefined) {
+    } else {
+        return getValueString(value, isKey)
+    }
+}
+
+// Gets a human readable value string.
+var getValueString = exports.getValueString = function(value, isKey) {
+    if(value.meta.primitive !== undefined) {
         if(value.meta.primitive.numerator !== undefined) {
             var name = value.meta.primitive.numerator+""
             if(value.meta.primitive.denominator !== 1)
@@ -410,12 +417,12 @@ var getName = exports.getName = function(value, isKey) {
         for(var hashcode in value.meta.properties) {
             var propertyList = value.meta.properties[hashcode]
             propertyList.forEach(function(propertyInfo) {
-                propertyStrings.push(getName(propertyInfo.key, true)+":"+getName(propertyInfo.value))
+                propertyStrings.push(getValueString(propertyInfo.key, true)+":"+getValueString(propertyInfo.value))
             })
         }
         for(var key in value.meta.privileged) {
             var privilegedProperty = value.meta.privileged[key]
-            propertyStrings.push(key+":"+getName(privilegedProperty))
+            propertyStrings.push(key+":"+getValueString(privilegedProperty))
         }
 
         return '{'+propertyStrings.join(' ')+'}'

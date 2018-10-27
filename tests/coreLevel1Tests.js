@@ -6,7 +6,6 @@ var utils = require("../src/utils")
 var tests = exports.tests = {
 
 
-
     //*
     emptySource:                    "",
     hello:                          "wout['hello world']\r\n",
@@ -358,10 +357,10 @@ var tests = exports.tests = {
         // .
 
     // todo:
-    // stringToString:    {content:'"a".str', check: function(module) {
-    //     var element0 = getFirstProperty(module).value
-    //     return isFalse(element0)
-    // }},
+//    stringToString:    {content:'"a".str', check: function(module) {
+//         var element0 = getFirstProperty(module).value
+//         return isFalse(element0)
+//    }},
 
 
     // module creation (almost the same as an object literal):
@@ -840,31 +839,8 @@ var tests = exports.tests = {
         }
     },
 
-    // TODO: TEST first line 3 nested macros (for convention D)
+    // TODO: TEST 3 first-line nested macros (for convention D)
 
-
-//    basicFunctionValue3: {
-//        content:'a = fn: ret 5\n' +
-//                'wout[a[]]',
-//        check: function(module) {
-//            return true // todo: test console output
-//        }
-//    },
-//    basicFunctionValue4: {
-//        content:'a = fn: ret 5\n' +
-//                'wout[ a[] ]',
-//        check: function(module) {
-//            return true // todo: test console output
-//        }
-//    },
-//    functionWithParameter: {
-//        content:'a = fn x: ret x\n' +
-//                'a[4]',
-//        check: function(module) {
-//            var element0 = getFirstProperty(module).value
-//            return isSpecificInt(element0, 4)
-//        }
-//    },
 
 
     // macro
@@ -893,19 +869,37 @@ var tests = exports.tests = {
             return isSpecificInt(element0, 5)
         }
     },
-    // todo: test startColumn when that's implemented
     macroParamsTest: {
         content:'a = macro\n'+
                 ' match rawInput startColumn: \n' +
-                '  ret {consume:2 arg:{rawInput:rawInput startColumn:startColumn}}\n'+
+                '  ret {consume:3 arg:{rawInput:rawInput startColumn:startColumn}}\n'+
                 ' run arg:   \n' +
                 '  ret arg\n'+
-                'a 2',
+                'a hi',
         check: function(module) {
             var element0 = getFirstProperty(module).value
             var rawInput = utils.getProperty({this:element0}, coreLevel1.StringObj("rawInput"))
-//            var startColumn = utils.getProperty({this:element0}, coreLevel1.StringObj("startColumn"))
-            return rawInput.meta.primitive.string === " 2"
+            var startColumn = utils.getProperty({this:element0}, coreLevel1.StringObj("startColumn"))
+            return rawInput.meta.primitive.string === " hi" && isSpecificInt(startColumn, 1)
+        }
+    },
+    macroParamsTest2: {
+        content:'a = macro\n'+
+                ' match rawInput startColumn: \n' +
+                '  ret {consume:3 arg:{rawInput:rawInput startColumn:startColumn}}\n'+
+                ' run arg:   \n' +
+                '  ret arg\n'+
+                '\n' +
+                'b = rawFn match args: ret {arg:args[0]}\n' +
+                ' run arg:             ret arg\n' +
+                '\n' +
+                'b[a hi]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            var rawInput = utils.getProperty({this:element0}, coreLevel1.StringObj("rawInput"))
+            var startColumn = utils.getProperty({this:element0}, coreLevel1.StringObj("startColumn"))
+            return rawInput.meta.primitive.string === " hi]" // <- This has more characters than were consumed because its the rawInput
+                   && isSpecificInt(startColumn, 3)          //    from the match block.
         }
     },
 

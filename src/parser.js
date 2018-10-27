@@ -269,7 +269,7 @@ var L = P.createLanguage({/*scope:{}, */consumeFirstlineMacros: false}, {
 
                 var nextIndex = i+consumedChars
                 var macroConsumption = {type:"macroConsumption", index: 0, consume:consumedChars}
-                var rawExpression = {type:"rawExpression", expression:input.slice(i, nextIndex)}
+                var rawExpression = {type:"rawExpression", expression:input.slice(i, nextIndex)}   // todo: add (and test) startIndex for this path
                 return P.makeSuccess(nextIndex, [macroConsumption, rawExpression]);
             }.bind(this))
         },
@@ -293,9 +293,10 @@ var L = P.createLanguage({/*scope:{}, */consumeFirstlineMacros: false}, {
                     none('\n').many()
                 )
             ).many()
-        ).tie().map(function(v) {
-            return {type:'rawExpression', expression:v}
-        })
+        ).tie().mark().map(function(v) {
+            var startColumn = v.start.column-this.state.indent
+            return {type:'rawExpression', startColumn: startColumn, expression: v.value}
+        }.bind(this))
     },
 
     colonOperator: function() {

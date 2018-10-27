@@ -161,7 +161,7 @@ var nil = exports.nil = {
     //type: undefined,          // Will be filled in later.
     name: 'nil',
     get _d() {                  // Value that makes it easier to debug (shows the lima value).
-        return utils.getName(this)
+        return utils.getValueString(this)
     },
     meta: {
         const: false,           // Will be set to true in coreLevel2.lima
@@ -541,7 +541,9 @@ rawFn.name = 'rawFn'
 
         parameters.forEach(function(parameter, n) {
             var arg = args[n]
-            var param = {name:parameter, meta: arg.meta}
+            var param = basicUtils.copyValue(nil)
+            param.name = parameter
+            param.meta = arg.meta
             functionScope[utils.normalizedVariableName(parameter)] = param
         })
 
@@ -626,16 +628,9 @@ rawFn.name = 'rawFn'
         return retMacro
     }
 
-
+// The macro that creates macros.
 var macroMacro = macro({
     match: function(rawInput) {
-    /*  macro
-            match rawInput startColumn:
-                statements
-            run input:
-                statements
-     */
-
         var javascriptRawInput = utils.getPrimitiveStr(this, rawInput)
         var macroContext = createMacroConsumptionContext(this)
         var ast = macroParsers.macroBlock(macroContext, {language: macroParsers, parser: 'macroInner'}).tryParse(javascriptRawInput)
@@ -646,6 +641,13 @@ var macroMacro = macro({
         })
     },
     run: function(astObject) {
+        /*  macro
+             match rawInput startColumn:
+                statements
+             run input:
+                statements
+        */
+
         var ast = getFromJsPrimitive(astObject)
         var originalContext = this
         var rawMacroObject = macro({

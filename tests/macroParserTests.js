@@ -25,7 +25,7 @@ innerBlockTests.inputs[
    [ { type: 'superExpression',
        parts:
         [ { type: 'variable', name: 'whatever' },
-          { type: 'rawExpression', expression: '' } ],
+          { type: 'rawExpression', startColumn: 10, expression: '' } ],
        needsEndParen: false } ],
    parameters: 'param' }
 
@@ -36,7 +36,7 @@ innerBlockTests.inputs[
    [ { type: 'superExpression',
        parts:
         [ { type: 'variable', name: 'whatever' },
-          { type: 'rawExpression', expression: '' } ],
+          { type: 'rawExpression', startColumn: 10, expression: '' } ],
        needsEndParen: false } ],
    parameters: 'param' }
 
@@ -48,7 +48,7 @@ innerBlockTests.inputs[
    [ { type: 'superExpression',
        parts:
         [ { type: 'variable', name: 'whatever' },
-          { type: 'rawExpression', expression: '' } ],
+          { type: 'rawExpression', startColumn: 8, expression: '' } ],
        needsEndParen: false } ],
    parameters: 'param' }
 
@@ -107,7 +107,7 @@ rawFnInnerTests.inputs[
           [ { type: 'superExpression',
               parts:
                [ { type: 'variable', name: 'whatever' },
-                 { type: 'rawExpression', expression: '' } ],
+                 { type: 'rawExpression', startColumn: 10, expression: '' } ],
               needsEndParen: false } ] },
       run:
        { parameters: [],
@@ -115,7 +115,7 @@ rawFnInnerTests.inputs[
           [ { type: 'superExpression',
               parts:
                [ { type: 'variable', name: 'whatever' },
-                 { type: 'rawExpression', expression: '' } ],
+                 { type: 'rawExpression', startColumn: 10, expression: '' } ],
               needsEndParen: false } ] } }
 
 rawFnInnerTests.inputs[
@@ -128,7 +128,7 @@ rawFnInnerTests.inputs[
           [ { type: 'superExpression',
               parts:
                [ { type: 'variable', name: 'whatever' },
-                 { type: 'rawExpression', expression: '' } ],
+                 { type: 'rawExpression', startColumn: 10, expression: '' } ],
               needsEndParen: false } ] },
       run:
        { parameters: ['b'],
@@ -136,7 +136,7 @@ rawFnInnerTests.inputs[
           [ { type: 'superExpression',
               parts:
                [ { type: 'variable', name: 'whatever' },
-                 { type: 'rawExpression', expression: '' } ],
+                 { type: 'rawExpression', startColumn: 10, expression: '' } ],
               needsEndParen: false } ] } }
 
 
@@ -166,7 +166,7 @@ macroInnerTests.inputs[
           [ { type: 'superExpression',
               parts:
                [ { type: 'variable', name: 'whatever' },
-                 { type: 'rawExpression', expression: '' } ],
+                 { type: 'rawExpression', startColumn: 10, expression: '' } ],
               needsEndParen: false } ] },
        run:
        { parameters: ['a'],
@@ -174,7 +174,7 @@ macroInnerTests.inputs[
           [ { type: 'superExpression',
               parts:
                [ { type: 'variable', name: 'whatever' },
-                 { type: 'rawExpression', expression: '' } ],
+                 { type: 'rawExpression', startColumn: 10, expression: '' } ],
               needsEndParen: false } ] } }
 
 

@@ -55,7 +55,7 @@ These are all under the `src/` directory.
 **`{type:"object", expressions:_, needsEndBrace:_}`** - Represents an object literal. The `expressions` is a list of value nodes. `needsEndBrace` will be true if the endbrace wasn't found in the expression block (and presumably exists in a `rawExpression` somewhere inside expressions), false if it was found.
 
 **`{type:"superExpression", parts:_, parens:_, needsEndParen:_}`** - Represents a block of code that may contain one or more actual expressions. The `parts` is a list of values nodes, operator nodes, or rawExpressions. Value nodes must be separated by one or more special operator nodes. It may contain rawExpressions, described below. If `parens` is true, it means the superExpression represents an expression surrounded by parens, otherwise the `parens` property won't exist. `needsEndParen` will be true if the endbrace wasn't found in the expression block (and presumably exists in a `rawExpression` somewhere inside expressions), false if it was found.
-* **`{type:"rawExpression", expression:_, meta:_}`** - Represents a block of code that may contain one or more actual expressions. `expression` is the raw expression string. `meta` contains an object with an `index` representing the index in the source code the rawExpression starts at. `index` has the structure `{ offset: _, line: _, column: _ }`. *Note: this isn't a value node.*
+* **`{type:"rawExpression", startColumn:_, expression:_, meta:_}`** - Represents a block of code that may contain one or more actual expressions. `expression` is the raw expression string. `startColumn` is the 0-indexed column the rawExpression starts at relative to the indent of the expression that contains it. `meta` contains an object with an `index` representing the index in the source code the rawExpression starts at. `index` has the structure `{ offset: _, line: _, column: _ }`. *Note: this isn't a value node.*
 * **`{type:"macroConsumption", consume:_}`** - Indicates that the previous value is expected to consumes `consume` number of characters (eg because its consumption was evaluated as part of the first line of a block macro). Can also be inserted after values not expected to be a macro (with `consume:0`). This is intended to be used in evaluation to double-check that the macro consumes the expected number of characters when run for real, and facilitate throwing an error if the consumption doesn't match when run.
 
 ##### Operator Nodes:
@@ -441,6 +441,7 @@ These are things that were done in Core Level 1, but should be moved to Core Lev
 
 ## Change log
 
+* 0.0.18 - 2018-10-27 - Adding support for the `startColumn` parameter for `macro`.
 * 0.0.17 - 2018-10-27 - Testing rawFn with parameters.
 * 0.0.16 - 2018-10-26
   * Fixing more bugs with nested `rawFn`s and multi-line statements on the same line as the macro.

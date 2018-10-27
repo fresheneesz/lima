@@ -132,12 +132,13 @@ normalizedTests.forEach(function(testItem) {
                 ))
             } else {
                 if('expectedResult' in testItem && testItem.expectedResult !== testUtils.anything) {
-                    if(deepEqual(result,testItem.expectedResult, {strict:true})) {
+                    var normalizedExpectedResult = normalizeExpectedResult(testItem.expectedResult, result)
+                    if(deepEqual(result,normalizedExpectedResult, {strict:true})) {
                         console.log('./ - '+util.inspect(result, {depth:null}))
                     } else {
                         failures++
                         console.log(colors.red("X - Got unexpected result for "+JSON.stringify(testItem.content)+"!!!"))
-                        console.log("Expected: "+util.inspect(testItem.expectedResult, {depth:null}))
+                        console.log("Expected: "+util.inspect(normalizedExpectedResult, {depth:null}))
                         console.log(colors.red("Got: "))
                         console.log(colors.red(util.inspect(result, {depth:null})))
                     }
@@ -163,4 +164,23 @@ if(failures > 0) {
     console.log(colors.red("Got "+failures+" failure"+(failures===1?'':'s')+"."))
 } else {
     console.log(colors.green("---"+testUtils.successMessage()+"---"))
+}
+
+
+function normalizeExpectedResult(expectedResult, actualResult) {
+    if(expectedResult === testUtils.anything) {
+        return actualResult
+    } else if(expectedResult instanceof Array && actualResult !== undefined) {
+        return expectedResult.map(function(v, n) {
+            return normalizeExpectedResult(v, actualResult[n])
+        })
+    } else if(typeof(expectedResult) === 'object' && actualResult !== undefined) {
+        var expectedResultCopy = {}
+        for(var k in expectedResult) {
+            expectedResultCopy[k] = normalizeExpectedResult(expectedResult[k], actualResult[k])
+        }
+        return expectedResultCopy
+    } else {
+        return expectedResult
+    }
 }

@@ -398,7 +398,7 @@ function resolveBinaryOperandFrom(context, curState, index, allowProperties, imp
         var rawExpressionIndex = valueItemIndex+1
         var rawExpression = curState[rawExpressionIndex]
         var macroInput = rawExpression.expression // For any item that is a macro, its expected that a rawExpression follows it.
-        var consumeResult = utils.consumeMacro(context, macroObject, macroInput)
+        var consumeResult = utils.consumeMacro(context, macroObject, macroInput, rawExpression.startColumn)
         var consumedCharsLimaValue = utils.getProperty({this:consumeResult}, coreLevel1.StringObj('consume'))
         var consumedChars = consumedCharsLimaValue.meta.primitive.numerator
         if(expectedConsumption !== undefined && consumedChars !== expectedConsumption) {
