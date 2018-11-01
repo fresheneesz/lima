@@ -30,7 +30,15 @@ for(var name in normalizedTests) {
         }
     } catch(e) {
         if(test.shouldFail) {
-            console.log("Correctly failed!")
+            if(test.shouldFail === true || e.message.indexOf(test.shouldFail) !== -1) {
+                console.log("Correctly failed!")
+            } else {
+                failures++
+                console.log(colors.red(
+                    "Didn't correctly fail for:\n"+test.content+'\n'+
+                    "Expected an exception containing: '"+test.shouldFail+"'\nbut got the exception: \n"+e
+                ))
+            }
         } else {
             failures++
             console.log(colors.red("Exception for:"))

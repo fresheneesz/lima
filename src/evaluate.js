@@ -21,7 +21,7 @@ var coreLevel1 = require("./coreLevel1")
 // objectEndOperator - The marker that the object definition space has ended before the objectNode's expressions are done.
 // implicitDeclarations - If true, undeclared variables that are set on the scope are declared as var typed variables.
 // curState - Holds the list of ast nodes in the object expressions.
-var resolveObjectSpace = exports.resolveObjectSpace = function(context, curState, n, isObjectEnd, implicitDeclarations) {
+var resolveObjectSpace = function(context, curState, n, isObjectEnd, implicitDeclarations) {
     while(curState.length > 0) {
         var node = curState[n]
         if(isObjectEnd && isObjectEnd(node)) {
@@ -80,13 +80,11 @@ var resolveObjectSpace = exports.resolveObjectSpace = function(context, curState
 // returns an object with the properties:
     // value - the resulting value of the expression
     // remainingParts - The parts of any additional expressions in this superExpression
-var superExpression = exports.superExpression = function(context, parts, options) {
+var superExpression = function(context, parts, options) {
     if(!options) options = {}
 
     // curState can contain AST node parts *and* lima object values
-    var curState = parts.map(function(x) { // shallow copy of the parts
-        return x
-    })
+    var curState = parts.map(function(x){return x}) // Shallow copy of the parts.
 
     // resolve parens, dereference operators, and unary operators
     var curIndex = 0
@@ -101,6 +99,15 @@ var superExpression = exports.superExpression = function(context, parts, options
         value: curState[0],
         remainingParts: curState.slice(1)
     }
+}
+
+// The exported versions won't mutate the input parts or state. This is important sometimes because outside use might call the
+// function with the same input twice (eg macro match statements).
+exports.superExpression = function(context, parts, options) {
+    return superExpression(context, utils.cloneJsValue(parts), options)
+}
+exports.resolveObjectSpace = function(context, curState, n, isObjectEnd, implicitDeclarations) {
+    return resolveObjectSpace(context, utils.cloneJsValue(curState), n, isObjectEnd, implicitDeclarations)
 }
 
 function resolveBinaryOperations(context, curState, allowProperties, implicitDeclarations) {

@@ -585,3 +585,21 @@ var isNode = exports.isNode = function(x) { // returns true if the expression it
 exports.countChars = function(targetString, character) {
     return targetString.match(new RegExp(character, 'g')||[]).length
 }
+
+var cloneJsValue = exports.cloneJsValue = function(value) {
+    if (value instanceof Array) {
+        var copy = []
+        for (var i = 0, len = value.length; i < len; i++) {
+            copy[i] = cloneJsValue(value[i])
+        }
+        return copy
+    } else if (value instanceof Object) {
+        copy = {}
+        for (var attr in value) {
+            copy[attr] = cloneJsValue(value[attr])
+        }
+        return copy
+    } else {
+        return value
+    }
+}

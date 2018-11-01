@@ -263,13 +263,11 @@ var L = P.createLanguage({/*scope:{}, */consumeFirstlineMacros: false}, {
                 var consumedCharsLimaValue = utils.getProperty({this:consumeResult}, coreLevel1.StringObj('consume'))
                 var consumedChars = consumedCharsLimaValue.meta.primitive.numerator
                 var consumedString = input.slice(i, i+consumedChars)
-                if(consumedString.indexOf('\n') !== -1) {
-                    this.state.consumeFirstlineMacros = false
-                }
+                maybeUnsetFirstline(this, consumedString)
 
                 var nextIndex = i+consumedChars
-                var macroConsumption = {type:"macroConsumption", index: 0, consume:consumedChars}
-                var rawExpression = {type:"rawExpression", expression:input.slice(i, nextIndex)}   // todo: add (and test) startIndex for this path
+                var macroConsumption = {type:"macroConsumption", consume:consumedChars}
+                var rawExpression = {type:"rawExpression", expression:input.slice(i, nextIndex)}   // todo: add (and test) startColumn for this path
                 return P.makeSuccess(nextIndex, [macroConsumption, rawExpression]);
             }.bind(this))
         },

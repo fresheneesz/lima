@@ -552,7 +552,7 @@ rawFn.name = 'rawFn'
             if(utils.isNodeType(node, 'superExpression')) {
                 var parts = node.parts
             } else {
-                var parts = [node]
+                var parts = node
             }
 
             while(parts.length > 0) {

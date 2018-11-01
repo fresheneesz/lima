@@ -839,8 +839,54 @@ var tests = exports.tests = {
         }
     },
 
-    // TODO: TEST 3 first-line nested macros (for convention D)
-
+    // Testing Convention D:
+    rawFnMultipleNestedFirstLineMacros: {
+        content:'x = macro match: ret {consume:2}\n' +
+                ' run: ret 3\n' +
+                '\n' +
+                'a = rawFn match: ret {arg: x 1+2}\n'+
+                ' run arg: ret arg\n'+
+                '\n' +
+                'a[]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 5)
+        }
+    },
+    // todo:
+//    rawFnMultipleNestedFirstLineMacrosWithConsumptionMismatch: {
+//        shouldFail: "Macro `x` had an inconsistent number of consumed characters between parsing (0 characters) and dynamic execution (1",
+//        content:'a = rawFn match: ret x 1+2\n'+
+//                ' run: ret 5\n'+
+//                '\n' +
+//                // set x to consume a different amount
+//                'x = macro match: ret {consume:1}\n' +
+//                ' run: ret nil\n' +
+//                '\n' +
+//                'a[]',
+//        check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return isSpecificInt(element0, 6)
+//        }
+//    },
+//    rawFnMultipleNestedFirstLineMacrosWithConsumptionMismatch2: {
+//        shouldFail: "Macro `x` had an inconsistent number of consumed characters between parsing (2 characters) and dynamic execution (1",
+//        content:'x = macro match: ret {consume:2}\n' +
+//                ' run: ret nil\n' +
+//                '\n' +
+//                'a = rawFn match: ret x 1+2\n'+
+//                ' run: ret 5\n'+
+//                '\n' +
+//                // reset x to consume a different amount
+//                'x = macro match: ret {consume:1}\n' +
+//                ' run: ret nil\n' +
+//                '\n' +
+//                'a[]',
+//        check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return isSpecificInt(element0, 6)
+//        }
+//    },
 
 
     // macro
