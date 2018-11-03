@@ -217,18 +217,19 @@ var L = P.createLanguage({/*scope:{}, */consumeFirstlineMacros: false}, {
     // returns a list of nodes where the first is always a value node and the second node is a macroConsumption node if it exists
     expressionAtom: function() {
         return alt(
-            this.value().chain(function(v) {
-                if(this.state.consumeFirstlineMacros && v.type === 'variable') {
-                    var value = utils.scopeGet(this.state.scope, v.name)
+            this.value().mark().chain(function(v) {
+                if(this.state.consumeFirstlineMacros && v.value.type === 'variable') {
+                    var value = utils.scopeGet(this.state.scope, v.value.name)
                     if(value !== undefined && value.meta.macro !== undefined) {
-                        // evaluate macro consumption
-                        return this.macro(value).map(function(parts) {
-                            return [v].concat(parts)
+                        // Evaluate macro consumption.
+                        //var startColumn = v.end.column-this.state.indent+1 // The +1 because the end.column is 1 behind the start column.
+                        return this.macro(value/*, startColumn*/).map(function(parts) {
+                            return [v.value].concat(parts)
                         })
                     }
                 }
                 // else
-                return P.succeed([v])
+                return P.succeed([v.value])
             }.bind(this)),
 
             seqObj('(',
@@ -246,7 +247,7 @@ var L = P.createLanguage({/*scope:{}, */consumeFirstlineMacros: false}, {
                     v.superExpression.needsEndParen = true
                 }
 
-                if(v.superExpression.length === 1 && !v.superExpression.needsEndParen) { // todo: do we need to check needsEndParen? That might always be false here
+                if(v.superExpression.length === 1) { // && !v.superExpression.needsEndParen - I think needsEndParen is always false here
                     return [v.superExpression.parts[0]] // return the lone part of the superExpression
                 } else {
                     return [v.superExpression]
@@ -256,7 +257,7 @@ var L = P.createLanguage({/*scope:{}, */consumeFirstlineMacros: false}, {
     },
         // macro - A lima macro value.
         // returns a macroConsumption node
-        macro: function(macro) {
+        macro: function(macro, startColumn) {
             return P(function(input, i) {
                 var context = {scope:this.state.scope, consumeFirstlineMacros:this.state.consumeFirstlineMacros}
                 var consumeResult = utils.consumeMacro(context, macro, input.slice(i))
@@ -267,7 +268,7 @@ var L = P.createLanguage({/*scope:{}, */consumeFirstlineMacros: false}, {
 
                 var nextIndex = i+consumedChars
                 var macroConsumption = {type:"macroConsumption", consume:consumedChars}
-                var rawExpression = {type:"rawExpression", expression:input.slice(i, nextIndex)}   // todo: add (and test) startColumn for this path
+                var rawExpression = {type:"rawExpression", startColumn:startColumn, expression:input.slice(i, nextIndex)}
                 return P.makeSuccess(nextIndex, [macroConsumption, rawExpression]);
             }.bind(this))
         },

@@ -948,6 +948,25 @@ var tests = exports.tests = {
                    && isSpecificInt(startColumn, 3)          //    from the match block.
         }
     },
+    // Todo:
+    // Testing that startColumn works for nested first-line macros.
+//    macroParamsTest3: {
+//        content:'a = macro\n'+
+//                ' match rawInput startColumn: \n' +
+//                '  ret {consume:3 arg:{rawInput:rawInput startColumn:startColumn}}\n'+
+//                ' run arg:   \n' +
+//                '  ret arg\n'+
+//                '\n' +
+//                'b = rawFn match args: ret {arg: a 11}\n' +
+//                ' run arg:             ret arg\n' +
+//                '\n' +
+//                'b[]',
+//        check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            var startColumn = utils.getProperty({this:element0}, coreLevel1.StringObj("startColumn"))
+//            return isSpecificInt(startColumn, 33)
+//        }
+//    },
 
 
     // other
