@@ -1,7 +1,7 @@
 var P = require("./limaParsimmon")
 var basicUtils = require("./basicUtils")
 var utils = require("./utils")
-var coreLevel1 = require("./coreLevel1")
+var coreLevel1 = require("./coreLevel1b")
 
 for(var name in P.getBasicParsers()) {
   eval('var '+name+' = P["'+name+'"]')
@@ -28,8 +28,8 @@ var L = P.createLanguage({/*scope:{}, */consumeFirstlineMacros: false}, {
 
 	// expressions
 
-    // the returned superExpression can contain multiple logical expressions, and
-        // where one begins and another ends is determined later (in the interpreter)
+    // The returned superExpression can contain multiple logical expressions, and
+        // where one begins and another ends is determined later (in the interpreter).
     superExpression: function(allowColonOperators/*=true*/, allowEndBracesAndParens/*=false*/) {
         if(allowColonOperators === undefined) allowColonOperators = true
         return this.indent(function() {
@@ -39,16 +39,12 @@ var L = P.createLanguage({/*scope:{}, */consumeFirstlineMacros: false}, {
                 }),
                 this.binaryOperatorAndOperand(allowColonOperators, allowEndBracesAndParens).many()
             ).map(function(v) {
-                if(v[0].length === 1 && v[1].length === 0) {
-                    return v[0][0]
-                } else {
-                    return {type:'superExpression', parts:v[0].concat(flatten(v[1])), needsEndParen:false}
-                }
+                return {type:'superExpression', parts:v[0].concat(flatten(v[1])), needsEndParen:false}
             })
         })
     },
-        // represents a binary operator, then a binary operand (with potential prefix and postfix operators)
-        // returns an array of superExpression parts
+        // Represents a binary operator, then a binary operand (with potential prefix and postfix operators).
+        // Returns an array of superExpression parts.
         binaryOperatorAndOperand: function(allowColonOperators, allowEndBracesAndParens/*=false*/){
             var operators = [
                 this.basicOperator().times(1),
@@ -118,10 +114,10 @@ var L = P.createLanguage({/*scope:{}, */consumeFirstlineMacros: false}, {
             )
         },
 
-        // parses the last possible line of an expression block, that must start with an end paren of some kind
-        // note: theoretically, we could allow the same semantics for any operator that an expression can't
-            // start with (but for now at least, we're just allowing the paren types)
-        // returns any consumed whitespace
+        // Parses the last possible line of an expression block, that must start with an end paren of some kind.
+        // Note: theoretically, we could allow the same semantics for any operator that an expression can't
+            // start with (but for now at least, we're just allowing the paren types).
+        // Returns any consumed whitespace.
         expressionEndLine: function(){
             return seq(
                 this.indentedWs(this.state.indent-1).map(function(v) {
@@ -133,8 +129,8 @@ var L = P.createLanguage({/*scope:{}, */consumeFirstlineMacros: false}, {
             })
         },
 
-        // parses a value with potential unary operators
-        // returns an array of superExpression parts
+        // Parses a value with potential unary operators.
+        // Returns an array of superExpression parts.
         binaryOperand: function() {
             return seqObj(
                 ['binaryOperandPrefixAndAtom', this.binaryOperandPrefixAndAtom()],
@@ -146,7 +142,7 @@ var L = P.createLanguage({/*scope:{}, */consumeFirstlineMacros: false}, {
                 return v.binaryOperandPrefixAndAtom.concat(v.postfixOperator).concat(v.closingBrackets)
             })
         },
-            // returns an array of superExpression parts
+            // Returns an array of superExpression parts.
             binaryOperandPrefixAndAtom: function() {
                 return seqObj(
                     ['basicOperators', this.basicOperator().atMost(1)],
@@ -190,10 +186,10 @@ var L = P.createLanguage({/*scope:{}, */consumeFirstlineMacros: false}, {
                 })
             },
 
-    // evaluates the string of a rawExpression once it has been determined that the previous item was not a macro
-    // returns an object with the properties:
-        // current - An array of superExpression parts representing the continuation of the current expression
-        // next - A list of super expressions that follow the current expression
+    // Evaluates the string of a rawExpression once it has been determined that the previous item was not a macro.
+    // Returns an object with the properties:
+        // current - An array of superExpression parts representing the continuation of the current expression.
+        // next - A list of super expressions that follow the current expression.
     nonMacroExpressionContinuation: function(allowColonOperators/*=true*/) {
         if(allowColonOperators === undefined) allowColonOperators = true
         return seqObj(
@@ -214,7 +210,7 @@ var L = P.createLanguage({/*scope:{}, */consumeFirstlineMacros: false}, {
         })
     },
 
-    // returns a list of nodes where the first is always a value node and the second node is a macroConsumption node if it exists
+    // Returns a list of nodes where the first is always a value node and the second node is a macroConsumption node if it exists.
     expressionAtom: function() {
         return alt(
             this.value().mark().chain(function(v) {
@@ -256,7 +252,7 @@ var L = P.createLanguage({/*scope:{}, */consumeFirstlineMacros: false}, {
         )
     },
         // macro - A lima macro value.
-        // returns a macroConsumption node
+        // Returns a macroConsumption node.
         macro: function(macro, startColumn) {
             return P(function(input, i) {
                 var context = {scope:this.state.scope, consumeFirstlineMacros:this.state.consumeFirstlineMacros}
@@ -275,8 +271,8 @@ var L = P.createLanguage({/*scope:{}, */consumeFirstlineMacros: false}, {
 
     // operators and macros
 
-    // the input string to a macro
-    // returns a rawExpression node
+    // The input string to a macro.
+    // Returns a rawExpression node.
     rawExpression: function() {
         return seq(
             none('\n').many().map(function(v){

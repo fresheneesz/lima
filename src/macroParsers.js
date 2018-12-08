@@ -31,17 +31,21 @@ module.exports = P.createLanguage({scope:{}}, {
     innerBlock: function(name, parametersParser) {
         var that = this
         var parserState = getParser().withState(this.state)
-        return seqObj(
+        var sequence = [
             parserState.newlineFreeWs().many(),
             seq(parserState.newlineFreeWs().many(),
                 parserState.indentedNewline(1)
-            ).many(),
-            name,
-            parserState.indentedWs(2).many(),
+            ).many()
+        ]
+        if(name !== undefined) {
+            sequence.push(name, parserState.indentedWs(2).many())
+        }
+        sequence.push(
             ['parameters', parametersParser],
             parserState.indentedWs(2).many(),
             ":"
-        ).chain(function(v) {
+        )
+        return seqObj.apply(seqObj, sequence).chain(function(v) {
             return that.indentedBlock(2).map(function(indentedBlock) {
                 var newState = basicUtils.merge({}, this.state, {indent:0})
                 var parserStateInner = getParser().withState(newState)
@@ -79,153 +83,6 @@ module.exports = P.createLanguage({scope:{}}, {
             ).many().tie()
         },
 
-
-
-//    // A parser that executes the passed in parsers until the testFn returns true.
-//    // foundSplitPoint(consumedString) - Executed after parsing with each parser. If it returns true, that will be the
-//    //                                   last parser parsed with.
-//        // consumedString - The string consumed by the last parser.
-//    // betweenParser() - If not undefined, the returned parser will be parsed after each of the `parsers` unless testFn returns truthy.
-//    // Returns an object with the properties:
-//        // n - The number of parsers executed before testFn returned true.
-//        // results - An array containing the output of each parser that was parsed with.
-//    findSplitPoint: function(parsers, testFn, betweenParser) {
-//        return P(function(input, i) {
-//            return parsers[0].mark().chain(function(info) {
-//                var consumedString = input.slice(info.start.offset, info.end.offset)
-//                var consumedChars = info.end.offset - info.start.offset
-//                if(testFn(consumedString)) {
-//                    P.makeSuccess(i+consumedChars, {n:1, results:[info.value]})
-//                } else if(parsers.length > 1) {
-//                    var nextSplitPointParser = this.findSplitPoint(parsers.slice(1), testFn, betweenParser)
-//                    if(betweenParser) {
-//                        var nextParser = seq(betweenParser(), nextSplitPointParser)
-//                    } else {
-//                        var nextParser = seq(nextSplitPointParser)
-//                    }
-//
-//                    return nextParser.map(function(v) {
-//                        if(v.length > 1) {
-//                            var betweenParserResult = v[0]
-//                            var splitPointResult = v[1]
-//                        } else {
-//                            var splitPointResult = v[0]
-//                        }
-//
-//                        var returnInfo = {n:splitPointResult.n+1, results:[info.value].concat(splitPointResult.results)}
-//                        if(v.length > 1) {
-//                            returnInfo.results.unshift(betweenParserResult)
-//                        }
-//                        return returnInfo
-//                    })
-//                } else {
-//                    return P.makeSuccess(i+consumedChars, {n:1, results:[]});
-//                }
-//            })
-//        }.bind(this))
-//    },
-
-//    // Returns an object with:
-//        // shallowest - The indent of the least indented line.
-//        // firstShallowestLineIndex - The index of the first line at the shallowest indent (0 being first).
-//    // Consumes no input.
-//    // skipFirstLine - If true, the first line of input isn't counted for shallowness.
-//    findShallowestIndent: function(skipFirstLine) {
-//        return P(function(input, i) {
-//            var relevantInput = input.slice(i)
-//            var lines = relevantInput.split('\n')
-//            if(skipFirstLine) {
-//                lines = lines.slice(1)
-//            }
-//
-//            var shallowest = Infinity, shallowestLineIndex
-//            lines.forEach(function(line, n) {
-//                var result = seq(getParser().whitespace().many(), any).tryParse(line)
-//                if(result[0].length < shallowest) {
-//                    shallowest = result[0].length
-//                    shallowestLineIndex = n
-//                }
-//            })
-//
-//            return P.makeSuccess(i, {shallowest:shallowest, firstShallowestLineIndex:shallowestLineIndex});
-//        }.bind(this))
-//    },
-
-//
-//    rawFnInner2: function() {
-//        // If second line is the shortest indent and is part of a parameter set:
-//            // The shortest line is parameter indentation.
-//        // Else:
-//            // If the first subsequent line at the shortest indent matches the next parameter set:
-//                // The shortest line is parameter indentation.
-//            // Else:
-//                // The shortest line is not a parameter indentation and don't expect any more parameter sets.
-//
-//        return this.findShallowestIndent(true).chain(function(shallowestInfo) {
-//            var innerBlockParsers = [
-//                this.rawFnParameterSet("match"),
-//                this.rawFnParameterSet("run")
-//            ]
-//
-//
-//
-//            if(shallowestInfo.firstShallowestLineIndex === 1) {
-//
-//            } else {
-//
-//            }
-//
-//            var parameterIndent = shallowestInfo.shallowest
-//
-//
-//
-//            var parserState = getParser().withState(this.state)
-//            var macroParserState = this
-//            return this.findSplitPoint(innerBlockParsers,
-//                function foundSplitPoint(consumedString) {
-//                    return consumedString.indexOf('\n') // Whether the parser consumed a newline.
-//                },
-//                function betweenParser() {
-//                    return macroParserState.indentedBlock().map(function(indentedBlock) {
-//                        return parserState.superExpression(false).many().tryParse(indentedBlock)
-//                    }.bind(this))
-//                }
-//            )
-//        })
-//    },
-//        rawFnInnerBlock2: function(name) {
-//            var parserState = getParser().withState(this.state)
-//            return this.innerBlock2(name, parserState.variable().atMost(1).map(function(v) {
-//                var parameters = []
-//                if(v.length === 1) {
-//                    parameters.push(v[0].name)
-//                }
-//                return parameters
-//            }))
-//        },
-//
-//            innerBlock2: function(name, parametersParser) {
-//                var parserState = getParser().withState(this.state)
-//                var macroParserState = this.withState(this.state)
-//                return seqObj(
-//                    name,
-//                    this.indentedWs().many(),
-//                    ['parameters', parametersParser],
-//                    this.indentedWs().many(),
-//                    ":"
-//                ).chain(function(v) {
-//                    return macroParserState.indentedBlock().map(function(indentedBlock) {
-//                        var result = {
-//                            body: parserState.superExpression(false).many().tryParse(indentedBlock)
-//                        }
-//                        if(v.parameters) {
-//                            result.parameters = v.parameters
-//                        }
-//                        return result
-//                    }.bind(this))
-//                }.bind(this))
-//            },
-
     // returns an object with the properties:
         // run
             // parameter - The name of the parameter.
@@ -260,7 +117,6 @@ module.exports = P.createLanguage({scope:{}}, {
     macroInner: function() {
         return seqObj(
             ['match', this.macroInnerBlock("match")],
-
             ['run',this.macroInnerBlock("run")]
         )
     },
@@ -285,6 +141,23 @@ module.exports = P.createLanguage({scope:{}}, {
             }))
         },
 
+    ifInner: function() {
+        return this.ifConditionBlock().atLeast(1)
+    },
+        ifConditionBlock: function() {
+//            var newState = basicUtils.merge({}, this.state, {indent:this.state.indent+2})
+            var parserState = getParser().withState(this.state)
+            return seq(
+                parserState.superExpression(false),
+                parserState.indentedWs().many(),
+                seq(':',
+                    parserState.indentedWs()
+                ).atMost(1)
+            ).map(function(v) {
+                return {expressionBlock:v[0], foundTrailingColon: v[2].length > 0}
+            })
+        },
+
     // returns either undefined if there's no expression, or an object with the properties:
         // expression - a superExpression node
         // consume - how many characters of input the superExpression node consumed
@@ -298,12 +171,7 @@ module.exports = P.createLanguage({scope:{}}, {
         ).map(function(v) {
             if(v.expression.value.length > 0) {
                 var node = v.expression.value[0]
-                if(node.type === 'superExpression') {
-                    var value = node
-                } else {
-                    var value = {type:'superExpression', parts:[node]}
-                }
-                return {expression: value, consumed: v.expression.end.offset- v.ws.start.offset}
+                return {expression: node, consumed: v.expression.end.offset- v.ws.start.offset}
             }
         })
     },

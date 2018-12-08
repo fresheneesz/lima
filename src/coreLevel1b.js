@@ -3,25 +3,34 @@ var utils = require("./utils")
 var parser = require("./parser")
 var macroParsers = require("./macroParsers")
 var evaluate = require("./evaluate")
+var coreLevel1a = require("./coreLevel1a")
+
+var anyType = exports.anyType = coreLevel1a.anyType
+var nil = exports.nil = coreLevel1a.nil
+
+// todo:
+    // Make sure boundObject is correctly set for functions *and* macros
+    // Make sure macro definition scopes are like function definitions (ie not the calling scope)
+    // Make sure macros have the callingScope available to pass to evaluators for the
 
 // Conventions:
-    // For any function that takes in a `scope`, that has the same structure as the
+    // For any function that takes in a `scope`, `scope` has the same structure as the
         // `context.scope` from evaluate.superExpression
 
 // constructs and functions used by multiple literals
 
+
+
 var _ = undefined // for places where you don't need a value
-var anyType = exports.anyType = function() {
-    return true // everything's a `var?`
-}
+
 
 var dotOperator = {
     order:0, scope: 0,
     dispatch: makeParamInfo([{params: [{name:anyType}], fn: function(name) {
-        var result = this.this.meta.privileged[name.meta.primitive.string]
-        if(result !== undefined)
-            return result
-        result = utils.getProperty(this, name)
+        var exists = this.this.meta.privileged[name.meta.primitive.string]
+        if(exists)
+            return this.this.meta.scopes[0].get(name.meta.primitive.string)
+        var result = utils.getProperty(this, name)
         if(result !== nil)
             return result
         // else
@@ -154,59 +163,41 @@ var Boxed = function(value, tildeOperator) {
     return box
 }
 
+var limaObjectScope = function(object, upperScope) {
+    var objectScope = basicUtils.ContextScope(
+        // The `this` context for get and set is the ContextScope itself.
+        function get(name) {
+            if(name in this.scope) {
+                return this.scope[name]
+            } else {
+                return utils.scopeGet(upperScope,name)
+            }
+        }, function(name, value, isPrivate) {
+            // todo: add support for overriding and error for overriding without the override keyword/macro/attribute
+            if(name in this.scope)
+                throw new Error("Can't re-declare property "+name)
+
+            this.scope[name] = value
+            if(!isPrivate) {// todo: change isPrivate into an attribute
+                // Using this.object rather than object so the object can be swapped out (eg when an object is copied).
+                this.object.meta.privileged[name] = true
+            }
+        }
+    )
+    objectScope.scope = {}
+    objectScope.object = object
+    objectScope._upperScope = upperScope // For debug.
+    return objectScope
+}
 
 // literals
 
-var nil = exports.nil = {
-    //type: undefined,          // Will be filled in later.
-    name: 'nil',
-    get _d() {                  // Value that makes it easier to debug (shows the lima value).
-        return utils.getValueString(this)
-    },
-    meta: {
-        const: false,           // Will be set to true in coreLevel2.lima
-        scopes: [{}],           // Each scope has the structure:
-                                    // keys are primitive string names
-                                    // values are lima objects
-                                // An object will have multiple scopes when it inherits from multiple objects.
-                                // All privileged members will also be in at least one of the private scopes.
-                                // A privileged member will appear in multiple private scopes when it has been inherited
-                                    // under an alias.
-        privileged: {},         // keys are primitive string names and values are lima objects
-        properties: {},         // keys are hashcodes and values are arrays where each member looks like
-                                    // {key:keyObj,value:valueObj} where both `keyObj` and `valueObj` are lima objects
-        //nilProperties: []     // Temporary storage location for properties that have been set to nil while the object literal is being constructed.
-        elements: 0,
-        primitive: {nil:true},
+// Value that makes it easier to debug (shows the lima value).
+Object.defineProperty(nil, '_d', {
+  get: function() { return utils.getValueString(this) }
+})
 
-        //interfaces: [],       // each inherited object will be listed here to be used for interface dispatch (see the spec)
-
-        // If `macro` is defined, it is an object representing a macro operation. It has the following properties:
-            // match(rawInput, startColumn) - A function that parses the input and returns an object with the properties:
-                // consumed - The number of characters consumed (as a lima value)
-                // arg - A lima object containing info to be passed to the `run` function
-            // run(arg) - A function to be run when the macro is actually executed.
-        macro: undefined,
-        // //inherit: undefined,
-        destructors: [],
-
-        // operators is an object representing binary operators where each key is an operator and value has the properties:
-            // order
-            // scope - The index of the scope (within `scopes`) to look for variables in
-            // backward - (Optional) If true, the operator is right-to-left associative
-            // boundObject - (Optional) The object the function is bound to (because it was defined inside that object)
-            // dispatch - An object with the properties
-                // match - Defines how parameters match and are normalized.
-                //         If the arguments don't match should return nil, and if the arguments do match it should return
-                //         an object with the following properties:
-                    // arg - A value to be passed to `run`
-                    // weak - True if the matching should be considered weak for operator dispatch.
-                // run - The raw function to call if the parameters match. Takes in `info` from the return value of match.
-        operators: {},
-        preOperators:{}, // same form as operators, except won't have the order, backward, or chain properties
-        postOperators:{} // same form as preOperators
-    }
-}
+nil.meta.scopes[0] = limaObjectScope(nil, {get:function(){}})
 // Declaring nil's operators outside the above object so that nil can be used as defaults.
 nil.meta.operators['??'] = symmetricalOperator({order:6, scope:0, paramType: anyType, default:nil}, function(other) {
     return toLimaBoolean(this.this === other) // todo: support references
@@ -221,7 +212,7 @@ nil.meta.operators['='] = {
         {params: [{rvalue:anyType}], fn: function(rvalue) { // assignment operator
             if(this.this.meta.const)
                 throw new Error("Can't assign a const variable")
-            basicUtils.overwriteValue(this.this.meta, rvalue.meta)
+            basicUtils.overwriteValue(this.this, rvalue)
         }},
         {params: [], fn: function() { // copy operator
             return basicUtils.copyValue(this.this)
@@ -335,11 +326,15 @@ function FunctionObjThatMatches(runFn) {
     })
 }
 
+function addPrivilegedMember(obj, name, value) {
+    obj.meta.privileged[name] = true
+    obj.meta.scopes[0].scope[name] = value
+}
 
 // privileged members
 
 // todo: define hashcode and str as a function for now (when I figure out how to make accessors, we'll use that instead)
-zero.meta.privileged.hashcode = FunctionObj(zero, makeParamInfo([
+addPrivilegedMember(zero, 'hashcode', FunctionObj(zero, makeParamInfo([
     {params: [], fn: function() {
         if(this.this.meta.primitive.denominator === 1) {
             return this.this
@@ -348,9 +343,9 @@ zero.meta.privileged.hashcode = FunctionObj(zero, makeParamInfo([
             return NumberObj(primitiveHashcode,1)
         }
     }}
-]))
+])))
 // todo: move zero.str to coreLevel2
-zero.meta.privileged.str = FunctionObj(zero, makeParamInfo([
+addPrivilegedMember(zero, 'str', FunctionObj(zero, makeParamInfo([
     {params: [], fn: function() {
         if(this.this.meta.primitive.denominator === 1) {
             return StringObj(''+this.this.meta.primitive.numerator)
@@ -358,20 +353,20 @@ zero.meta.privileged.str = FunctionObj(zero, makeParamInfo([
             return StringObj(this.this.meta.primitive.numerator+'/'+this.this.meta.primitive.denominator)
         }
     }}
-]))
+])))
 
 // todo: define hashcode and str as a function for now (when I figure out how to make accessors, we'll use that instead)
-emptyString.meta.privileged.hashcode = FunctionObj(emptyString, makeParamInfo([
+addPrivilegedMember(emptyString, 'hashcode', FunctionObj(emptyString, makeParamInfo([
     {params: [], fn: function() {
         var primitiveHashcode = utils.getJsStringKeyHash('s'+this.this.meta.primitive.string) // the 's' is for string - to distinguish it from the hashcode for numbers
         return NumberObj(primitiveHashcode,1)
     }}
-]))
-emptyString.meta.privileged.str = FunctionObj(emptyString, makeParamInfo([
+])))
+addPrivilegedMember(emptyString, 'str', FunctionObj(emptyString, makeParamInfo([
     {params: [], fn: function() {
         return this.this
     }}
-]))
+])))
 
 
 // object creation functions
@@ -493,42 +488,6 @@ function macro(macroFns) {
     return macroObject
 }
 
-var rawFn = macro({
-    match: function(rawInput) {
-        /* Plan:
-            If its possible the macro is a one-liner, parse the macro with an option that indicates that words on the first line first line should be evaluated for macro consumption.
-            The parser should insert a `macroConsumption` ast node after any first-line value to mark how many characters each is expected to consume.
-         */
-
-        var javascriptRawInput = utils.getPrimitiveStr(this, rawInput)
-        var macroContext = createMacroConsumptionContext(this)
-        var ast = macroParsers.macroBlock(macroContext, {language: macroParsers, parser: 'rawFnInner'}).tryParse(javascriptRawInput)
-
-        // todo: ast.openingBracket needs to be passed up somehow so if there's a parsing error, the runtime can tell you it might be macro weirdness in the function's first line. This would happen either if a macro was expected to consume input and didn't, or if it was expected not to consume some output and did.
-        // todo: ast should possibly contain a whole map of macroConsumption information to use with all nested macros in a first-line situation
-
-        return LimaObject({
-            consume: NumberObj(javascriptRawInput.length),
-            arg: createJsPrimitive(ast)
-        })
-    },
-    run: function(astLimaObject) {
-        var ast = getFromJsPrimitive(astLimaObject)
-        var originalContext = this
-        return FunctionObj({
-            match: function(args) {
-                var context = {this:this.this, scope:originalContext.scope}
-                return runFunctionStatements(context, ast.match.body, ast.match.parameters, [args])
-            },
-            run: function(callInfo) {
-                var context = {this:this.this, scope:originalContext.scope}
-                return runFunctionStatements(context, ast.run.body, ast.run.parameters, [callInfo])
-            }
-        })
-    }
-})
-rawFn.name = 'rawFn'
-
     function runFunctionStatements(context, body, parameters, args) {
         var retPtr = {}
         var functionScope = {}
@@ -556,7 +515,7 @@ rawFn.name = 'rawFn'
             }
 
             while(parts.length > 0) {
-                var result = evaluate.superExpression(functionContext, parts, {allowProperties:false, implicitDeclarations:false})
+                var result = evaluate.superExpression(functionContext, parts, {inObjectSpace:false})
                 parts = result.remainingParts
                 if(retPtr.returnValue !== undefined) {
                     return retPtr.returnValue
@@ -569,7 +528,7 @@ rawFn.name = 'rawFn'
         var functionContext = {
             this: context.this,
             consumeFirstlineMacros: context.consumeFirstlineMacros,
-            scope: utils.ContextScope(
+            scope: basicUtils.ContextScope(
                 function get(name) {
                     if(name in functionScope) {
                         return functionScope[name]
@@ -583,9 +542,27 @@ rawFn.name = 'rawFn'
             )
         }
 
+        // For debug:
+        functionContext.scope._functionScope=functionScope
+        functionContext.scope._contextScope=context.scope
+
         functionScope.ret = createRetMacro(retPtr, functionContext)
 
         return functionContext
+    }
+
+    // Creates a sub-scope for get, but keeps the same set.
+    function wrapGetScope(scope, subGetScope) {
+        return basicUtils.ContextScope(
+            function get(name) {
+                if(name in subGetScope) {
+                    return subGetScope[name]
+                } else {
+                    return scope.get.apply(scope,arguments)
+                }
+            },
+            scope.set
+        )
     }
 
     function createMacroConsumptionContext(context) {
@@ -619,7 +596,7 @@ rawFn.name = 'rawFn'
             },
             run: function(infoObject) {
                 var parts = getFromJsPrimitive(infoObject)
-                var result = evaluate.superExpression(functionContext, parts, {allowProperties:false, implicitDeclarations:false})
+                var result = evaluate.superExpression(functionContext, parts, {inObjectSpace:false})
                 retPtr.returnValue = result.value
                 return nil
             }
@@ -628,45 +605,126 @@ rawFn.name = 'rawFn'
         return retMacro
     }
 
-// The macro that creates macros.
-var macroMacro = macro({
-    match: function(rawInput) {
-        var javascriptRawInput = utils.getPrimitiveStr(this, rawInput)
-        var macroContext = createMacroConsumptionContext(this)
-        var ast = macroParsers.macroBlock(macroContext, {language: macroParsers, parser: 'macroInner'}).tryParse(javascriptRawInput)
 
-        return LimaObject({
-            consume: NumberObj(javascriptRawInput.length),
-            arg: createJsPrimitive(ast)
-        })
-    },
-    run: function(astObject) {
-        /*  macro
-             match rawInput startColumn:
-                statements
-             run input:
-                statements
-        */
+function macroWithConventionsACD(name, macroParser, run) {
+    var macroObject = macro({
+        match: function(rawInput) {
+            var javascriptRawInput = utils.getPrimitiveStr(this, rawInput)
+            var macroContext = createMacroConsumptionContext(this)
+            var ast = macroParsers.macroBlock(macroContext, {language: macroParsers, parser: macroParser}).tryParse(javascriptRawInput)
 
-        var ast = getFromJsPrimitive(astObject)
-        var originalContext = this
-        var rawMacroObject = macro({
-            match: function(rawInput, startColumn) {
-                var context = {this:this.this, scope:originalContext.scope}
-                var result = runFunctionStatements(context, ast.match.body, ast.match.parameters, [rawInput, startColumn])
-                return result
-            },
-            run: function(arg) {
-                var context = {this:this.this, scope:originalContext.scope}
-                var macroReturnValue = runFunctionStatements(context, ast.run.body, ast.run.parameters, [arg])
-                return macroReturnValue
-            }
-        })
+            /* Plan:
+                If its possible the macro is a one-liner, parse the macro with an option that indicates that words on the first
+                line first line should be evaluated for macro consumption.
+                The parser should insert a `macroConsumption` ast node after any first-line value to mark how many characters
+                each is expected to consume.
+             */
+            // todo: ast.openingBracket needs to be passed up somehow so if there's a parsing error, the runtime can tell you it might be macro weirdness in the function's first line. This would happen either if a macro was expected to consume input and didn't, or if it was expected not to consume some output and did.
+            // todo: ast should possibly contain a whole map of macroConsumption information to use with all nested macros in a first-line situation
+            // todo: startColumn (and maybe the indent) needs to be passed somehow so inner macros get the right column
 
-        return Boxed(rawMacroObject)
-    }
+            return LimaObject({
+                consume: NumberObj(javascriptRawInput.length),
+                arg: createJsPrimitive(ast)
+            })
+        },
+        run: function(astLimaObject) {
+            var ast = getFromJsPrimitive(astLimaObject)
+            return run.call(this, ast)
+        }
+    })
+    macroObject.name = name
+    return macroObject
+}
+
+
+var rawFn = macroWithConventionsACD('rawFn', 'rawFnInner', function run(ast) {
+    var context = this
+    return FunctionObj({
+        match: function(args) {
+            return runFunctionStatements(context, ast.match.body, ast.match.parameters, [args])
+        },
+        run: function(callInfo) {
+            return runFunctionStatements(context, ast.run.body, ast.run.parameters, [callInfo])
+        }
+    })
 })
-macroMacro.name = 'macro'
+
+
+var macroMacro = macroWithConventionsACD('macro', 'macroInner', function run(ast, originalContext) {
+    var context = this
+    var rawMacroObject = macro({
+        match: function(rawInput, startColumn) {
+            return runFunctionStatements(context, ast.match.body, ast.match.parameters, [rawInput, startColumn])
+        },
+        run: function(arg) {
+            var macroReturnValue = runFunctionStatements(context, ast.run.body, ast.run.parameters, [arg])
+            return macroReturnValue
+        }
+    })
+
+    return Boxed(rawMacroObject)
+})
+
+
+var ifMacro = macroWithConventionsACD('macro', 'ifInner', function run(ast) {
+    for(var n=0; n<ast.length; n++) {
+        var blockItem = ast[n]
+//        var info = getBlockInfo(ast[n])
+
+        var wrappedScope = wrapGetScope(this.scope, {else:True}) // Treat "else" like true so it always matches.
+        var conditionContext = {this:this.this, scope:wrappedScope}
+        var conditionResult = evaluate.superExpression(conditionContext, blockItem.expressionBlock.parts, {endStatementAtColon:true})
+        if(conditionResult.remainingParts.length === 0) {
+            if(!blockItem.foundTrailingColon)
+                throw new Error("Invalid `if` statement, didn't find any conditional block.")
+        } else if(utils.isSpecificOperator(conditionResult.remainingParts[0], ':')) {
+            if(blockItem.foundTrailingColon)
+                throw new Error("Invalid `if` block, found invalid trailing colon in the body of a conditional block.")
+        }
+
+        if(utils.limaEquals(conditionContext, conditionResult.value, True)) {
+            if(conditionResult.remainingParts.length <= 1) {
+                return nil
+            }
+
+            // Todo: care whether you're in an object context or function context (re allowProperties and implicitDeclarations)?
+            var conditionalBody = conditionResult.remainingParts.slice(1) // Strip off the colon
+            var bodyResult = evaluate.superExpression(this, conditionalBody, {
+                allowProperties:true, implicitDeclarations:true
+            })
+
+            return bodyResult.value
+        }
+    }
+    // else
+    return nil
+})
+    // Finds the parameter (before the colon) and the body of a block (eg for `if`).
+    function getBlockInfo(blockItem) {
+        var expressionBlock = blockItem.expressionBlock
+        if(expressionBlock.parts.length === 1 && blockItem.foundTrailingColon) {
+            return {condition: expressionBlock}
+        }
+
+        for(var n=0; n<expressionBlock.parts.length; n++) {
+            var item = expressionBlock.parts[n]
+            if(utils.isSpecificOperator(item, ':')) {
+                if(blockItem.foundTrailingColon)
+                    throw new Error("Invalid `if` block, found invalid trailing colon in the body of a conditional block.")
+                var body = {type:'superExpression', parts:expressionBlock.parts.slice(n+1)}
+                expressionBlock.parts.splice(n+1)
+                return {
+                    condition: expressionBlock,
+                    body: body
+                }
+            }
+        }
+        // else
+        if(!blockItem.foundTrailingColon)
+            throw new Error("Invalid `if` statement, didn't find any conditional block.")
+    }
+
 
 
 var wout = FunctionObj({
@@ -681,30 +739,19 @@ var wout = FunctionObj({
 
 // context functions
 
-// Returns a context with a new empty object value as `this` and a ContextScope for the object's definition space
+// Returns a context with:
+    // A new empty object value as `this`.
+    // An extended ContextScope for the object's definition space. Also contains the properties:
+        // scope - An object where keys are member names and values are the members' values.
+        // object - The object the scope is bound to.
 // Those parts will be used by evaluate.resolveObjectSpace to complete the object
 var limaObjectContext = exports.limaObjectContext = function(upperScope) {
     var object = basicUtils.copyValue(emptyObj)
+    object.meta.scopes[0] = limaObjectScope(object, upperScope)
     return {
         this: object,
-        scope: utils.ContextScope(
-            function get(name) {
-                if(name in object.meta.scopes[0]) {
-                    return object.meta.scopes[0][name]
-                } else {
-                    return utils.scopeGet(upperScope,name)
-                }
-            },
-            function set(name, value, isPrivate) {
-                if(name in object.meta.scopes[0])
-                    throw new Error("Can't re-declare property "+name)
-                // todo: add support for overriding and error for overriding without the override keyword/macro/attribute
-
-                object.meta.scopes[0][name] = value
-                if(!isPrivate) // todo: change isPrivate into an attribute
-                    object.meta.privileged[name] = value
-            }
-        )
+        scope: object.meta.scopes[0],
+        inObjectSpace: true
     }
 }
 
@@ -728,10 +775,11 @@ exports.makeCoreLevel1Scope = function() {
         false: False,
         rawFn: rawFn,
         macro: macroMacro,
-        wout: wout
+        wout: wout,
+        if: ifMacro
     })
 
-    return utils.ContextScope(
+    var contextScope = basicUtils.ContextScope(
         function get(name) {
             return scope[name]
         },
@@ -741,4 +789,7 @@ exports.makeCoreLevel1Scope = function() {
             scope[name] = value
         }
     )
+
+    contextScope._scope = scope // For debug.
+    return contextScope
 }

@@ -1,0 +1,13 @@
+
+== implementation thoughts ==
+
+Overwriting of values MUST overwrite the destructor first if necessary (since that's a scenario where the destructor is called).
+
+All the operator overloading stuff is probably implementable via meta, and so are all types probably.
+Throw and while can probably be implemented with jump
+
+In javascript, exceptions will probably need to be creatively used to make jump work correctly in longjump situations.
+
+Attributes are easy to implement until you need to consider asynchronous behavior. Without asynchronous behavior, an attribute could be a simple global variable that's set at the start, and its original value replaced at the end. However, in any place where an asynchronous continuation might start, a pointer to what the attribute currently points to must be made and that attribute reset in thread-local global scope at the start of that thread.
+
+optimization: https://liberty.princeton.edu/Research/PBE/

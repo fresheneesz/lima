@@ -10,13 +10,13 @@ var normalizedTests = normalizeTests(tests)
 var failures = 0
 for(var name in normalizedTests) {
     var test = normalizedTests[name]
-    console.log(name+":\n")
+    console.log(colors.cyan(name+":\n"))
 
     try {
         var module = limaInterpreter(test.content)
         if(test.check) {
             if(test.check(module)) {
-                console.log("success!")
+                console.log(colors.green("success!"))
             } else {
                 failures++
                 console.log(colors.red("Failed for:"))
@@ -31,7 +31,7 @@ for(var name in normalizedTests) {
     } catch(e) {
         if(test.shouldFail) {
             if(test.shouldFail === true || e.message.indexOf(test.shouldFail) !== -1) {
-                console.log("Correctly failed!")
+                console.log(colors.green("Correctly failed!"))
             } else {
                 failures++
                 console.log(colors.red(

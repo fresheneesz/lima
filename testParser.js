@@ -5,11 +5,12 @@ var colors = require("colors/safe")
 
 var limaParser = require("./src/parser")
 var macroParsers = require("./src/macroParsers")
+var basicUtils = require("./src/basicUtils")
 var tests = require("./tests/parserTests")
 var macroParserTests = require("./tests/macroParserTests")
 var testUtils = require("./tests/testUtils")
 
-var tests = {
+var tests = basicUtils.merge({
     indentedWs: tests.indentedWsTests,
     indent: tests.indentTests,
     comment: tests.commentTests,
@@ -28,15 +29,9 @@ var tests = {
     object: tests.objectTests,
     module: tests.moduleTests,
     macro: tests.macroTests,
-
-    "macroParsers.innerBlock": macroParserTests.innerBlockTests,
-    "macroParsers.macroBlock": macroParserTests.macroBlockTests,
-    "macroParsers.rawFnInnerBlock": macroParserTests.rawFnInnerBlockTests,
-    "macroParsers.rawFnInner": macroParserTests.rawFnInnerTests,
-    "macroParsers.indentedBlock": macroParserTests.indentedBlockTests,
-    "macroParsers.retStatement": macroParserTests.retStatementTests,
-    "macroParsers.macroInner": macroParserTests.macroInnerTests,
-}
+},  basicUtils.objMap(macroParserTests, function(key, value) {
+    return {key:'macroParsers.'+key, value:value}
+}))
 
 
 
@@ -103,7 +98,7 @@ for(var method in tests) {
 var failures = 0
 normalizedTests.forEach(function(testItem) {
     if(testItem.title) {
-        console.log(' '+testItem.title+":\n")
+        console.log(colors.cyan(' '+testItem.title+":\n"))
     } else {
         try {
             var methodParts = testItem.method.split('.')
@@ -134,21 +129,21 @@ normalizedTests.forEach(function(testItem) {
                 if('expectedResult' in testItem && testItem.expectedResult !== testUtils.anything) {
                     var normalizedExpectedResult = normalizeExpectedResult(testItem.expectedResult, result)
                     if(deepEqual(result,normalizedExpectedResult, {strict:true})) {
-                        console.log('./ - '+util.inspect(result, {depth:null}))
+                        console.log(colors.green('./ - '+util.inspect(result, {depth:null})))
                     } else {
                         failures++
                         console.log(colors.red("X - Got unexpected result for "+JSON.stringify(testItem.content)+"!!!"))
-                        console.log("Expected: "+util.inspect(normalizedExpectedResult, {depth:null}))
+                        console.log(colors.magenta("Expected: "+util.inspect(normalizedExpectedResult, {depth:null})))
                         console.log(colors.red("Got: "))
                         console.log(colors.red(util.inspect(result, {depth:null})))
                     }
                 } else {
-                    console.log(util.inspect(result, {depth: null}))
+                    console.log(colors.green(util.inspect(result, {depth: null})))
                 }
             }
         } catch(e) {
             if(testItem.shouldFail) {
-                console.log("Correctly failed!")
+                console.log(colors.green("Correctly failed!"))
             } else {
                 failures++
                 console.log(colors.red("Error for: "+JSON.stringify(testItem.content)))
@@ -165,7 +160,6 @@ if(failures > 0) {
 } else {
     console.log(colors.green("---"+testUtils.successMessage()+"---"))
 }
-
 
 function normalizeExpectedResult(expectedResult, actualResult) {
     if(expectedResult === testUtils.anything) {

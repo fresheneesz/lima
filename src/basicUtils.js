@@ -2,18 +2,21 @@
 var copyValue = exports.copyValue = function(value) {
     var containerCopy = {type:'any',const:false, meta:{}}
     Object.defineProperty(containerCopy,'_d',Object.getOwnPropertyDescriptor(value,'_d'));
-    overwriteValue(containerCopy.meta, value.meta)
+    overwriteValue(containerCopy, value)
 
     return containerCopy
 }
 // Source and destination should both be the meta property of a lima object.
-var overwriteValue = exports.overwriteValue = function(destination, source) {
+var overwriteValue = exports.overwriteValue = function(destinationObject, sourceObject) {
+    var destination = destinationObject.meta
+    var source = sourceObject.meta
+
     //destination.interfaces = value.interfaces
     destination.primitive = source.primitive
     destination.elements = source.elements
     destination.macro = source.macro
     destination.destructors = source.destructors.slice(0)
-    destination.privileged = copyScope(source.privileged, destination, source)
+    destination.privileged = merge({}, source.privileged)
     destination.properties = {}
     for(var hashcode in source.properties) {
         var props = source.properties[hashcode]
@@ -30,7 +33,7 @@ var overwriteValue = exports.overwriteValue = function(destination, source) {
     copyOperators(destination, source, 'postOperators')
     destination.scopes = []
     source.scopes.forEach(function(scope) {
-        destination.scopes.push(copyScope(scope, destination, source))
+        destination.scopes.push(copyScope(scope, destinationObject, sourceObject))
     })
 }
     function copyOperators(destination, source, optype) {
@@ -44,13 +47,13 @@ var overwriteValue = exports.overwriteValue = function(destination, source) {
         }
     }
 
-    // scope - an object where keys are primitive string names and values are lima objects
-    // returns a new scope where each value is a copy of the values in `scope`
-    function copyScope(scope, destination, source) {
-        var newScope = {}
-        for(var name in scope) {
-            newScope[name] = copyValue(scope[name])
-            rebindFunctions(newScope[name], destination, source)
+    // scope - An object where keys are primitive string names and values are lima objects.
+    // Returns a new scope.
+    function copyScope(scope, destinationObj, sourceObj) {
+        var newScope = {get: scope.get, set:scope.set, scope: {}, object:destinationObj}
+        for(var name in scope.scope) {
+            newScope.scope[name] = copyValue(scope.scope[name])
+            rebindFunctions(newScope.scope[name], destinationObj, sourceObj)
         }
         return newScope
     }
@@ -65,6 +68,18 @@ var overwriteValue = exports.overwriteValue = function(destination, source) {
         }
     }
 
+// Returns a context scope - the same type of value `evaluate.superExpression` takes as its `scope` parameter.
+// getFromScope(name)
+// setOnScope(name, value, private)
+exports.ContextScope = function(getFromScope, setOnScope) {
+    return {
+        get:function() {
+            return getFromScope.apply(this, arguments)
+        }, set:function() {
+            return setOnScope.apply(this, arguments)
+        }
+    }
+}
 
 exports.strMult = function(str, multiplier) {
 	var result = [];
@@ -75,10 +90,20 @@ exports.strMult = function(str, multiplier) {
 }
 
 // merges a number of objects into the object passed as the first parameter
-exports.merge = function(a/*, b,...*/) {
+var merge = exports.merge = function(a/*, b,...*/) {
     for(var n=1; n<arguments.length; n++) {
         Object.assign(a,arguments[n])
     }
 
     return a
+}
+
+// mapFn(key, value) - Should return an object with `key` and `value` properties.
+exports.objMap = function(obj, mapFn) {
+    var result = {}
+    for(var k in obj) {
+        var mapResult = mapFn(k, obj[k])
+        result[mapResult.key] = mapResult.value
+    }
+    return result
 }

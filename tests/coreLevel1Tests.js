@@ -1,10 +1,19 @@
 
-var coreLevel1 = require("../src/coreLevel1")
+var coreLevel1 = require("../src/coreLevel1b")
 var utils = require("../src/utils")
 
 
 var tests = exports.tests = {
 
+
+
+//    ifConditionalProperty1: {
+//        content:'if true: a:1',
+//        check: function(module) {
+//            var element0 = utils.getProperty({this:module}, coreLevel1.StringObj('a'))
+//            return isSpecificInt(element0, 1)
+//        }
+//    },
 
     //*
     emptySource:                    "",
@@ -397,8 +406,9 @@ var tests = exports.tests = {
         content:'a=5 a::9',
         check: function(module) {
             var property = getFirstProperty(module)
-            var privilegedMember = module.meta.privileged.a
-            return Object.keys(module.meta.properties).length === 1 // only one property
+            var privilegedMember = module.meta.scopes[0].scope.a
+            return module.meta.privileged.a === true
+                && Object.keys(module.meta.properties).length === 1 // only one property
                 && Object.keys(module.meta.privileged).length === 1 // only one additional privileged member
                 && isSpecificInt(privilegedMember, 5)
                 && isSpecificInt(property.key, 5)
@@ -406,8 +416,9 @@ var tests = exports.tests = {
         }
     },
     implicitVariableCreation: {content:'a = 5', check: function(module) {
-        var member = module.meta.privileged['a']
-        return member.meta.primitive.numerator === 5
+        var privilegedMember = module.meta.scopes[0].scope.a
+        return module.meta.privileged.a === true
+            && privilegedMember.meta.primitive.numerator === 5
     }},
 
     // A case where the end paren has to be resolved in a nonmacro expression continuation
@@ -456,14 +467,15 @@ var tests = exports.tests = {
     }},
     implicitVariableCreation_object: {content:'{a = 5}', check: function(module) {
         var element0 = getFirstProperty(module).value
-        var member = element0.meta.privileged['a']
-        return member.meta.primitive.numerator === 5
+        var member = element0.meta.scopes[0].scope['a']
+        return element0.meta.privileged['a'] === true
+            && member.meta.primitive.numerator === 5
     }},
     doubleColonVariableKey_object: {
         content:'{a=5 a::9}',
         check: function(module) {
             var object = getFirstProperty(module).value
-            var privilegedMember = object.meta.privileged.a
+            var privilegedMember = object.meta.scopes[0].get('a')
             var property = getFirstProperty(object)
             return Object.keys(object.meta.properties).length === 1 // only one property
                 && Object.keys(object.meta.privileged).length === 1 // only one additional privileged member
@@ -779,7 +791,7 @@ var tests = exports.tests = {
     basicRawFunctionValue1p2: {                // From convention A.
         content:'a = rawFn\n'+
                 ' match \n' +
-                '  a: ' +
+                '  a: \n' +
                 '  ret {arg:a[0]}\n'+
                 ' run a:   \n' +
                 '  ret a+4\n'+
@@ -967,6 +979,112 @@ var tests = exports.tests = {
 //            return isSpecificInt(startColumn, 33)
 //        }
 //    },
+
+
+    // if
+
+    basicIfNoFirstline: {
+        content:'if \n' +
+                ' true:\n' +
+                '  x = 1\n'+
+                ' else:   \n' +
+                '  x = 2\n'+
+                'x',
+        check: function(module) {
+            var element0 = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
+            return isSpecificInt(element0, 1)
+        }
+    },
+    basicIfOneFirstlineCond: {
+        content:'if  true:\n' +  // Ensuring two spaces is ok here.
+                '  x = 1\n'+
+                ' else:   \n' +
+                '  x = 2\n'+
+                'x',
+        check: function(module) {
+            var element0 = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
+            return isSpecificInt(element0, 1)
+        }
+    },
+    basicIfOneFirstlineBlock: {
+        content:'if true: x = 1\n'+
+                ' else:   \n' +
+                '  x = 2\n'+
+                'x',
+        check: function(module) {
+            var element0 = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
+            return isSpecificInt(element0, 1)
+        }
+    },
+    basicIfTwoFirstlineBlocks: {
+        content:'if true: x=1 else: x=2\n'+
+                'x',
+        check: function(module) {
+            var element0 = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
+            return isSpecificInt(element0, 1)
+        }
+    },
+
+    ifReturnValue: {
+        content:'if true: 1 else: 2',
+        check: function(module) {
+            var element0 = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
+            return isSpecificInt(element0, 1)
+        }
+    },
+    ifConditionalProperty1: {
+        content:'if true: a:1',
+        check: function(module) {
+            var element0 = utils.getProperty({this:module}, coreLevel1.StringObj('a'))
+            return isSpecificInt(element0, 1)
+        }
+    },
+    ifElse: {
+        content:'if false: a:1 else: a:2',
+        check: function(module) {
+            var element0 = utils.getProperty({this:module}, coreLevel1.StringObj('a'))
+            return isSpecificInt(element0, 2)
+        }
+    },
+
+    basicIfInsideFunction: {
+        shouldFail:true,
+        content:'a = rawFn match a: \n' + // Because this isn't indented from the start of the parameter set.
+                '  ret {arg:a}\n'+
+                ' run a:   \n' +
+                '  if a==true: ret true' +
+                '   else:   ret false\n'+
+                'a[1]',
+        check: function(module) {
+            var element0 = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
+            return isSpecificInt(element0, 1)
+        }
+    },
+
+        // Should fail:
+
+    basicIfAlreadyDeclaredVariablesObjectScope: {
+        content:'x = 5\n'+
+                'if true: x=1 else: x=2\n',
+        check: function(module) {
+            var element0 = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
+            return isSpecificInt(element0, 1)
+        }
+    },
+    basicIfInsideFunctionUndeclaredVariable: {
+        shouldFail:true,
+        content:'a = rawFn match a: \n' + // Because this isn't indented from the start of the parameter set.
+                '  ret {arg:a}\n'+
+                ' run a:   \n' +
+                '  if a==true: x=5' +
+                '   else:   x=99\n'+
+                '  ret x\n'+
+                'a[1]',
+        check: function(module) {
+            var element0 = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
+            return isSpecificInt(element0, 1)
+        }
+    },
 
 
     // other

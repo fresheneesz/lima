@@ -8,9 +8,7 @@ var innerBlockTests = []
 var macroBlockTests=[]
 var rawFnInnerBlockTests=[], rawFnInnerTests = [], indentedBlockTests = []
 var retStatementTests=[]
-var macroInnerTests=[]
-
-
+var macroInnerTests=[], ifInnerBlockTests=[]
 
 
 //*
@@ -178,12 +176,25 @@ macroInnerTests.inputs[
               needsEndParen: false } ] } }
 
 
+ifInnerBlockTests = {inputs: {}, state: {indent: 0, scope:{get:function(name) {
+    if(name === 'true') return 1
+}}}}
+ifInnerBlockTests.inputs[
+    " 1:"
+] =
+    { body: [],
+      parameters: { numerator: 1, denominator: 1, type: 'number' } }
+
+
 //*/
 
-exports.innerBlockTests = innerBlockTests
-exports.macroBlockTests = macroBlockTests
-exports.rawFnInnerBlockTests = rawFnInnerBlockTests
-exports.rawFnInnerTests = rawFnInnerTests
-exports.retStatementTests = retStatementTests
-exports.indentedBlockTests = indentedBlockTests
-exports.macroInnerTests = macroInnerTests
+module.exports = {
+    innerBlock: innerBlockTests,
+    macroBlock: macroBlockTests,
+    rawFnInnerBlock: rawFnInnerBlockTests,
+    rawFnInner: rawFnInnerTests,
+    retStatement: retStatementTests,
+    indentedBlock: indentedBlockTests,
+    macroInner: macroInnerTests,
+    ifInnerBlock:ifInnerBlockTests
+}

@@ -1,4 +1,5 @@
-var coreLevel1 = require("./coreLevel1")
+
+var coreLevel1 = require("./coreLevel1b")
 var basicUtils = require("./basicUtils")
 
 
@@ -24,12 +25,6 @@ var Scope = exports.Scope = function(upperScope, innerScope) {
         return dest
     }
 
-// returns a context scope - the same type of value `evaluate.superExpression` takes as its `scope` parameter
-// getFromScope(name)
-// setOnScope(name, value, private)
-var ContextScope = exports.ContextScope = function(getFromScope, setOnScope) {
-    return {get:getFromScope, set:setOnScope}
-}
 
 var blockCallingScope = exports.blockCallingScope = {
     get: function() {
@@ -62,13 +57,16 @@ var scopeGet = exports.scopeGet = function(scope, name) {
             // For non-macro bracket operators, the first operand should be the main object, and the second operand should be
                 // an `arguments` object of the same type `getOperatorDispatch` takes.
     // operatorType - Either 'prefix', 'postfix', or undefined (for binary)
-var callOperator = exports.callOperator = function(context, operator, operands, operatorType) {
+    // options
+        // inObjectScope
+var callOperator = exports.callOperator = function(context, operator, operands, operatorType, options) {
     // todo: implement chaining and multiple dispatch
     var callingScope = context.scope
     var consumeFirstlineMacros = context.consumeFirstlineMacros
     var operatorsKey = 'operators'
     if(operatorType === 'prefix') operatorsKey = 'preOperators'
     else if(operatorType === 'postfix') operatorsKey = 'postOperators'
+    if(!options) options = {}
 
     // Unbox if necessary.
     function unboxOperand(operand, unboxedOperands) {
@@ -151,11 +149,11 @@ var callOperator = exports.callOperator = function(context, operator, operands, 
         var run = dispatchInfo.operatorInfo.dispatch.run
     }
 
-    var context = {this: thisContext, scope: callingScope, consumeFirstlineMacros:consumeFirstlineMacros}
+    var contextToPass = {this: thisContext, scope: callingScope, consumeFirstlineMacros:consumeFirstlineMacros}
     if(args !== undefined) {
-        var runArgs = getRunArgsFromMatch(context, match, args, operator)
+        var runArgs = getRunArgsFromMatch(contextToPass, match, args, operator)
 
-        var matchResult = applyOperator(match, context, args)
+        var matchResult = applyOperator(match, contextToPass, args)
         if(isNil(matchResult)) throw new Error("Arguments don't match.")
         var runArgs = getProperty({this:matchResult, scope:blockCallingScope}, coreLevel1.StringObj('arg'))
         if(runArgs === coreLevel1.nil) {
@@ -163,7 +161,7 @@ var callOperator = exports.callOperator = function(context, operator, operands, 
         }
     }
 
-    return applyOperator(run, context, runArgs)
+    return applyOperator(run, contextToPass, runArgs)
 }
     function applyOperator(run, context, args) {
         var returnValue = run.call(context, args)
@@ -223,7 +221,9 @@ var getBinaryDispatch = exports.getBinaryDispatch = function(operand1, operator,
         // weak - True if the matching parameters are weak dispatch.
     function getOperatorDispatch(object, operator, args) {
         var operatorInfo = object.meta.operators[operator]
-        var context = {this:object}
+        if(operatorInfo === undefined) return
+
+        var context = {this:object, scope:object.meta.scopes[operatorInfo.scope]}
         var matchResult = operatorInfo.dispatch.match.call(context, args)
         if(!isNil(matchResult)) {
             var result = {
@@ -421,7 +421,7 @@ var getValueString = exports.getValueString = function(value, isKey) {
             })
         }
         for(var key in value.meta.privileged) {
-            var privilegedProperty = value.meta.privileged[key]
+            var privilegedProperty = value.meta.scopes[0].get(key)
             propertyStrings.push(key+":"+getValueString(privilegedProperty))
         }
 

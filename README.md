@@ -9,8 +9,9 @@ A highly expressive C-family general purpose programming language that frees the
 These are all under the `src/` directory.
 
 * **interpreter.js** - The entrypoint for the interpreter. Takes a string and executes it as a lima program.
-* **coreLevel1.js** - Contains the unsimplifiable set of core lima constructs. This includes some (incomplete) basic values (like `nil`, `{}`, `0`, and `""`) as well as some functions that return lima objects when given the AST node for that object. The incomplete values are completed by coreLevel2.lima .
-* **coreLevel2.lima** - Contains lima code that completes the incomplete core constructs from `coreLevel1.js`. For example, while `coreLevel1.js` defines object literals, things like the `str` member or the `has` method for objects are defined in `coreLevel2.lima`. Core level 1 and core level 2 taken together have everything in the spec other than the "standard library" objects.
+* **coreLevel1a.js** - Contains the most basic lima constructs needed for defaults in things like `Context.js`.
+* **coreLevel1b.js** - Contains the unsimplifiable set of core lima constructs. This includes some (incomplete) basic values (like `nil`, `{}`, `0`, and `""`) as well as some functions that return lima objects when given the AST node for that object. Exposes everything exposed in coreLevel1a.js. The incomplete values are completed by coreLevel2.lima .
+* **coreLevel2.lima** - Contains lima code that completes the incomplete core constructs from `coreLevel1b.js`. For example, while `coreLevel1b.js` defines object literals, things like the `str` member or the `has` method for objects are defined in `coreLevel2.lima`. Core level 1 and core level 2 taken together have everything in the spec other than the "standard library" objects.
 * **evaluate.js** - Contains the logic around evaluating operators on lima objects, and evaluting superExpressions and objects.
 * **utils.js** - Contains utility functions mostly around interacting with lima objects, composing lima objects, and higher-level functions for evaluating lima objects.
 * **basicUtils.js** - Utilities that don't depend on any other module. Currently only contains `copyValue`. Exists to avoid a circular dependency.
@@ -34,9 +35,9 @@ These are all under the `src/` directory.
 #### Level 1 Interpreter
 1. Parse the source with `parser.js` into an AST
 2. `evaluate`
-	* Evaluate uses coreLevel1 to construct values that end up in the evaluation result.
+	* Evaluate uses coreLevel1b to construct values that end up in the evaluation result.
 	* Evaluate also uses `parser.js` to parse rawExpressions still in the AST if they're not evaluated by a macro.
-3. Turn the result of that evaluation into an object with `coreLevel1`.
+3. Turn the result of that evaluation into an object with `coreLevel1b`.
 
 #### Level 2 Interpreter
 1. Render a level 2 core scope `coreLevel2.lima` using the Level 1 Interpreter.
@@ -180,7 +181,8 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 	* condType
 	* error about undeclared variables in functions
 * macro
-    * `startColumn` parameter
+  * `startColumn` parameter for nested macros.
+  * Validate consumption for nested macros.
 * interfaces
   * automatic interface promotion
   * cast
@@ -232,6 +234,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
     * throw
     * try
     * atry
+    * mix
     * rawthread
     * atomic
     * change
@@ -307,7 +310,6 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * `::` with expression keys
   * implicitly declared privileged members (with var type)
 * fn.raw function creation
-* macro
 
 #### Migrations from Core Level 1 to Level 2
 

@@ -1,7 +1,7 @@
 
 var utils = require("./utils")
 var basicUtils = require("./basicUtils")
-var coreLevel1 = require("./coreLevel1")
+var coreLevel1 = require("./coreLevel1b")
 
 // CONVENTIONS:
     // all functions beginning with 'resolve' take in the current state and the current index and
@@ -77,6 +77,7 @@ var resolveObjectSpace = function(context, curState, n, isObjectEnd, implicitDec
 // options
     // allowProperties - If true, colon assignments can create properties.
     // implicitDeclarations - If true, undeclared variables that are set on the scope are declared as var typed variables.
+    // endStatementAtColon - If true, the colon operator will act as a delimiter and will be the first item returned in remainingParts.
 // returns an object with the properties:
     // value - the resulting value of the expression
     // remainingParts - The parts of any additional expressions in this superExpression
@@ -89,11 +90,11 @@ var superExpression = function(context, parts, options) {
     // resolve parens, dereference operators, and unary operators
     var curIndex = 0
     while(curIndex !== undefined) {
-        curIndex = resolveBinaryOperandFrom(context, curState, curIndex, options.allowProperties, options.implicitDeclarations)
+        curIndex = resolveBinaryOperandFrom(context, curState, curIndex, options)
     }
 
     // resolve binary operators
-    resolveBinaryOperations(context, curState, options.allowProperties, options.implicitDeclarations)
+    resolveBinaryOperations(context, curState, options)
 
     return {
         value: curState[0],
@@ -110,7 +111,8 @@ exports.resolveObjectSpace = function(context, curState, n, isObjectEnd, implici
     return resolveObjectSpace(context, utils.cloneJsValue(curState), n, isObjectEnd, implicitDeclarations)
 }
 
-function resolveBinaryOperations(context, curState, allowProperties, implicitDeclarations) {
+// options - Same options as superExpression gets.
+function resolveBinaryOperations(context, curState, options) {
     var curIndex = 0
     while(true) {
         var operand1 = curState[curIndex]
@@ -120,13 +122,17 @@ function resolveBinaryOperations(context, curState, allowProperties, implicitDec
         var operand3 = curState[curIndex+4]
 
         if(operand1 && operand2 && utils.isOperatorOfType(operator1, 'binary')) {
+            if(options.endStatementAtColon && utils.isSpecificOperator(operator1, ':')) {
+                return // No more binary operators.
+            }
+
             var operator1ValueForOpInfo = operand1
             if(utils.isNodeType(operand1, 'variable')) {
                 operator1ValueForOpInfo = coreLevel1.nil
             }
-            var operator1Info = getOperatorInfo(operand1, operator1, operand2, allowProperties)
+            var operator1Info = getOperatorInfo(operand1, operator1, operand2, options.allowProperties)
             if(operand3 && !utils.isNodeType(operand3, 'operator') && utils.isOperatorOfType(operator2, 'binary')) {
-                var operator2Info = getOperatorInfo(operand2, operator2, operand3, allowProperties)
+                var operator2Info = getOperatorInfo(operand2, operator2, operand3, options.allowProperties)
                 var op1Order = combinedOrder(operator1Info)
                 var op2Order = combinedOrder(operator2Info)
 
@@ -180,7 +186,7 @@ function resolveBinaryOperations(context, curState, allowProperties, implicitDec
                     var returnValue = coreLevel1.nil
                 } else {
                     if(utils.isNodeType(operand1, 'variable')) {
-                        if(implicitDeclarations) {
+                        if(options.implicitDeclarations) {
                             if(operator1.operator === '=') {
                                 var newValue = basicUtils.copyValue(coreLevel1.nil)
                                 newValue.name = operand1.name
@@ -191,7 +197,7 @@ function resolveBinaryOperations(context, curState, allowProperties, implicitDec
                             } else if(utils.isReferenceAssignmentOperator(operator1)) {
                                 throw new Error("~> operator not yet supported.")
                             } else {
-                                throw new Error("Variable "+operator1.name+" not defined.")
+                                throw new Error("Variable "+operand1.name+" not defined.")
                             }
                         } else {
                             throw new Error("Variable "+operand1.name+" not defined.")
@@ -199,7 +205,7 @@ function resolveBinaryOperations(context, curState, allowProperties, implicitDec
                     }
 
                     // When implicitDeclarations is true, reassignments to values in scope are illegal
-                    if(implicitDeclarations && !allowReassignment && operator1.operator === '=') {
+                    if(options.implicitDeclarations && !allowReassignment && operator1.operator === '=') {
                         throw new Error("Variable "+operand1.name+" can't be redefined.")
                     }
 
@@ -268,9 +274,9 @@ function resolveBinaryOperations(context, curState, allowProperties, implicitDec
         }
     }
 
-// resolves non-binary operators and condenses the curState into a set of binary operations
-// returns the next index to resolve from, or undefined if the expression is over
-function resolveBinaryOperandFrom(context, curState, index, allowProperties, implicitDeclarations) {
+// Resolves non-binary operators and condenses the curState into a set of binary operations.
+// Returns the next index to resolve from, or undefined if the expression is over.
+function resolveBinaryOperandFrom(context, curState, index, options) {
     var n=index
     while(n<curState.length) {
         var item = curState[n]
@@ -282,7 +288,8 @@ function resolveBinaryOperandFrom(context, curState, index, allowProperties, imp
             if(utils.isNodeType(item, 'variable')) {
                 var variableValue = utils.scopeGet(context.scope, item.name)
                 if(variableValue === undefined) {
-                    if(nextItemExists && utils.isNodeType(nextItem, 'rawExpression')) { // previously unevaluted stuff because the variable might have been a macro
+                    // Previously unevaluted stuff because the variable might have been a macro:
+                    if(nextItemExists && utils.isNodeType(nextItem, 'rawExpression')) {
                         resolveNonmacroRawExpression(context, curState, n+1)
                     }
                     n++
@@ -290,10 +297,10 @@ function resolveBinaryOperandFrom(context, curState, index, allowProperties, imp
                     curState[n] = variableValue
                 }
             } else if(utils.isNode(item)) {
-                resolveValue(context, curState, n, allowProperties, implicitDeclarations, true)
+                resolveValue(context, curState, n, options.allowProperties, options.implicitDeclarations, true)
             } else if(utils.isMacro(item) && !(nextItemExists && utils.isSpecificOperator(nextItem,'~') && nextItem[1] === 'postfix')) {
                 resolveMacro(context, curState, n)
-            } else if(nextItemExists && utils.isNodeType(nextItem, 'rawExpression')) { // previously unevaluted stuff because the variable might have been a macro
+            } else if(nextItemExists && utils.isNodeType(nextItem, 'rawExpression')) { // Previously unevaluted stuff because the variable might have been a macro.
                 resolveNonmacroRawExpression(context, curState, n+1)
             } else if(nextItemExists && utils.isDereferenceOperator(nextItem)) {
                 resolveDereferenceOperation(context, curState, n)
@@ -305,7 +312,7 @@ function resolveBinaryOperandFrom(context, curState, index, allowProperties, imp
                     if(utils.hasOperatorOfType(item, nextItem, 'postfix')) {
                         resolveUnaryOperator(context.scope, curState, n, 'postfix')
                     } else if(utils.hasOperatorOfType(item, nextItem, 'binary')) {
-                        return n+2   // go to the next binary operand
+                        return n+1   // Next item.
                     } else { // the is a new expression
                         return undefined
                     }
@@ -313,6 +320,8 @@ function resolveBinaryOperandFrom(context, curState, index, allowProperties, imp
                    return undefined  // the end, no next item
                 }
             }
+        } else if(options.endStatementAtColon && utils.isSpecificOperator(item, ':')) {
+            return undefined
         } else {
             n++
         }
@@ -413,7 +422,7 @@ function resolveBinaryOperandFrom(context, curState, index, allowProperties, imp
         }
 
         var arg = utils.getProperty({this:consumeResult}, coreLevel1.StringObj('arg'))
-        var runResult = utils.callOperator(context, '[', [macroObject.meta.macro.run, arg])
+        var runResult = utils.callOperator(context, '[', [macroObject.meta.macro.run, arg], undefined, true)
 
         curState[valueItemIndex] = runResult
         rawExpression.expression = rawExpression.expression.slice(consumedChars)
