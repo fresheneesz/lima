@@ -21,10 +21,10 @@ var emptyScope = {get: function() {}}
     // All parsers consume some input. If you want to optionally consume input,
         // the calling parser should specify `many`, `atMost`, etc.
 // state
-    // scope - A lima scope object with `get` and `set`. Only used when consumeFirstlineMacros is true.
+    // context - A Context object. Only used when consumeFirstlineMacros is true.
     // consumeFirstlineMacros - If true, macros will be consumed on the first line of the construct being parsed.
     //                          Also, if true, macros that aren't found in scope will be assumed not to be macros.
-var L = P.createLanguage({/*scope:{}, */consumeFirstlineMacros: false}, {
+var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
 
 	// expressions
 
@@ -215,13 +215,15 @@ var L = P.createLanguage({/*scope:{}, */consumeFirstlineMacros: false}, {
         return alt(
             this.value().mark().chain(function(v) {
                 if(this.state.consumeFirstlineMacros && v.value.type === 'variable') {
-                    var value = utils.scopeGet(this.state.scope, v.value.name)
-                    if(value !== undefined && value.meta.macro !== undefined) {
-                        // Evaluate macro consumption.
-                        //var startColumn = v.end.column-this.state.indent+1 // The +1 because the end.column is 1 behind the start column.
-                        return this.macro(value/*, startColumn*/).map(function(parts) {
-                            return [v.value].concat(parts)
-                        })
+                    if(this.state.context.has(v.value.name)) {
+                        var value = this.state.context.get(v.value.name)
+                        if(value.meta.macro !== undefined) {
+                            // Evaluate macro consumption.
+                            //var startColumn = v.end.column-this.state.indent+1 // The +1 because the end.column is 1 behind the start column.
+                            return this.macro(value/*, startColumn*/).map(function(parts) {
+                                return [v.value].concat(parts)
+                            })
+                        }
                     }
                 }
                 // else
@@ -255,9 +257,11 @@ var L = P.createLanguage({/*scope:{}, */consumeFirstlineMacros: false}, {
         // Returns a macroConsumption node.
         macro: function(macro, startColumn) {
             return P(function(input, i) {
-                var context = {scope:this.state.scope, consumeFirstlineMacros:this.state.consumeFirstlineMacros}
-                var consumeResult = utils.consumeMacro(context, macro, input.slice(i))
-                var consumedCharsLimaValue = utils.getProperty({this:consumeResult}, coreLevel1.StringObj('consume'))
+                var startColumn = '??'    // todo: support startColumn
+                // Create a new context with consumeFirstlineMacros potentially set to false (if the first line has passed)
+                var newContext = this.state.context.newStackContext(this.state.context.scope, this.state.consumeFirstlineMacros)
+                var consumeResult = utils.consumeMacro(newContext, macro, input.slice(i), startColumn)
+                var consumedCharsLimaValue = utils.getProperty(this.state.context, consumeResult, coreLevel1.StringObj('consume'))
                 var consumedChars = consumedCharsLimaValue.meta.primitive.numerator
                 var consumedString = input.slice(i, i+consumedChars)
                 maybeUnsetFirstline(this, consumedString)

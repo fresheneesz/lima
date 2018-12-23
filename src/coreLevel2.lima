@@ -236,7 +236,7 @@ df itemsToLock item:
 //                for(var n=0; n<ast.length; n++) {
 //                    var block = ast[n]
 //                    var blockInfo = evaluate.fnParams(block)
-//                    var normalizedArgs = utils.getNormalizedArgs(this.this, blockInfo.params, args)
+//                    var normalizedArgs = utils.getNormalizedArgs(this.get('this'), blockInfo.params, args)
 //                    if(normalizedArgs !== undefined) {
 //                        return {
 //                            args: normalizedArgs,

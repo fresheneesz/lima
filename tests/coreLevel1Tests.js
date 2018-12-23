@@ -2,18 +2,18 @@
 var coreLevel1 = require("../src/coreLevel1b")
 var utils = require("../src/utils")
 
+var inaccessibleScope = require("../src/Context").inaccessibleScope
+function getProperty(obj, key) {
+    return utils.getProperty(inaccessibleScope, obj, key)
+}
+function getPropertyOld(oldScope, key) { // deprecated
+    return getProperty(oldScope.this, key)
+}
 
 var tests = exports.tests = {
 
 
 
-//    ifConditionalProperty1: {
-//        content:'if true: a:1',
-//        check: function(module) {
-//            var element0 = utils.getProperty({this:module}, coreLevel1.StringObj('a'))
-//            return isSpecificInt(element0, 1)
-//        }
-//    },
 
     //*
     emptySource:                    "",
@@ -22,7 +22,7 @@ var tests = exports.tests = {
     printReal:                      "wout[3.3]\r\n",
     twoStatements:                  "wout['hello world']\n" +
                                     "wout[3]",
-    threeStatements:                "wout[3]\n" +     // this was failing for some unknown reason
+    threeStatements:                "wout[3]\n" +     // This was failing for some unknown reason.
                                     "x = 4\n" +
                                     "wout[x]",
     twoStatementsOnALine:           "wout[3] wout[4]",
@@ -406,19 +406,24 @@ var tests = exports.tests = {
         content:'a=5 a::9',
         check: function(module) {
             var property = getFirstProperty(module)
-            var privilegedMember = module.meta.scopes[0].scope.a
-            return module.meta.privileged.a === true
+            var privilegedMemberDirect = module.meta.privileged.a
+            var privilegedMemberViaScope = module.meta.scopes[0].get('a')
+
+            return Object.keys(module.meta.privileged).length === 1 // Only one additional privileged member.
+                && isSpecificInt(privilegedMemberViaScope, 5)
+                && isSpecificInt(privilegedMemberDirect, 5) === true
+                && privilegedMemberViaScope === privilegedMemberDirect // They're the same object.
                 && Object.keys(module.meta.properties).length === 1 // only one property
-                && Object.keys(module.meta.privileged).length === 1 // only one additional privileged member
-                && isSpecificInt(privilegedMember, 5)
                 && isSpecificInt(property.key, 5)
                 && isSpecificInt(property.value, 9)
         }
     },
     implicitVariableCreation: {content:'a = 5', check: function(module) {
-        var privilegedMember = module.meta.scopes[0].scope.a
-        return module.meta.privileged.a === true
-            && privilegedMember.meta.primitive.numerator === 5
+        var privilegedMemberDirect = module.meta.privileged.a
+        var privilegedMemberViaScope = module.meta.scopes[0].get('a')
+        return Object.keys(module.meta.privileged).length === 1
+            && isSpecificInt(privilegedMemberViaScope, 5)
+            && isSpecificInt(privilegedMemberDirect, 5) === true
     }},
 
     // A case where the end paren has to be resolved in a nonmacro expression continuation
@@ -445,14 +450,14 @@ var tests = exports.tests = {
     // object literal creation:
 
     oneElement_object:    {content:'{5}', check: function(module) {
-        var object = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
-        var element0 = utils.getProperty({this:object}, coreLevel1.NumberObj(0))
+        var object = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
+        var element0 = getPropertyOld({this:object}, coreLevel1.NumberObj(0))
         return isSpecificInt(element0, 5)
     }},
     multipleElements_object:    {content:'{5 6}', check: function(module) {
-        var object = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
-        var element0 = utils.getProperty({this:object}, coreLevel1.NumberObj(0))
-        var element1 = utils.getProperty({this:object}, coreLevel1.NumberObj(1))
+        var object = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
+        var element0 = getPropertyOld({this:object}, coreLevel1.NumberObj(0))
+        var element1 = getPropertyOld({this:object}, coreLevel1.NumberObj(1))
         return isSpecificInt(element0, 5) && isSpecificInt(element1, 6)
     }},
     singleColonLiteralKey_object:    {content:'{2: 5}', check: function(module) {
@@ -467,9 +472,9 @@ var tests = exports.tests = {
     }},
     implicitVariableCreation_object: {content:'{a = 5}', check: function(module) {
         var element0 = getFirstProperty(module).value
-        var member = element0.meta.scopes[0].scope['a']
-        return element0.meta.privileged['a'] === true
-            && member.meta.primitive.numerator === 5
+        var member = element0.meta.scopes[0].get('a')
+        return element0.meta.privileged['a'] === member
+            && isSpecificInt(member, 5)
     }},
     doubleColonVariableKey_object: {
         content:'{a=5 a::9}',
@@ -485,34 +490,34 @@ var tests = exports.tests = {
         }
     },
     nestedObjects: {content:'{a:{b:"c"}}', check: function(module) {
-        var object = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
-        var a = utils.getProperty({this:object}, coreLevel1.StringObj("a"))
-        var b = utils.getProperty({this:a}, coreLevel1.StringObj("b"))
+        var object = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
+        var a = getPropertyOld({this:object}, coreLevel1.StringObj("a"))
+        var b = getPropertyOld({this:a}, coreLevel1.StringObj("b"))
         return b.meta.primitive.string === 'c'
     }},
     nestedObjectsSamePropertyNames: {content:'{a:{b:1 a:"b"}}', check: function(module) {
-        var object = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
-        var a = utils.getProperty({this:object}, coreLevel1.StringObj("a"))
-        var b = utils.getProperty({this:a}, coreLevel1.StringObj("b"))
-        var a2 = utils.getProperty({this:a}, coreLevel1.StringObj("a"))
+        var object = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
+        var a = getPropertyOld({this:object}, coreLevel1.StringObj("a"))
+        var b = getPropertyOld({this:a}, coreLevel1.StringObj("b"))
+        var a2 = getPropertyOld({this:a}, coreLevel1.StringObj("a"))
         return  isSpecificInt(b, 1)
                 && a2.meta.primitive.string === 'b'
     }},
     nestedObjectsWithWeirdParens: {content:'{a:{(b:"c")}}', check: function(module) {
-        var object = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
-        var a = utils.getProperty({this:object}, coreLevel1.StringObj("a"))
-        var b = utils.getProperty({this:a}, coreLevel1.StringObj("b"))
+        var object = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
+        var a = getPropertyOld({this:object}, coreLevel1.StringObj("a"))
+        var b = getPropertyOld({this:a}, coreLevel1.StringObj("b"))
         return b.meta.primitive.string === 'c'
     }},
     objectWithAllTheAs: {content:'a=5 {a:a}', check: function(module) {
-        var object = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
-        var a = utils.getProperty({this:object}, coreLevel1.StringObj("a"))
+        var object = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
+        var a = getPropertyOld({this:object}, coreLevel1.StringObj("a"))
         return isSpecificInt(a, 5)
     }},
     objectWithAllTheAs2: {content:'a=5 {a:{a:a}}', check: function(module) {
-        var object = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
-        var a = utils.getProperty({this:object}, coreLevel1.StringObj("a"))
-        var innerA = utils.getProperty({this:a}, coreLevel1.StringObj("a"))
+        var object = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
+        var a = getPropertyOld({this:object}, coreLevel1.StringObj("a"))
+        var innerA = getPropertyOld({this:a}, coreLevel1.StringObj("a"))
         return isSpecificInt(innerA, 5)
     }},
 
@@ -523,7 +528,7 @@ var tests = exports.tests = {
                 // Single-argument [
 
     basicBracketOperator: {content:'x = {a:1}  x["a"]', check: function(module) {
-        var value = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
+        var value = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
         return isSpecificInt(value, 1)
     }},
 
@@ -701,7 +706,7 @@ var tests = exports.tests = {
     },
     // doubly nested macro on first-line
     rawFunctionValueWithNestedMacros: {
-        content:'a = rawFn[match: ret {arg:true fakeRet: ret {0:ret "fake"}}\n'+
+        content:'a = rawFn[match: ret {weak:true arg: ret {0:ret "fake"}}\n'+
                 ' run:   ret 5\n' +
                 ']\n'+
                 'a[]',
@@ -711,7 +716,7 @@ var tests = exports.tests = {
         }
     },
     rawFunctionValueWithNestedMacros2: {
-        content:'a = rawFn[match: ret {arg:true fakeRet: ret {0:ret x}}\n'+
+        content:'a = rawFn[match: ret {weak:true arg: ret {0:ret x}}\n'+
                 ' run:   ret 5\n' +
                 ']\n' +
                 'x = 5\n'+
@@ -804,7 +809,7 @@ var tests = exports.tests = {
     // expressions on same line as marker
     basicRawFunctionValue2p: {
         content:'a = rawFn\n'+
-                ' match x: ret {arg:x[0]}\n'+
+                ' match x: ret {arg: x[0]}\n'+
                 ' run x:   ret x\n'+
                 'a[5]',
         check: function(module) {
@@ -814,7 +819,7 @@ var tests = exports.tests = {
     },
     // expression on first-line
     basicRawFunctionValue3p: {
-        content:'a = rawFn match x: ret true\n'+
+        content:'a = rawFn match x: ret {arg: true}\n'+
                 ' run y:   ret 5\n'+
                 'a[]',
         check: function(module) {
@@ -853,7 +858,7 @@ var tests = exports.tests = {
 
     // Testing Convention D:
     rawFnMultipleNestedFirstLineMacros: {
-        content:'x = macro match: ret {consume:2}\n' +
+        content:'x = macro match: ret {consume:2 arg:nil}\n' +
                 ' run: ret 3\n' +
                 '\n' +
                 'a = rawFn match: ret {arg: x 1+2}\n'+
@@ -936,8 +941,8 @@ var tests = exports.tests = {
                 'a hi',
         check: function(module) {
             var element0 = getFirstProperty(module).value
-            var rawInput = utils.getProperty({this:element0}, coreLevel1.StringObj("rawInput"))
-            var startColumn = utils.getProperty({this:element0}, coreLevel1.StringObj("startColumn"))
+            var rawInput = getPropertyOld({this:element0}, coreLevel1.StringObj("rawInput"))
+            var startColumn = getPropertyOld({this:element0}, coreLevel1.StringObj("startColumn"))
             return rawInput.meta.primitive.string === " hi" && isSpecificInt(startColumn, 1)
         }
     },
@@ -954,8 +959,8 @@ var tests = exports.tests = {
                 'b[a hi]',
         check: function(module) {
             var element0 = getFirstProperty(module).value
-            var rawInput = utils.getProperty({this:element0}, coreLevel1.StringObj("rawInput"))
-            var startColumn = utils.getProperty({this:element0}, coreLevel1.StringObj("startColumn"))
+            var rawInput = getPropertyOld({this:element0}, coreLevel1.StringObj("rawInput"))
+            var startColumn = getPropertyOld({this:element0}, coreLevel1.StringObj("startColumn"))
             return rawInput.meta.primitive.string === " hi]" // <- This has more characters than were consumed because its the rawInput
                    && isSpecificInt(startColumn, 3)          //    from the match block.
         }
@@ -975,7 +980,7 @@ var tests = exports.tests = {
 //                'b[]',
 //        check: function(module) {
 //            var element0 = getFirstProperty(module).value
-//            var startColumn = utils.getProperty({this:element0}, coreLevel1.StringObj("startColumn"))
+//            var startColumn = getPropertyOld({this:element0}, coreLevel1.StringObj("startColumn"))
 //            return isSpecificInt(startColumn, 33)
 //        }
 //    },
@@ -991,7 +996,7 @@ var tests = exports.tests = {
                 '  x = 2\n'+
                 'x',
         check: function(module) {
-            var element0 = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
+            var element0 = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
             return isSpecificInt(element0, 1)
         }
     },
@@ -1002,7 +1007,7 @@ var tests = exports.tests = {
                 '  x = 2\n'+
                 'x',
         check: function(module) {
-            var element0 = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
+            var element0 = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
             return isSpecificInt(element0, 1)
         }
     },
@@ -1012,7 +1017,7 @@ var tests = exports.tests = {
                 '  x = 2\n'+
                 'x',
         check: function(module) {
-            var element0 = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
+            var element0 = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
             return isSpecificInt(element0, 1)
         }
     },
@@ -1020,7 +1025,7 @@ var tests = exports.tests = {
         content:'if true: x=1 else: x=2\n'+
                 'x',
         check: function(module) {
-            var element0 = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
+            var element0 = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
             return isSpecificInt(element0, 1)
         }
     },
@@ -1028,21 +1033,21 @@ var tests = exports.tests = {
     ifReturnValue: {
         content:'if true: 1 else: 2',
         check: function(module) {
-            var element0 = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
+            var element0 = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
             return isSpecificInt(element0, 1)
         }
     },
     ifConditionalProperty1: {
         content:'if true: a:1',
         check: function(module) {
-            var element0 = utils.getProperty({this:module}, coreLevel1.StringObj('a'))
+            var element0 = getProperty(module, coreLevel1.StringObj('a'))
             return isSpecificInt(element0, 1)
         }
     },
     ifElse: {
         content:'if false: a:1 else: a:2',
         check: function(module) {
-            var element0 = utils.getProperty({this:module}, coreLevel1.StringObj('a'))
+            var element0 = getPropertyOld({this:module}, coreLevel1.StringObj('a'))
             return isSpecificInt(element0, 2)
         }
     },
@@ -1056,7 +1061,7 @@ var tests = exports.tests = {
                 '   else:   ret false\n'+
                 'a[1]',
         check: function(module) {
-            var element0 = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
+            var element0 = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
             return isSpecificInt(element0, 1)
         }
     },
@@ -1064,12 +1069,13 @@ var tests = exports.tests = {
         // Should fail:
 
     basicIfAlreadyDeclaredVariablesObjectScope: {
+        shouldFail:true,
         content:'x = 5\n'+
                 'if true: x=1 else: x=2\n',
-        check: function(module) {
-            var element0 = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
-            return isSpecificInt(element0, 1)
-        }
+//        check: function(module) {
+//            var element0 = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
+//            return isSpecificInt(element0, 1)
+//        }
     },
     basicIfInsideFunctionUndeclaredVariable: {
         shouldFail:true,
@@ -1080,10 +1086,10 @@ var tests = exports.tests = {
                 '   else:   x=99\n'+
                 '  ret x\n'+
                 'a[1]',
-        check: function(module) {
-            var element0 = utils.getProperty({this:module}, coreLevel1.NumberObj(0))
-            return isSpecificInt(element0, 1)
-        }
+//        check: function(module) {
+//            var element0 = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
+//            return isSpecificInt(element0, 1)
+//        }
     },
 
 

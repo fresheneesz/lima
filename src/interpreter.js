@@ -7,11 +7,10 @@ var coreLevel1 = require('./coreLevel1b')
 module.exports = function(sourceString, args) {
     var moduleAst = parser.withState({index:0}).module().tryParse(sourceString)
 
-    var coreLevel1Scope = coreLevel1.makeCoreLevel1Scope()
-
-    var moduleContext = coreLevel1.limaObjectContext(coreLevel1Scope)
+    var standardContext = coreLevel1.makeCoreLevel1Context()
+    var moduleContext = coreLevel1.limaObjectContext(standardContext)
     evaluate.resolveObjectSpace(moduleContext, moduleAst.expressions, 0, undefined, true)
 
-    return moduleContext.this
+    return moduleContext.get('this')
 }
 

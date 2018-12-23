@@ -1,3 +1,4 @@
+var basicUtils = require("./basicUtils")
 
 // Basic constructs used in defaults:
     // The default type in an implicit declaration is anyType (ie `var?`). This will change to `var` at some point.
@@ -10,7 +11,7 @@ exports.anyType = function() {
 // literals
 
 // nil will be added to in coreLevel1b
-exports.nil = {
+var nil = exports.nil = {
     //type: undefined,          // Will be filled in later.
     name: 'nil',
     meta: {
@@ -61,3 +62,15 @@ exports.nil = {
         postOperators:{} // same form as preOperators
     }
 }
+
+// Note that this was copied before any of the operators were attached (therefore no operators need to be removed)
+var nilReference = exports.nilReference = basicUtils.copyValue(nil)
+nilReference.meta.primitive = {ref: nil}
+
+exports.Ref = function(object) {
+    var ref = basicUtils.copyValue(nilReference)
+    ref.meta.primitive.ref = object
+    return ref
+}
+
+

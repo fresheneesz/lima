@@ -1,7 +1,13 @@
 
+exports.normalizedVariableName = function(name) {
+    return name[0]+name.slice(1).toLowerCase()
+}
+
 var copyValue = exports.copyValue = function(value) {
     var containerCopy = {type:'any',const:false, meta:{}}
-    Object.defineProperty(containerCopy,'_d',Object.getOwnPropertyDescriptor(value,'_d'));
+    var descriptor = Object.getOwnPropertyDescriptor(value,'_d')
+    if(descriptor)
+        Object.defineProperty(containerCopy,'_d',descriptor);
     overwriteValue(containerCopy, value)
 
     return containerCopy
@@ -16,24 +22,28 @@ var overwriteValue = exports.overwriteValue = function(destinationObject, source
     destination.elements = source.elements
     destination.macro = source.macro
     destination.destructors = source.destructors.slice(0)
-    destination.privileged = merge({}, source.privileged)
+    destination.privileged = {}
+    for(var name in source.privileged) {
+        var newValue = copyValue(source.privileged[name])
+        rebindFunctions(newValue, destinationObject, sourceObject)
+        destination.privileged[name] = newValue
+    }
     destination.properties = {}
     for(var hashcode in source.properties) {
         var props = source.properties[hashcode]
-        var newProps = props.map(function(item) {
+        destination.properties[hashcode] = props.map(function(item) {
             var newKey = copyValue(item.key)
             var newValue = copyValue(item.value)
             rebindFunctions(newValue, destination, source)
             return {key:newKey, value:newValue}
         })
-        destination.properties[hashcode] = newProps
     }
     copyOperators(destination, source, 'operators')
     copyOperators(destination, source, 'preOperators')
     copyOperators(destination, source, 'postOperators')
     destination.scopes = []
     source.scopes.forEach(function(scope) {
-        destination.scopes.push(copyScope(scope, destinationObject, sourceObject))
+        destination.scopes.push(scope.inheritScope(destinationObject))
     })
 }
     function copyOperators(destination, source, optype) {
@@ -41,45 +51,12 @@ var overwriteValue = exports.overwriteValue = function(destinationObject, source
         for(var op in source[optype]) {
             var operator = source[optype][op], newOperator = {}
             for(var key in operator) {
-                newOperator[key] = operator[key]  // copy individual items from operator, because those items might be overwritten (by rebindFunctions)
+                // copy individual items from operator, because those items might be overwritten (by rebindFunctions)
+                newOperator[key] = operator[key]
             }
             destination[optype][op] = newOperator
         }
     }
-
-    // scope - An object where keys are primitive string names and values are lima objects.
-    // Returns a new scope.
-    function copyScope(scope, destinationObj, sourceObj) {
-        var newScope = {get: scope.get, set:scope.set, scope: {}, object:destinationObj}
-        for(var name in scope.scope) {
-            newScope.scope[name] = copyValue(scope.scope[name])
-            rebindFunctions(newScope.scope[name], destinationObj, sourceObj)
-        }
-        return newScope
-    }
-
-    // For each function in the passed member that were bound to the source, rebind it to the destination
-    function rebindFunctions(member, destination, source) {
-        for(var op in member.operators) {
-            var opInfo = member.operators[op]
-            if(opInfo.boundObject === source) {
-                opInfo.boundObject = destination
-            }
-        }
-    }
-
-// Returns a context scope - the same type of value `evaluate.superExpression` takes as its `scope` parameter.
-// getFromScope(name)
-// setOnScope(name, value, private)
-exports.ContextScope = function(getFromScope, setOnScope) {
-    return {
-        get:function() {
-            return getFromScope.apply(this, arguments)
-        }, set:function() {
-            return setOnScope.apply(this, arguments)
-        }
-    }
-}
 
 exports.strMult = function(str, multiplier) {
 	var result = [];
@@ -106,4 +83,16 @@ exports.objMap = function(obj, mapFn) {
         result[mapResult.key] = mapResult.value
     }
     return result
+}
+
+
+// For each function in the passed member that were bound to the source, rebind it to the destination.
+var rebindFunctions = exports.rebindFunctions = function(member, destination, source) {
+    for(var op in member.meta.operators) {
+        var opInfo = member.meta.operators[op]
+        // Todo: do the basic constructs in coreLevel1 (eg nil and zero) need boundObject?
+        if(opInfo.boundObject === source || opInfo.boundObject === undefined) {
+            opInfo.boundObject = destination
+        }
+    }
 }

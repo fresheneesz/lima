@@ -11,6 +11,7 @@ These are all under the `src/` directory.
 * **interpreter.js** - The entrypoint for the interpreter. Takes a string and executes it as a lima program.
 * **coreLevel1a.js** - Contains the most basic lima constructs needed for defaults in things like `Context.js`.
 * **coreLevel1b.js** - Contains the unsimplifiable set of core lima constructs. This includes some (incomplete) basic values (like `nil`, `{}`, `0`, and `""`) as well as some functions that return lima objects when given the AST node for that object. Exposes everything exposed in coreLevel1a.js. The incomplete values are completed by coreLevel2.lima .
+* **Context.js** - Contains classes that represent scope and stack contexts and encapsulate the creation of related or sub contexts/scopes.
 * **coreLevel2.lima** - Contains lima code that completes the incomplete core constructs from `coreLevel1b.js`. For example, while `coreLevel1b.js` defines object literals, things like the `str` member or the `has` method for objects are defined in `coreLevel2.lima`. Core level 1 and core level 2 taken together have everything in the spec other than the "standard library" objects.
 * **evaluate.js** - Contains the logic around evaluating operators on lima objects, and evaluting superExpressions and objects.
 * **utils.js** - Contains utility functions mostly around interacting with lima objects, composing lima objects, and higher-level functions for evaluating lima objects.
@@ -443,6 +444,9 @@ These are things that were done in Core Level 1, but should be moved to Core Lev
 
 ## Change log
 
+* 0.0.19 - 2018-12-23
+  * If statements! Just in time for Christmas!
+  * Also overhauled the context and scope system with some nacent (incomplete) support for context attributes.
 * 0.0.18 - 2018-10-27 - Adding support for the `startColumn` parameter for `macro`.
 * 0.0.17 - 2018-10-27 - Testing rawFn with parameters.
 * 0.0.16 - 2018-10-26

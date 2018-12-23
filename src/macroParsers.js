@@ -5,14 +5,14 @@ for(var name in P.getBasicParsers()) {
   eval('var '+name+' = P["'+name+'"]')
 }
 
-module.exports = P.createLanguage({scope:{}}, {
+module.exports = P.createLanguage({context:{}}, {
 
     // Parses a construct that is either delimited by whitespace or by brackets.
     // The if, while, and fn constructs are examples of parsers that use this.
     // innerBlockParser - The parser that parses whatever comes after the macro, potentially within brackets.
     // Returns whatever innerParserBlock returns.
     macroBlock: function(context, innerBlockParser) {
-        var state = {scope: context.scope, consumeFirstlineMacros: true, indent: 0}
+        var state = {context: context, consumeFirstlineMacros: true, indent: 0}
         var parserState = getParser().withState(state)
         return seq(
             parserState.indentedWs().many(),

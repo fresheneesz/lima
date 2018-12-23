@@ -1,6 +1,6 @@
 {
  "name": "limaCompiler",
- "version": "0.0.18",
+ "version": "0.0.19",
  "main": "buildAndPrint.js",
  "description": "",
  "keywords": [],

@@ -4,6 +4,7 @@ var parser = require("./parser")
 var macroParsers = require("./macroParsers")
 var evaluate = require("./evaluate")
 var coreLevel1a = require("./coreLevel1a")
+var Context = require("./Context")
 
 var anyType = exports.anyType = coreLevel1a.anyType
 var nil = exports.nil = coreLevel1a.nil
@@ -27,14 +28,11 @@ var _ = undefined // for places where you don't need a value
 var dotOperator = {
     order:0, scope: 0,
     dispatch: makeParamInfo([{params: [{name:anyType}], fn: function(name) {
-        var exists = this.this.meta.privileged[name.meta.primitive.string]
+        var exists = this.get('this').meta.privileged[name.meta.primitive.string]
         if(exists)
-            return this.this.meta.scopes[0].get(name.meta.primitive.string)
-        var result = utils.getProperty(this, name)
-        if(result !== nil)
-            return result
-        // else
-        return nil
+            return this.get('this').meta.privileged[name.meta.primitive.string]
+        else // Todo: support friend modules.
+            throw new Error(this.name+" has no public member '"+name+"'.")
     }}])
 }
 
@@ -65,10 +63,10 @@ function nonSymmetricalOperator(options, rawOperationFn) {
         order: options.order, scope: options.scope,
         dispatch: makeParamInfo([
             {params: [{other: {type:options.paramType, default:options.default}}, {this: _}], fn: function (other) {
-                return rawOperationFn.call(this, other, this.this)
+                return rawOperationFn.call(this, other, this.get('this'))
             }},
             {params: [{this: _}, {other: {type:options.paramType, default:options.default}}], fn: function (thisObj, other) {
-                return rawOperationFn.call(this, this.this, other)
+                return rawOperationFn.call(this, this.get('this'), other)
             }}
         ])
     }
@@ -98,7 +96,7 @@ function makeParamInfo(parameterSets) {
             for(var n=0; n<parameterSets.length; n++) {
                 var parameters = parameterSets[n].params
                 var expandedParams = expandParameters(parameters)
-                var normalizedArgs = utils.getNormalizedArgs(this.this, expandedParams, args)
+                var normalizedArgs = utils.getNormalizedArgs(this, expandedParams, args)
                 if(normalizedArgs !== undefined) {
                     for(var j=0; j<expandedParams.length; j++) {
                         if(expandedParams[j].type !== anyType && expandedParams[j].type !== undefined) {
@@ -163,32 +161,7 @@ var Boxed = function(value, tildeOperator) {
     return box
 }
 
-var limaObjectScope = function(object, upperScope) {
-    var objectScope = basicUtils.ContextScope(
-        // The `this` context for get and set is the ContextScope itself.
-        function get(name) {
-            if(name in this.scope) {
-                return this.scope[name]
-            } else {
-                return utils.scopeGet(upperScope,name)
-            }
-        }, function(name, value, isPrivate) {
-            // todo: add support for overriding and error for overriding without the override keyword/macro/attribute
-            if(name in this.scope)
-                throw new Error("Can't re-declare property "+name)
 
-            this.scope[name] = value
-            if(!isPrivate) {// todo: change isPrivate into an attribute
-                // Using this.object rather than object so the object can be swapped out (eg when an object is copied).
-                this.object.meta.privileged[name] = true
-            }
-        }
-    )
-    objectScope.scope = {}
-    objectScope.object = object
-    objectScope._upperScope = upperScope // For debug.
-    return objectScope
-}
 
 // literals
 
@@ -197,10 +170,10 @@ Object.defineProperty(nil, '_d', {
   get: function() { return utils.getValueString(this) }
 })
 
-nil.meta.scopes[0] = limaObjectScope(nil, {get:function(){}})
+nil.meta.scopes[0] = Context.Scope(nil)
 // Declaring nil's operators outside the above object so that nil can be used as defaults.
 nil.meta.operators['??'] = symmetricalOperator({order:6, scope:0, paramType: anyType, default:nil}, function(other) {
-    return toLimaBoolean(this.this === other) // todo: support references
+    return toLimaBoolean(this.get('this') === other) // todo: support references
 })
 // This needs the parameter to default to nil so if nil is passed, it still matches.
 nil.meta.operators['=='] = symmetricalOperator({order:6, scope:0, paramType: anyType, default:nil}, function(other) {
@@ -210,26 +183,26 @@ nil.meta.operators['='] = {
     order:9, backward:true, scope: 0,
     dispatch: makeParamInfo([
         {params: [{rvalue:anyType}], fn: function(rvalue) { // assignment operator
-            if(this.this.meta.const)
+            if(this.get('this').meta.const)
                 throw new Error("Can't assign a const variable")
-            basicUtils.overwriteValue(this.this, rvalue)
+            basicUtils.overwriteValue(this.get('this'), rvalue)
         }},
         {params: [], fn: function() { // copy operator
-            return basicUtils.copyValue(this.this)
+            return basicUtils.copyValue(this.get('this'))
         }}
     ])
 }
 nil.meta.operators['~'] = {
     scope: 0,
     dispatch: makeParamInfo([{params: [], fn: function() {
-        return Boxed(this.this)
+        return Boxed(this.get('this'))
     }}])
 }
 // '~>': {
 //     order:9, scope: 0, dispatch: [
 //         {parameters:[{name:'rvalue',type:anyType}], fn: function(rvalue) {
 //             throw new Error("unsupported yet")
-//             //return utils.callOperator(this.this, this.this.operators['>'], this.callingScope, [rvalue])
+//             //return utils.callOperator(this.get('this'), this.get('this').operators['>'], this.callingScope, [rvalue])
 //         }}
 //     ]
 // }
@@ -239,16 +212,16 @@ var zero = exports.zero = basicUtils.copyValue(nil)
 zero.meta.primitive = {numerator:0, denominator: 1}
 zero.meta.operators['.'] = dotOperator
 zero.meta.operators['=='] = symmetricalOperator({order:4, scope:0, paramType: anyType}, function(other) {
-    return toLimaBoolean(other.meta.primitive && other.meta.primitive.numerator === this.this.meta.primitive.numerator
-                                         && other.meta.primitive.denominator === this.this.meta.primitive.denominator)
+    return toLimaBoolean(other.meta.primitive && other.meta.primitive.numerator === this.get('this').meta.primitive.numerator
+                                         && other.meta.primitive.denominator === this.get('this').meta.primitive.denominator)
 })
 zero.meta.operators['+'] = symmetricalOperator({order:4, scope:0, paramType: anyType}, function(other) {
-    if(other.meta.primitive.denominator === this.this.meta.primitive.denominator) {
-        return NumberObj(this.this.meta.primitive.numerator+other.meta.primitive.numerator)
+    if(other.meta.primitive.denominator === this.get('this').meta.primitive.denominator) {
+        return NumberObj(this.get('this').meta.primitive.numerator+other.meta.primitive.numerator)
     } else {
-        var commonDenominator = other.meta.primitive.denominator * this.this.meta.primitive.denominator
-        var otherNumeratorScaled = this.this.meta.primitive.denominator*other.meta.primitive.numerator
-        var thisNumeratorScaled = other.meta.primitive.denominator*this.this.meta.primitive.numerator
+        var commonDenominator = other.meta.primitive.denominator * this.get('this').meta.primitive.denominator
+        var otherNumeratorScaled = this.get('this').meta.primitive.denominator*other.meta.primitive.numerator
+        var thisNumeratorScaled = other.meta.primitive.denominator*this.get('this').meta.primitive.numerator
         return NumberObj(thisNumeratorScaled+otherNumeratorScaled, commonDenominator)
     }
 })
@@ -268,18 +241,18 @@ var emptyString = exports.emptyString = basicUtils.copyValue(nil)
 emptyString.meta.primitive = {string: ""}
 emptyString.meta.operators['.'] = dotOperator
 emptyString.meta.operators['=='] = symmetricalOperator({order:6, scope:0, paramType: anyType}, function(other) {
-    return toLimaBoolean(other.meta.primitive && other.meta.primitive.string === this.this.meta.primitive.string)
+    return toLimaBoolean(other.meta.primitive && other.meta.primitive.string === this.get('this').meta.primitive.string)
 })
 emptyString.meta.preOperators['@'] = {
     scope: 0,
     dispatch: makeParamInfo([{params: [], fn: function() {
-        return StringObj('\n'+this.this.meta.primitive.string)
+        return StringObj('\n'+this.get('this').meta.primitive.string)
     }}])
 }
 emptyString.meta.postOperators['@'] = {
     scope: 0,
     dispatch: makeParamInfo([{params: [], fn: function() {
-        return StringObj(this.this.meta.primitive.string+'\n')
+        return StringObj(this.get('this').meta.primitive.string+'\n')
     }}])
 }
 
@@ -291,10 +264,20 @@ emptyObj.meta.operators['.'] = dotOperator
 emptyObj.meta.operators['['] = { // Basic single-operand bracket operator (multi-operand will be in coreLevel2).
     order:0, scope: 0,
     dispatch: makeParamInfo([{params: [{key:anyType}], fn: function(key) {
-        return utils.getProperty(this, key)
+        return utils.getProperty(this, this.get('this'), key)
     }}])
 }
 
+var nilReference = exports.nilReference = coreLevel1a.nilReference
+Object.defineProperty(nilReference, '_d', {
+  get: function() { return utils.getValueString(this) }
+})
+nilReference.meta.operators['else'] = {
+    scope: 0,
+    dispatch: makeParamInfo([{params: [{operator:anyType, args:anyType}], fn: function(operator, args) {
+        return this.get('this').meta.primitive.ref
+    }}])
+}
 
 // functions used to create privileged members
 
@@ -326,45 +309,46 @@ function FunctionObjThatMatches(runFn) {
     })
 }
 
-function addPrivilegedMember(obj, name, value) {
-    obj.meta.privileged[name] = true
-    obj.meta.scopes[0].scope[name] = value
+function addPublicPrivilegedMember(obj, name, value) {
+    var scope = obj.meta.scopes[0]
+    scope.declare(name, coreLevel1a.anyType, true)
+    scope.set(name, value, true)
 }
 
 // privileged members
 
 // todo: define hashcode and str as a function for now (when I figure out how to make accessors, we'll use that instead)
-addPrivilegedMember(zero, 'hashcode', FunctionObj(zero, makeParamInfo([
+addPublicPrivilegedMember(zero, 'hashcode', FunctionObj(zero, makeParamInfo([
     {params: [], fn: function() {
-        if(this.this.meta.primitive.denominator === 1) {
-            return this.this
+        if(this.get('this').meta.primitive.denominator === 1) {
+            return this.get('this')
         } else {
-            var primitiveHashcode = utils.getJsStringKeyHash(this.this.meta.primitive.numerator+'/'+this.this.meta.primitive.denominator)
+            var primitiveHashcode = utils.getJsStringKeyHash(this.get('this').meta.primitive.numerator+'/'+this.get('this').meta.primitive.denominator)
             return NumberObj(primitiveHashcode,1)
         }
     }}
 ])))
 // todo: move zero.str to coreLevel2
-addPrivilegedMember(zero, 'str', FunctionObj(zero, makeParamInfo([
+addPublicPrivilegedMember(zero, 'str', FunctionObj(zero, makeParamInfo([
     {params: [], fn: function() {
-        if(this.this.meta.primitive.denominator === 1) {
-            return StringObj(''+this.this.meta.primitive.numerator)
+        if(this.get('this').meta.primitive.denominator === 1) {
+            return StringObj(''+this.get('this').meta.primitive.numerator)
         } else {
-            return StringObj(this.this.meta.primitive.numerator+'/'+this.this.meta.primitive.denominator)
+            return StringObj(this.get('this').meta.primitive.numerator+'/'+this.get('this').meta.primitive.denominator)
         }
     }}
 ])))
 
 // todo: define hashcode and str as a function for now (when I figure out how to make accessors, we'll use that instead)
-addPrivilegedMember(emptyString, 'hashcode', FunctionObj(emptyString, makeParamInfo([
+addPublicPrivilegedMember(emptyString, 'hashcode', FunctionObj(emptyString, makeParamInfo([
     {params: [], fn: function() {
-        var primitiveHashcode = utils.getJsStringKeyHash('s'+this.this.meta.primitive.string) // the 's' is for string - to distinguish it from the hashcode for numbers
+        var primitiveHashcode = utils.getJsStringKeyHash('s'+this.get('this').meta.primitive.string) // the 's' is for string - to distinguish it from the hashcode for numbers
         return NumberObj(primitiveHashcode,1)
     }}
 ])))
-addPrivilegedMember(emptyString, 'str', FunctionObj(emptyString, makeParamInfo([
+addPublicPrivilegedMember(emptyString, 'str', FunctionObj(emptyString, makeParamInfo([
     {params: [], fn: function() {
-        return this.this
+        return this.get('this')
     }}
 ])))
 
@@ -392,34 +376,30 @@ var NumberObj = exports.NumberObj = function(primitiveNumerator, primitiveDenomi
     // Js objects that have string keys.
     // Js arrays.
     // The above where elements and values are either js numbers, js string values, or lima objects.
-var LimaObject = exports.LimaObject = function(jsObjOrArray, allowNil) {
+var LimaObject = exports.LimaObject = function(jsObjOrArray) {
     if(jsObjOrArray instanceof Array) {
-        return jsArrayToLimaObj(jsObjOrArray, allowNil)
+        return jsArrayToLimaObj(jsObjOrArray)
     } else if(typeof(jsObjOrArray) === 'object') {
-        return jsObjToLimaObj(jsObjOrArray, allowNil)
+        return jsObjToLimaObj(jsObjOrArray)
     } else throw ": ("
 }
 
-function jsObjToLimaObj(jsObj, allowNil) {
-    var result = basicUtils.copyValue(emptyObj)
-    var context = {this:result, scope:utils.blockCallingScope}
+function jsObjToLimaObj(jsObj) {
+    var context = limaObjectContext(topLevelContext())
     for(var k in jsObj) {
         var limaKey = StringObj(k)
         var limaValue = jsValueToLimaValue(jsObj[k])
-
-        if(!limaValue.meta.primitive || !limaValue.meta.primitive.nil) {
-            utils.setProperty(context, limaKey, limaValue, allowNil)
-        }
+        utils.setProperty(context, limaKey, limaValue)
     }
 
-    return result
+    return context.get('this')
 }
-function jsArrayToLimaObj(jsArray, allowNil) {
+function jsArrayToLimaObj(jsArray) {
     var result = basicUtils.copyValue(emptyObj)
+    var fakeContext = Context(Context.Scope(result, true))
     jsArray.forEach(function(value) {
         var limaValue = jsValueToLimaValue(value)
-        if(allowNil || !limaValue.meta || !limaValue.meta.primitive || !limaValue.meta.primitive.nil)
-            utils.appendElement({this:result}, limaValue, allowNil)
+        utils.appendElement(fakeContext, limaValue)
     })
 
     return result
@@ -438,11 +418,19 @@ function jsValueToLimaValue(value) {
     }
 }
 
-function limaListToJsArray(list) {
+function limaListToJsArray(context, list) {
     var result = []
     for(var n=0; n<list.meta.elements; n++) {
-        result.push(utils.getProperty({this:list}, NumberObj(n)))
+        result.push(utils.getProperty(context, list, NumberObj(n)))
     }
+    return result
+}
+
+var LimaRef = exports.LimaRef = function(value) {
+    if(primitiveDenominator === undefined) primitiveDenominator = 1
+    var result = basicUtils.copyValue(nil)
+
+    result.meta.primitive = {numerator:primitiveNumerator, denominator: primitiveDenominator}
     return result
 }
 
@@ -473,8 +461,8 @@ function macro(macroFns) {
     delete macroObject.meta.primitive
     macroObject.meta.macro = {
         match: FunctionObjThatMatches(function(args) {
-            var rawInput = utils.getProperty({this:args}, zero)
-            var startColumn = utils.getProperty({this:args}, NumberObj(1))
+            var rawInput = utils.getProperty(this, args, zero)
+            var startColumn = utils.getProperty(this, args, NumberObj(1))
             return macroFns.match.call(this, rawInput, startColumn)
         }),
         run: FunctionObjThatMatches(function(info) {
@@ -482,28 +470,23 @@ function macro(macroFns) {
         })
     }
     macroObject.meta.operators['=='] = symmetricalOperator({order:6, scope:0, paramType: anyType}, function(other) {
-        return toLimaBoolean(other.meta.macro === this.this.meta.macro)
+        return toLimaBoolean(other.meta.macro === this.get('this').meta.macro)
     })
 
     return macroObject
 }
 
-    function runFunctionStatements(context, body, parameters, args) {
+    function runFunctionStatements(declarationContext, callingContext, body, parameters, args) {
         var retPtr = {}
-        var functionScope = {}
-        var functionContext = createFunctionContext(context, retPtr, functionScope, function(name, value, isPrivate, functionContext) {
-            if(utils.scopeGet(functionContext.scope,name) === undefined)
-                throw new Error("Variable "+name+" undeclared!")
-
-            functionScope[name] = value
-        })
+        var functionContext = createFunctionContext(declarationContext.scope, callingContext, retPtr)
 
         parameters.forEach(function(parameter, n) {
             var arg = args[n]
             var param = basicUtils.copyValue(nil)
             param.name = parameter
             param.meta = arg.meta
-            functionScope[utils.normalizedVariableName(parameter)] = param
+            functionContext.declare(parameter, param)
+            functionContext.set(parameter, param)
         })
 
         for(var j=0; j<body.length; j++) {
@@ -515,7 +498,7 @@ function macro(macroFns) {
             }
 
             while(parts.length > 0) {
-                var result = evaluate.superExpression(functionContext, parts, {inObjectSpace:false})
+                var result = evaluate.superExpression(functionContext, parts)
                 parts = result.remainingParts
                 if(retPtr.returnValue !== undefined) {
                     return retPtr.returnValue
@@ -524,52 +507,15 @@ function macro(macroFns) {
         }
     }
 
-    function createFunctionContext(context, retPtr, functionScope, setFn) {
-        var functionContext = {
-            this: context.this,
-            consumeFirstlineMacros: context.consumeFirstlineMacros,
-            scope: basicUtils.ContextScope(
-                function get(name) {
-                    if(name in functionScope) {
-                        return functionScope[name]
-                    } else {
-                        return utils.scopeGet(context.scope,name)
-                    }
-                },
-                function set(name, value, isPrivate) {
-                    setFn(name, value, isPrivate, functionContext, functionScope)
-                }
-            )
-        }
-
-        // For debug:
-        functionContext.scope._functionScope=functionScope
-        functionContext.scope._contextScope=context.scope
-
-        functionScope.ret = createRetMacro(retPtr, functionContext)
-
+    function createFunctionContext(declarationScope, callingContext, retPtr) {
+        var functionContext = callingContext.newStackContext(declarationScope.subScope(false))
+        functionContext.scope.declare('ret', coreLevel1a.anyType, undefined, true)
+        functionContext.set('ret', createRetMacro(retPtr, functionContext))
         return functionContext
     }
 
-    // Creates a sub-scope for get, but keeps the same set.
-    function wrapGetScope(scope, subGetScope) {
-        return basicUtils.ContextScope(
-            function get(name) {
-                if(name in subGetScope) {
-                    return subGetScope[name]
-                } else {
-                    return scope.get.apply(scope,arguments)
-                }
-            },
-            scope.set
-        )
-    }
-
     function createMacroConsumptionContext(context) {
-        return createFunctionContext(context, {}, {}, function(name, value, isPrivate, functionContext, functionScope) {
-            throw new Error("Can't overwrite variable "+name+" from an upper scope inside a macro " +
-                "consumption function (mutations should be done in the `run` function).")
-        })
+        return createFunctionContext(context.scope.macroReadScope(), context, {})
     }
 
     function createRetMacro(retPtr, functionContext) {
@@ -577,7 +523,7 @@ function macro(macroFns) {
             match: function(rawInputLima) {
                 var rawInput = utils.getPrimitiveStr(this, rawInputLima)
                 var statementInfo = macroParsers.withState({
-                    scope:functionContext.scope,
+                    context:functionContext,
                     consumeFirstlineMacros: true
                 }).retStatement().tryParse(rawInput)
 
@@ -596,7 +542,7 @@ function macro(macroFns) {
             },
             run: function(infoObject) {
                 var parts = getFromJsPrimitive(infoObject)
-                var result = evaluate.superExpression(functionContext, parts, {inObjectSpace:false})
+                var result = evaluate.superExpression(functionContext, parts)
                 retPtr.returnValue = result.value
                 return nil
             }
@@ -606,11 +552,12 @@ function macro(macroFns) {
     }
 
 
+// The context passed into run is the context the macro was called in.
 function macroWithConventionsACD(name, macroParser, run) {
     var macroObject = macro({
         match: function(rawInput) {
             var javascriptRawInput = utils.getPrimitiveStr(this, rawInput)
-            var macroContext = createMacroConsumptionContext(this)
+            var macroContext = createMacroConsumptionContext(this.callingContext())
             var ast = macroParsers.macroBlock(macroContext, {language: macroParsers, parser: macroParser}).tryParse(javascriptRawInput)
 
             /* Plan:
@@ -630,7 +577,7 @@ function macroWithConventionsACD(name, macroParser, run) {
         },
         run: function(astLimaObject) {
             var ast = getFromJsPrimitive(astLimaObject)
-            return run.call(this, ast)
+            return run.call(this.callingContext(), ast)
         }
     })
     macroObject.name = name
@@ -639,27 +586,30 @@ function macroWithConventionsACD(name, macroParser, run) {
 
 
 var rawFn = macroWithConventionsACD('rawFn', 'rawFnInner', function run(ast) {
-    var context = this
+    var functionDeclarationContext = this
     return FunctionObj({
         match: function(args) {
-            return runFunctionStatements(context, ast.match.body, ast.match.parameters, [args])
+            return runFunctionStatements(functionDeclarationContext, this.callingContext(), ast.match.body, ast.match.parameters, [args])
         },
         run: function(callInfo) {
-            return runFunctionStatements(context, ast.run.body, ast.run.parameters, [callInfo])
+            return runFunctionStatements(functionDeclarationContext, this.callingContext(), ast.run.body, ast.run.parameters, [callInfo])
         }
     })
 })
 
 
-var macroMacro = macroWithConventionsACD('macro', 'macroInner', function run(ast, originalContext) {
-    var context = this
+var macroMacro = macroWithConventionsACD('macro', 'macroInner', function run(ast) {
+    var macroDeclarationContext = this
     var rawMacroObject = macro({
         match: function(rawInput, startColumn) {
-            return runFunctionStatements(context, ast.match.body, ast.match.parameters, [rawInput, startColumn])
+            return runFunctionStatements(
+                macroDeclarationContext, this.callingContext(), ast.match.body, ast.match.parameters, [rawInput, startColumn]
+            )
         },
         run: function(arg) {
-            var macroReturnValue = runFunctionStatements(context, ast.run.body, ast.run.parameters, [arg])
-            return macroReturnValue
+            return runFunctionStatements(
+                macroDeclarationContext, this.callingContext(), ast.run.body, ast.run.parameters, [arg]
+            )
         }
     })
 
@@ -672,8 +622,14 @@ var ifMacro = macroWithConventionsACD('macro', 'ifInner', function run(ast) {
         var blockItem = ast[n]
 //        var info = getBlockInfo(ast[n])
 
-        var wrappedScope = wrapGetScope(this.scope, {else:True}) // Treat "else" like true so it always matches.
-        var conditionContext = {this:this.this, scope:wrappedScope}
+        // Create a temp-read scope with 'else' defined in it.
+        var tempReadScope = this.scope.tempReadScope()
+        tempReadScope.tempRead = false
+        tempReadScope.declare('else', coreLevel1a.anyType, undefined, true)
+        tempReadScope.set('else', True) // Treat "else" like true so it always matches.
+        tempReadScope.tempRead = true
+
+        var conditionContext = this.newStackContext(tempReadScope, false)
         var conditionResult = evaluate.superExpression(conditionContext, blockItem.expressionBlock.parts, {endStatementAtColon:true})
         if(conditionResult.remainingParts.length === 0) {
             if(!blockItem.foundTrailingColon)
@@ -689,10 +645,9 @@ var ifMacro = macroWithConventionsACD('macro', 'ifInner', function run(ast) {
             }
 
             // Todo: care whether you're in an object context or function context (re allowProperties and implicitDeclarations)?
+            var bodyContext = this.newStackContext(this.scope.tempReadScope(), false)
             var conditionalBody = conditionResult.remainingParts.slice(1) // Strip off the colon
-            var bodyResult = evaluate.superExpression(this, conditionalBody, {
-                allowProperties:true, implicitDeclarations:true
-            })
+            var bodyResult = evaluate.superExpression(bodyContext, conditionalBody)
 
             return bodyResult.value
         }
@@ -729,47 +684,43 @@ var ifMacro = macroWithConventionsACD('macro', 'ifInner', function run(ast) {
 
 var wout = FunctionObj({
     match: function(args) {
-        return LimaObject({arg: utils.getProperty({this:args}, NumberObj(0)) })
+        return LimaObject({arg: utils.getProperty(this, args, NumberObj(0)) })
     },
     run: function(value) {
         console.log(utils.getPrimitiveStr(this, value))
     }
 })
+wout.name = 'wout'
 
 
 // context functions
 
-// Returns a context with:
-    // A new empty object value as `this`.
-    // An extended ContextScope for the object's definition space. Also contains the properties:
-        // scope - An object where keys are member names and values are the members' values.
-        // object - The object the scope is bound to.
-// Those parts will be used by evaluate.resolveObjectSpace to complete the object
-var limaObjectContext = exports.limaObjectContext = function(upperScope) {
+// Returns a new context that contains nothing (this is meant to be above the module context).
+var topLevelContext = exports.topLevelContext = function() {
+    return Context(Context.Scope(undefined, false))
+}
+
+// Returns a context with a new empty object value as `this`.
+var limaObjectContext = exports.limaObjectContext = function(context) {
     var object = basicUtils.copyValue(emptyObj)
-    object.meta.scopes[0] = limaObjectScope(object, upperScope)
-    return {
-        this: object,
-        scope: object.meta.scopes[0],
-        inObjectSpace: true
-    }
+    var newScope = object.meta.scopes[0] = context.scope.subScope(true, object)
+    var newContext = context.subAtrContext({publicDeclarations: [newScope], allowShadowDeclarations: [newScope]})
+    newContext.scope = newScope
+    return newContext
 }
 
 // Returns a context with a new empty object value as `this` and a ContextScope for the argument definition space
 // Those parts will be used by evaluate.resolveObjectSpace to fill the object with (potentially named) arguments.
-var limaArgumentContext = exports.limaArgumentContext = function(upperScope) {
-    var object = basicUtils.copyValue(emptyObj)
-    return {
-        this: object,
-        scope: upperScope,
-        consumeFirstlineMacros:false
-    }
+exports.limaArgumentContext = function(context) {
+    // For now at least, the argument context will be the same as an object. Hopefully this will be permanent?
+    return limaObjectContext(context)
 }
 
 // makes the minimal core scope where some core constructs are missing operators and members that are derivable using
     // the core level 1 constructs
-exports.makeCoreLevel1Scope = function() {
-    var scope = utils.Scope({
+exports.makeCoreLevel1Context = function() {
+    var context = exports.limaObjectContext(topLevelContext())
+    var variables = {
         nil: nil,
         true: True,
         false: False,
@@ -777,19 +728,11 @@ exports.makeCoreLevel1Scope = function() {
         macro: macroMacro,
         wout: wout,
         if: ifMacro
-    })
+    }
+    for(var name in variables) {
+        context.set(name, variables[name])
+    }
 
-    var contextScope = basicUtils.ContextScope(
-        function get(name) {
-            return scope[name]
-        },
-        function set(name, value) {
-            if(name in scope)
-                throw new Error("Can't re-declare property "+name)
-            scope[name] = value
-        }
-    )
-
-    contextScope._scope = scope // For debug.
-    return contextScope
+    // Todo: set attributes.
+    return context
 }
