@@ -13,7 +13,7 @@ for(var name in normalizedTests) {
     console.log(colors.cyan(name+":\n"))
 
     try {
-        var module = limaInterpreter(test.content)
+        var module = limaInterpreter.coreLevel1Test(test.content)
         if(test.check) {
             if(test.check(module)) {
                 console.log(colors.green("success!"))

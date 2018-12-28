@@ -151,7 +151,7 @@ module.exports = P.createLanguage({context:{}}, {
                 parserState.superExpression(false),
                 parserState.indentedWs().many(),
                 seq(':',
-                    parserState.indentedWs()
+                    parserState.indentedWs().many()
                 ).atMost(1)
             ).map(function(v) {
                 return {expressionBlock:v[0], foundTrailingColon: v[2].length > 0}

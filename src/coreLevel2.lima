@@ -1,4 +1,9 @@
-;;[ requires a subset of lima to run:
+coreLevel1['wout']['test']
+wout = coreLevel1['wout']~
+
+;[
+
+;[ requires a subset of lima to run:
     * nil with:
         * operators ~> = ~ ??
         *
@@ -11,22 +16,22 @@
         *
     * fn
     * meta
-;;]
+;]
 
 var false = 0
 var true = 1
 
 var private = rawMacro chars:
-    ;; ...
+    ; ...
 
 var access = rawMacro chars:
-    ;; ...
+    ; ...
 
 var macro = rawMacro chars:
-    ;; ...
+    ; ...
 
 var while = macro charsBefore charsInside:
-    ;; ...
+    ; ...
 
 private:
  var augmentedNil = { mix[nil]
@@ -35,7 +40,7 @@ private:
         var originalObj ~> this
         var originalEquals = meta[originalObj].operators[=]
         return {
-            mix[this[! operator[~] operator[~>]]] ;; remove these operators
+            mix[this[! operator[~] operator[~>]]] ; remove these operators
             operator[>] = fn this x:
                 ret meta[originalObj].operators[~>].withCallingScope[callingScope][originalObj x]
             operator[=] = fn: // copy operator
@@ -369,3 +374,5 @@ df itemsToLock item:
 //        return this.real(base)
 //    }.bind(this))
 //},
+
+;]

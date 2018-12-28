@@ -192,7 +192,7 @@ nil.meta.operators['='] = {
         }}
     ])
 }
-nil.meta.operators['~'] = {
+nil.meta.postOperators['~'] = {
     scope: 0,
     dispatch: makeParamInfo([{params: [], fn: function() {
         return Boxed(this.get('this'))
@@ -634,6 +634,12 @@ var ifMacro = macroWithConventionsACD('macro', 'ifInner', function run(ast) {
         if(conditionResult.remainingParts.length === 0) {
             if(!blockItem.foundTrailingColon)
                 throw new Error("Invalid `if` statement, didn't find any conditional block.")
+        } else if(utils.isNode(conditionResult.value)) {
+            if(utils.isNodeType(conditionResult.value, 'variable')) {
+                throw new Error("Undefined variable '"+conditionResult.value.name+"'.")
+            } else {
+                throw new Error("Unevaluated expression '"+conditionResult.value+"'. This might be a bug in the interpreter.")
+            }
         } else if(utils.isSpecificOperator(conditionResult.remainingParts[0], ':')) {
             if(blockItem.foundTrailingColon)
                 throw new Error("Invalid `if` block, found invalid trailing colon in the body of a conditional block.")
@@ -716,23 +722,31 @@ exports.limaArgumentContext = function(context) {
     return limaObjectContext(context)
 }
 
+var coreLevel1Variables = {
+    nil: nil,
+    true: True,
+    false: False,
+    rawFn: rawFn,
+    macro: macroMacro,
+    if: ifMacro,
+    wout: wout,
+}
+
 // makes the minimal core scope where some core constructs are missing operators and members that are derivable using
     // the core level 1 constructs
 exports.makeCoreLevel1Context = function() {
     var context = exports.limaObjectContext(topLevelContext())
-    var variables = {
-        nil: nil,
-        true: True,
-        false: False,
-        rawFn: rawFn,
-        macro: macroMacro,
-        wout: wout,
-        if: ifMacro
-    }
-    for(var name in variables) {
-        context.set(name, variables[name])
-    }
-
+    context.set('coreLevel1', LimaObject(coreLevel1Variables))
     // Todo: set attributes.
     return context
 }
+
+exports.makeCoreLevel1TestContext = function() {
+    var context = exports.limaObjectContext(topLevelContext())
+    for(var name in coreLevel1Variables) {
+        context.set(name, coreLevel1Variables[name])
+    }
+    // Todo: set attributes.
+    return context
+}
+

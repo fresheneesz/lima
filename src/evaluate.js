@@ -280,7 +280,9 @@ function resolveBinaryOperandFrom(context, curState, index, options) {
                 if(context.has(item.name)) {
                     curState[n] = context.get(item.name)
                 } else {
-                    // Previously unevaluted stuff because the variable might have been a macro:
+                    // Previously unevaluted stuff because the variable might have been a macro (and is now known not to be).
+                    // To elaborate, this exists for the case where the lvalue is going to be assigned to by the non-macro expression on
+                    // the right evaluated here.
                     if(nextItemExists && utils.isNodeType(nextItem, 'rawExpression')) {
                         resolveNonmacroRawExpression(context, curState, n+1)
                     }
@@ -288,7 +290,10 @@ function resolveBinaryOperandFrom(context, curState, index, options) {
                 }
             } else if(utils.isNode(item)) {
                 resolveValue(context, curState, n, true)
-            } else if(utils.isMacro(item) && !(nextItemExists && utils.isSpecificOperator(nextItem,'~') && nextItem[1] === 'postfix')) {
+            } else if(utils.isMacro(item)
+                  && !(nextItemExists && utils.isNodeType(nextItem,'rawExpression') && nextItem.expression.indexOf('~') === 0)
+                  && !(nextItemExists && utils.isSpecificOperator(nextItem,'~') && nextItem.opType === 'postfix')
+            ) {
                 resolveMacro(context, curState, n)
             } else if(nextItemExists && utils.isNodeType(nextItem, 'rawExpression')) { // Previously unevaluted stuff because the variable might have been a macro.
                 resolveNonmacroRawExpression(context, curState, n+1)
@@ -496,18 +501,22 @@ function resolveBinaryOperandFrom(context, curState, index, options) {
     // Returns an object context representing the arguments.
     function resolveBracketArguments(context, curState, index, closeOperator) {
         var bracketArgumentObject = coreLevel1.limaArgumentContext(context)
-        var argumentSpaceSuperExpressionList = [{type:"superExpression", parts: curState.slice(index)}]
-        var isObjectEnd = function(node) {
-            return utils.isNodeType(node, 'operator') && node.operator.indexOf(closeOperator) === 0
+        if(!nextStateItemsIsEndBracketOperator(curState, index, closeOperator)) {
+            var argumentSpaceSuperExpressionList = [{type:"superExpression", parts: curState.slice(index)}]
+            var isObjectEnd = function(node) {
+                return utils.isNodeType(node, 'operator') && node.operator.indexOf(closeOperator) === 0
+            }
+            resolveObjectSpace(bracketArgumentObject, argumentSpaceSuperExpressionList, 0, isObjectEnd)
+            curState.splice.apply(curState, [index,curState.length-index].concat(argumentSpaceSuperExpressionList))
         }
-        resolveObjectSpace(bracketArgumentObject, argumentSpaceSuperExpressionList, 0, isObjectEnd)
-        curState.splice.apply(curState, [index,curState.length-index].concat(argumentSpaceSuperExpressionList))
 
-        if(utils.isBracketOperator(curState[index], ']')) {
-            if(curState[index].operator === closeOperator) {
-                curState.splice(index,1) // remove end bracket
+        var endOperatorInfo = nextStateItemsIsEndBracketOperator(curState, index, closeOperator)
+        if(endOperatorInfo) {
+            if(endOperatorInfo.partialLast !== undefined) {
+                curState.splice(index,endOperatorInfo.nodes-1) // remove end brackets
+                curState[index].operator = curState[index].operator.slice(endOperatorInfo.partialLast) // remove the number of brackets consumed
             } else {
-                curState[index].operator = curState[index].operator.slice(closeOperator.length) // remove the number of brackets consumed
+                curState.splice(index,endOperatorInfo.nodes) // remove end brackets
             }
         } else {
             throw new Error("Missing '"+closeOperator+"' for bracket operation.")
@@ -515,6 +524,29 @@ function resolveBinaryOperandFrom(context, curState, index, options) {
 
         return bracketArgumentObject
     }
+        // If the next state items don't match the bracket operator, returns undefined.
+        // If it does match, returns an object the properties:
+            // nodes - The number of nodes needed to match all the brackets.
+            // partialLast - The number of characters from the last operator node that match. If undefined, all the characters in the last node match.
+        // closeOperator - Either ']' or ']]'
+        function nextStateItemsIsEndBracketOperator(curState, index, closeOperator) {
+            var matchedEndBrackets = 0, targetBrackets = closeOperator.length
+            var n=index
+            while(true) {
+                if(!utils.isBracketOperator(curState[n], ']'))
+                    return undefined
+
+                var endBrackets = curState[n].operator.length
+                if(matchedEndBrackets + endBrackets === targetBrackets) {
+                    return {nodes:n+1-index}
+                } else if(matchedEndBrackets + endBrackets > targetBrackets) {
+                    return {nodes:n+1-index, partialLast: matchedEndBrackets + endBrackets - targetBrackets}
+                } else {
+                    matchedEndBrackets += curState[index].operator.length
+                    n++
+                }
+            }
+        }
 
     function resolveParens(context, curState, index) {
         var info = getParenOrBracketResolutionInfo(context, curState, index, ')')

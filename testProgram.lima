@@ -1,3 +1,15 @@
-x = fn: ret 5
+
+
+wout['test2]
+
+;[
+x = rawFn
+ match: ret {arg: nil}
+ run: ret 5
 
 wout[ x[] ]
+
+if x[] == 5:
+  wout['Hello']
+
+;]

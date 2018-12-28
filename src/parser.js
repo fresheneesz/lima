@@ -46,23 +46,32 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
         // Represents a binary operator, then a binary operand (with potential prefix and postfix operators).
         // Returns an array of superExpression parts.
         binaryOperatorAndOperand: function(allowColonOperators, allowEndBracesAndParens/*=false*/){
-            var operators = [
+            // Operators that must have whitespace on both sides or no whitespace on both sides.
+            var normalBinaryOperators = [
                 this.basicOperator().times(1),
-                this.equalsOperator().times(1),
-                this.openingBracket().times(1),
+                // This is here just to make error handling consistent with other operators. ~ can't actually be validly used here.
+                this.unaryTildeOperator().times(1),
                 this.closingBBPs(allowEndBracesAndParens)
             ]
             if(allowColonOperators) {
-                operators.push(this.colonOperator().times(1))
+                normalBinaryOperators.push(this.colonOperator().times(1))
             }
-
-            var middleOperator = alt.apply(null, operators).map(function(v) {
+            var normalBinaryOperator = alt.apply(null, normalBinaryOperators).map(function(v) {
                 return v.map(function(o) {
                     if(o.opType === undefined)
                         o.opType = 'binary'
                     return o
                 })
             })
+
+            // Binary operators that can be written normally (like the normalBinaryOperators) or with whitespace on one side
+            // but not the other:
+            var permissiveBinaryOperators = alt(
+                this.equalsOperator(),
+                this.colonOperator(),
+                this.openingBracket()
+            )
+
             var operatorWithSurroundingWhitespace = function(operatorParser, requiredWhitespace) {
                 return seq(
                     alt(this.indentedWs().atLeast(requiredWhitespace),
@@ -77,20 +86,19 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
             }.bind(this)
 
             return alt(
+                // Bracket operator with no parameters.
                 seq(this.openingBracket(), this.indentedWs().many(), this.closingBrackets()).map(function(v) {
                     return [v[0]].concat(v[2])
                 }),
+                // Bracket operator with parameters.
                 seqObj(
                     ['operators',alt(
-                        operatorWithSurroundingWhitespace(alt(
-                            this.equalsOperator(),
-                            this.colonOperator(),
-                            this.openingBracket()
-                        ), 0).times(1).map(function(v) {
-                            return v
-                        }),
-                        middleOperator,
-                        operatorWithSurroundingWhitespace(middleOperator, 1)
+                        // Binary operators that can be written with whitespace on one side but not the other:
+                        operatorWithSurroundingWhitespace(permissiveBinaryOperators, 0).times(1),
+                        // Binary operators with no whitespace separation between them and their operators:
+                        normalBinaryOperator,
+                        // Binary operator with whitespace separation on both sides:
+                        operatorWithSurroundingWhitespace(normalBinaryOperator, 1)
                     )],
                     ['operand', this.binaryOperand().map(function(v) {
                         return v
@@ -176,11 +184,13 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
             // Returns an array of superExpression parts.
             postfixOperator: function() {
                 return seq(
-                    this.basicOperator().map(function(v) {
+                    alt(this.basicOperator(),
+                        this.unaryTildeOperator()
+                    ).map(function(v) {
                         v.opType = 'postfix'
                         return v
                     }),
-                    notFollowedBy(this.expressionAtom()) // to prevent capturing a binary operator
+                    notFollowedBy(this.expressionAtom()) // To prevent capturing a binary operator.
                 ).map(function(v) {
                     return v[0]
                 })
@@ -200,10 +210,29 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
                 else
                     return []
             })],
+//            ['closingBBPsAndPostfix', seq(
+//                this.closingBBPs(true).map(function(v){
+//                    if(v.length > 0)
+//                        return v[0]
+//                    else
+//                        return []
+//                }),
+//                this.postfixOperator().atMost(1)
+//            ).atMost(1)],
             ['binaryOperatorAndOperands', this.binaryOperatorAndOperand(allowColonOperators, true).many()],
             ['superExpressions', this.superExpression(allowColonOperators, true).many()],
             this.ws().many()
         ).map(function(v) {
+//            var closingBBPs = []
+//            if(v.closingBBPsAndPostfix.length > 0) {
+//                closingBBPs = v.closingBBPsAndPostfix[0][0]
+//                var secondPostfixOperator = v.closingBBPsAndPostfix[0][1]
+//            }
+//
+//            return {current: v.postfix.concat([closingBBPs]).concat(secondPostfixOperator).concat(flatten(v.binaryOperatorAndOperands)),
+//                    next: v.superExpressions
+//            }
+
             return {current: v.postfix.concat(v.closingBBPs).concat(flatten(v.binaryOperatorAndOperands)),
                     next: v.superExpressions
             }
@@ -298,6 +327,12 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
         }.bind(this))
     },
 
+    unaryTildeOperator: function() {
+        return str('~').atLeast(1).tie().map(function(operator) {
+            return {type:'operator', operator:operator}
+        })
+    },
+
     colonOperator: function() {
         return this.rawOperator().chain(function(v) {
             if(v.operator in {':':1,'::':1}) {
@@ -328,6 +363,7 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
             if(v.operator in {':':1,'::':1}
                || v.operator.slice(-1) === '='     // no operators that end in equals
                   && v.operator.slice(-2) !== '==' // except operators that end in more than one equals
+               || v.operator.slice(-1) === '~'     // no operators the end in tilde
             ) {
                 return fail()
             } else {
@@ -339,7 +375,7 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
         // returns an operator node
         rawOperator: function() {
             return alt(
-                one('!$@%^&*-+/|\\/<>.,?!:='),
+                one('!$@%^&*-+/|\\/<>.,?!:=~'),
                 seq(one("#"),
                     notFollowedBy(this.rawString()) // since strings are modified by the # symbol
                 ).map(function(v){

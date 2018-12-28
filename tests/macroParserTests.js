@@ -180,11 +180,15 @@ ifInnerBlockTests = {inputs: {}, state: {indent: 0, scope:{get:function(name) {
     if(name === 'true') return 1
 }}}}
 ifInnerBlockTests.inputs[
-    " 1:"
+    "1:"
 ] =
-    { body: [],
-      parameters: { numerator: 1, denominator: 1, type: 'number' } }
-
+    [ { expressionBlock: {
+           type: 'superExpression',
+           parts: [ { numerator: 1, denominator: 1, type: 'number' } ],
+           needsEndParen: false },
+        foundTrailingColon: true
+      }
+    ]
 
 //*/
 
@@ -196,5 +200,5 @@ module.exports = {
     retStatement: retStatementTests,
     indentedBlock: indentedBlockTests,
     macroInner: macroInnerTests,
-    ifInnerBlock:ifInnerBlockTests
+    ifInner:ifInnerBlockTests
 }

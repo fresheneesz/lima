@@ -434,6 +434,16 @@ var tests = exports.tests = {
 
         //should fail:
 
+//    // Todo:
+//    multipleValuesInParens:          {shouldFail:true, content: "(1 2)"},
+//    multipleValuesInParens2:          {
+//        shouldFail:true,
+//        content: "a = 1\n" +
+//                 "b = 2\n" +
+//                 "(a b)"
+//    },
+
+
     dupeProperties:          {shouldFail:true, content: "a:4 a:5"},
     dupePropertiesWithNil:   {shouldFail:true, content: "a:nil a:5"}, // Multiple object properties should throw an error even if the first object property was set to nil.
     privilegedRedeclaration: {shouldFail:true, content: "x=4 x='hello world'"},
@@ -531,6 +541,19 @@ var tests = exports.tests = {
         var value = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
         return isSpecificInt(value, 1)
     }},
+    basicBracketOperator2: {content:'x = {a:1 b:2}  x["a"] x["b"]', check: function(module) {
+        var value1 = getProperty(module, coreLevel1.NumberObj(0))
+        var value2 = getProperty(module, coreLevel1.NumberObj(1))
+        return isSpecificInt(value1, 1) && isSpecificInt(value2, 2)
+    }},
+    basicBracketOperator3: {content:'x = {a:1 b:"a"}  x[x["b"]] ', check: function(module) {
+        var value1 = getProperty(module, coreLevel1.NumberObj(0))
+        return isSpecificInt(value1, 1)
+    }},
+    basicBracketOperator4: {content:'x = {a:1}  x["a"]+1 ', check: function(module) {
+        var value1 = getProperty(module, coreLevel1.NumberObj(0))
+        return isSpecificInt(value1, 2)
+    }},
 
 
     // general operators
@@ -596,6 +619,16 @@ var tests = exports.tests = {
         check: function(module) {
             var element0 = getFirstProperty(module).value
             return isSpecificInt(element0, 5)
+        }
+    },
+    basicRawFunctionValue5: {
+        content:'a = rawFn \n' +
+                ' match: ret {arg:true}\n'+
+                ' run:   ret 5\n'+
+                'a[] + 1',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 6)
         }
     },
 
@@ -985,6 +1018,19 @@ var tests = exports.tests = {
 //        }
 //    },
 
+    macroTildeOperator: {
+        content:'a = macro\n'+
+                ' match: \n' +
+                '  ret {consume: 0}\n'+
+                ' run:   \n' +
+                '  ret 5\n'+
+                'b = a~\n' +
+                'b',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 5)
+        }
+    },
 
     // if
 
@@ -1091,7 +1137,15 @@ var tests = exports.tests = {
 //            return isSpecificInt(element0, 1)
 //        }
     },
-
+    undefinedVariableInIfCondition: {
+        shouldFail:"Undefined variable",
+        content:'if x:\n'+
+                '  wout["Hello"]',
+//        check: function(module) {
+//            var element0 = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
+//            return isSpecificInt(element0, 1)
+//        }
+    },
 
     // other
 

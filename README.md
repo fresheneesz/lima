@@ -112,7 +112,6 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * `=`  (created, but can't be tested until `var?` exists and is usable)
   * `~>`
 * general operators
-  * `~` (etc)
   * `~>` (etc)
   * `...`
 * numbers
@@ -153,6 +152,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * require self for members that alias a variable from an upper scope
   * operators
     * `.`
+    * Multi-argument bracket operator
     * ! (interface operator)
     * [[ ]]
   * members
@@ -160,14 +160,12 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
     * keys
     * iterlist
   * special constructs
-    * self
-    * this
+    * this (Done but need to write tests for it)
     * static
     * target
   * methods
     * tslice
 * functions
-	* self member access
     * destructuring assignment in parameters
 	* ==
 	* sideEffectLess
@@ -230,7 +228,6 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
     * ready
     * outReady
     * const
-    * if
     * while
     * throw
     * try
@@ -286,6 +283,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 * error about undeclared variables in object definition space
 * error for declared variables with the same first character and case but are not case-insensitive-unique after the first character
 * general operators
+  * `~` (etc)
   * ??
 * nil
   * ==
@@ -299,9 +297,6 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * double quote strings
   * triple quote strings
   * grave accent strings (`)
-  * operators
-    * `==`
-    * basic single-argument bracket operator `[ ]`
   * members
   	* str
 * object literals
@@ -310,7 +305,12 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * `:` with named keys
   * `::` with expression keys
   * implicitly declared privileged members (with var type)
+  * operators
+    * `==`
+    * basic single-argument bracket operator `[ ]`
 * fn.raw function creation
+* core macros
+  * if
 
 #### Migrations from Core Level 1 to Level 2
 
@@ -444,6 +444,14 @@ These are things that were done in Core Level 1, but should be moved to Core Lev
 
 ## Change log
 
+* 0.0.20
+  * Tilde Operator
+  * Adding coreLevel2 (bracket operations need to be fixed before this is fully working)
+  * Adding limad for debugging
+  * Minor
+  	* Supporting throwing an error when an if statement is given an undefined variable.
+  	* Fixing bug in `if` where it couldn't handle multiple newlines in an empty block.
+  	* Fixing a number of parser unit tests since super-expressions no longer auto-simplify if they only contain one part.
 * 0.0.19 - 2018-12-23
   * If statements! Just in time for Christmas!
   * Also overhauled the context and scope system with some nacent (incomplete) support for context attributes.
