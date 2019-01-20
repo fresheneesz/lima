@@ -530,6 +530,8 @@ function macro(macroFns) {
                 if(statementInfo !== undefined) {
                     var parts = statementInfo.expression.parts
                     var consumed = statementInfo.consumed
+                    closeExpression(statementInfo.expression)
+                    var consumed = findExpressionEndOffset(statementInfo.expression)
                 } else {
                     var parts = []
                     var consumed = 0
@@ -551,6 +553,129 @@ function macro(macroFns) {
         return retMacro
     }
 
+
+// expression - A superExpression node.
+// Returns the offset of the last part in the expression (taking into account objects in the expression).
+function findExpressionEndOffset(expression) {
+    if(expression.parts.length > 0) {
+        var expressionLength = expression.parts.length
+        var lastPart = expression.parts[expressionLength-1]
+        if(utils.isNodeType(lastPart, 'object')) {
+            return findExpressionEndOffset(lastPart.expressions[lastPart.expressions.length-1])
+        } else {
+            return lastPart.end.offset
+        }
+    } else {
+        return 0
+    }
+}
+
+// Takes a superExpression node and mutates it so that any expression parts that are not part of the expression are removed.
+// Returns the removed items in the form of a list of superExpressions, where the first superExpression will always contain parts if it exists.
+// Assumes that macros in the expressions in the object have been consumption-evaluated.
+// Todo: consider moving this logic into evaluate.js when consumeFirstlineMacros is on.
+function closeExpression(expression) {
+    var counts = {paren:0, bracket:0}
+    var trailingExpressions = [], lastItemType, curItemType=undefined
+    for(var n=0; n<expression.parts.length;n++) {
+        var part = expression.parts[n]
+        if(utils.isNodeType(part, 'object')) {
+            var remainingExpressions = closeObject(part)
+            if(remainingExpressions.length > 0) {
+                expression.parts.splice.apply(expression.parts, [n+1,0].concat(remainingExpressions[0].parts))
+            }
+            if(remainingExpressions.length > 1) {
+                // Push the rest of the expressions onto the front of trailingExpressions
+                trailingExpressions.splice.apply(trailingExpressions, [0, 0].concat(remainingExpressions.slice(1)))
+            }
+        } else if(utils.isSpecificOperator(part, '}')) {
+            // We don't have to worry about situations where the opening brace of an object is inside a rawExpression, because
+            // the consumption of all the macros should have been evaluated before the node was passed to this function. Also
+            // the opening and closing brace should always be in the same rawExpression (so I guess that wouldn't be an issue anyway).
+            return buildReturnValue(n)
+        } else if(utils.isSpecificOperator(part, '(')) {
+            counts.paren++
+        } else if(utils.isSpecificOperator(part, ')')) {
+            counts.paren--
+        } else if(utils.isBracketOperator(part, '[')) {
+            counts.bracket += part.operator.length
+        } else if(utils.isBracketOperator(part, ']')) {
+            counts.bracket -= part.operator.length
+        }
+
+        if(counts.paren < 0 || counts.bracket < 0) {
+            return buildReturnValue(n)
+        }
+
+        lastItemType = curItemType
+        if(part.type in {number:1, string:1, object:1, variable:1}) {
+            curItemType = 'value'
+        } else if(part.type === 'rawExpression') {
+            curItemType = 'rawExpression'
+        } else if(utils.isNodeType(part, 'operator')) {
+            curItemType = utils.getOperatorType(part)
+        } else {
+            curItemType = undefined
+        }
+
+
+        if(lastItemType === 'rawExpression') {
+            lastItemType = 'value' // Makes the condition logic below easier.
+        }
+        if(counts.paren === 0 && counts.bracket === 0                       // If the expression is at its top level,
+           && (   lastItemType === 'value' && curItemType === 'value'       // and there's no way the expression could continue.
+               || lastItemType === 'postfix' && curItemType === 'value'
+               || lastItemType === 'value' && curItemType === 'prefix'
+           )
+        ) {
+            return buildReturnValue(n)
+        }
+    }
+
+    return [].concat(trailingExpressions)
+
+    function buildReturnValue(n) {
+        var result = []
+        var remainingParts = expression.parts.splice(n)
+        if(remainingParts.length > 0) {
+            result.push({type:'superExpression', parts:remainingParts})
+        }
+        return result.concat(trailingExpressions)
+    }
+}
+
+// Takes an object node and mutates it so that any expressions and expression parts that are not part of the object are removed.
+// Returns the removed items in the form of a list of superExpressions.
+// Assumes that macros in the expressions in the object have been consumption-evaluated.
+function closeObject(objectNode) {
+    for(var n=0; n<objectNode.expressions.length; n++) {
+        var expr = objectNode.expressions[n]
+        if(utils.isSpecificOperator(expr.parts[0], '}')) {
+            var remainingParts = expr.parts.splice(1) // Remove everything except the end brace.
+            var remainingObjectExpressions = objectNode.expressions.splice(n+1) // Remove rest of the expressions.
+
+            var result = []
+            if(remainingParts.length > 0) {
+                result.push({type:'superExpression', parts:remainingParts})
+            }
+            result = result.concat(remainingObjectExpressions)
+            return result
+        } else {
+            var remainingExprExpressions = closeExpression(expr)
+            objectNode.expressions.splice.apply(objectNode.expressions, [n+1, 0].concat(remainingExprExpressions))
+        }
+    }
+
+    return []
+}
+    function findEndBrace(expression) {
+        for(var n=0; n<expression.parts.length;n++) {
+            var part = expression.parts[n]
+            if(utils.isSpecificOperator(part, '}')) {
+                return n
+            }
+        }
+    }
 
 // The context passed into run is the context the macro was called in.
 function macroWithConventionsACD(name, macroParser, run) {
@@ -640,20 +765,33 @@ var ifMacro = macroWithConventionsACD('macro', 'ifInner', function run(ast) {
             } else {
                 throw new Error("Unevaluated expression '"+conditionResult.value+"'. This might be a bug in the interpreter.")
             }
-        } else if(utils.isSpecificOperator(conditionResult.remainingParts[0], ':')) {
-            if(blockItem.foundTrailingColon)
-                throw new Error("Invalid `if` block, found invalid trailing colon in the body of a conditional block.")
+        }
+        // I don't think this is necessary:
+//        else if(utils.isSpecificOperator(conditionResult.remainingParts[0], ':')) {
+//            if(blockItem.foundTrailingColon)
+//                throw new Error("Invalid `if` block, found invalid trailing colon in the body of a conditional block.")
+//        }
+
+        // superExpression without the colon.
+        var conditionalBody = {type:'superExpression', parts:conditionResult.remainingParts.slice(1)}
+        var remainingSuperExpressions = closeExpression(conditionalBody)
+        if(remainingSuperExpressions.length > 0) {
+            // Add any remaining parts as the next expression block.
+            ast.splice.apply(ast, [n+1, 0].concat(
+                remainingSuperExpressions.map(function(remainingSuperExpression) {
+                    return {expressionBlock: remainingSuperExpression}
+                })
+            ))
         }
 
         if(utils.limaEquals(conditionContext, conditionResult.value, True)) {
-            if(conditionResult.remainingParts.length <= 1) {
+            if(conditionalBody.parts.length === 0) {
                 return nil
             }
 
             // Todo: care whether you're in an object context or function context (re allowProperties and implicitDeclarations)?
             var bodyContext = this.newStackContext(this.scope.tempReadScope(), false)
-            var conditionalBody = conditionResult.remainingParts.slice(1) // Strip off the colon
-            var bodyResult = evaluate.superExpression(bodyContext, conditionalBody)
+            var bodyResult = evaluate.superExpression(bodyContext, conditionalBody.parts)
 
             return bodyResult.value
         }
@@ -726,10 +864,12 @@ var coreLevel1Variables = {
     nil: nil,
     true: True,
     false: False,
+    wout: wout,
+
+    // macros
     rawFn: rawFn,
     macro: macroMacro,
     if: ifMacro,
-    wout: wout,
 }
 
 // makes the minimal core scope where some core constructs are missing operators and members that are derivable using

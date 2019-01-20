@@ -14,7 +14,6 @@ var tests = exports.tests = {
 
 
 
-
     //*
     emptySource:                    "",
     hello:                          "wout['hello world']\r\n",
@@ -530,6 +529,15 @@ var tests = exports.tests = {
         var innerA = getPropertyOld({this:a}, coreLevel1.StringObj("a"))
         return isSpecificInt(innerA, 5)
     }},
+    nestedObjectThenOtherValues: {content:'{a:{b:"c"}} 3 4', check: function(module) {
+        var object = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
+        var a = getPropertyOld({this:object}, coreLevel1.StringObj("a"))
+        var b = getPropertyOld({this:a}, coreLevel1.StringObj("b"))
+        var one = getProperty(module, coreLevel1.NumberObj(1))
+        var two = getProperty(module, coreLevel1.NumberObj(2))
+        return b.meta.primitive.string === 'c'
+            && isSpecificInt(one, 3) && isSpecificInt(two, 4)
+    }},
 
         // object operators
 
@@ -739,6 +747,7 @@ var tests = exports.tests = {
     },
     // doubly nested macro on first-line
     rawFunctionValueWithNestedMacros: {
+        //                                            (      (  null   ))
         content:'a = rawFn[match: ret {weak:true arg: ret {0:ret "fake"}}\n'+
                 ' run:   ret 5\n' +
                 ']\n'+

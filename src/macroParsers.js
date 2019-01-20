@@ -60,7 +60,7 @@ module.exports = P.createLanguage({context:{}}, {
                     body: seq(
                         // Strip leading newlineFreeWs so first-line statements have the right indent in comparison to their block:
                         parserStateInner.newlineFreeWs().many(),
-                        parserStateInner.superExpression(false).many()
+                        parserStateInner.superExpression().many()
                     ).map(function(v) {
                         return v[1]
                     }).tryParse(adjustedIndentedBlock)

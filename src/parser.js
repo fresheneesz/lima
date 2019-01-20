@@ -28,133 +28,29 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
 
 	// expressions
 
+
     // The returned superExpression can contain multiple logical expressions, and
         // where one begins and another ends is determined later (in the interpreter).
-    superExpression: function(allowColonOperators/*=true*/, allowEndBracesAndParens/*=false*/) {
-        if(allowColonOperators === undefined) allowColonOperators = true
-        return this.indent(function() {
-            return seq(
-                this.binaryOperand().map(function(v){
-                    return v
-                }),
-                this.binaryOperatorAndOperand(allowColonOperators, allowEndBracesAndParens).many()
-            ).map(function(v) {
-                return {type:'superExpression', parts:v[0].concat(flatten(v[1])), needsEndParen:false}
-            })
+    // options
+        // disallowOperator(opString) - A function that returns true if the operator should be disallowed at the expression's top-level
+        //                              and false otherwise. Defaults to allowing everything.
+        // expressionContinuation  - If true, parses as an expression continuation (so if the first-node is an operator,
+        //                           it won't automatically be assumed to be a prefix operator).
+    superExpression: function(options) {
+        return this.indent(function(ws) {
+            return this.rawSuperExpression(options)
         })
     },
-        // Represents a binary operator, then a binary operand (with potential prefix and postfix operators).
-        // Returns an array of superExpression parts.
-        binaryOperatorAndOperand: function(allowColonOperators, allowEndBracesAndParens/*=false*/){
-            // Operators that must have whitespace on both sides or no whitespace on both sides.
-            var normalBinaryOperators = [
-                this.basicOperator().times(1),
-                // This is here just to make error handling consistent with other operators. ~ can't actually be validly used here.
-                this.unaryTildeOperator().times(1),
-                this.closingBBPs(allowEndBracesAndParens)
-            ]
-            if(allowColonOperators) {
-                normalBinaryOperators.push(this.colonOperator().times(1))
-            }
-            var normalBinaryOperator = alt.apply(null, normalBinaryOperators).map(function(v) {
-                return v.map(function(o) {
-                    if(o.opType === undefined)
-                        o.opType = 'binary'
-                    return o
-                })
-            })
-
-            // Binary operators that can be written normally (like the normalBinaryOperators) or with whitespace on one side
-            // but not the other:
-            var permissiveBinaryOperators = alt(
-                this.equalsOperator(),
-                this.colonOperator(),
-                this.openingBracket()
-            )
-
-            var operatorWithSurroundingWhitespace = function(operatorParser, requiredWhitespace) {
-                return seq(
-                    alt(this.indentedWs().atLeast(requiredWhitespace),
-                        this.expressionEndLine()),
-                    operatorParser,
-                    alt(this.indentedWs().atLeast(requiredWhitespace),
-                        this.expressionEndLine()
-                    )
-                ).map(function(v) {
-                    return v[1]
-                })
-            }.bind(this)
-
+        // A superExpression or superExpression continuation. Has the same parameters and return value as superExpression.
+        rawSuperExpression: function(options) {
+            if(options === undefined) options = {}
             return alt(
-                // Bracket operator with no parameters.
-                seq(this.openingBracket(), this.indentedWs().many(), this.closingBrackets()).map(function(v) {
-                    return [v[0]].concat(v[2])
-                }),
-                // Bracket operator with parameters.
-                seqObj(
-                    ['operators',alt(
-                        // Binary operators that can be written with whitespace on one side but not the other:
-                        operatorWithSurroundingWhitespace(permissiveBinaryOperators, 0).times(1),
-                        // Binary operators with no whitespace separation between them and their operators:
-                        normalBinaryOperator,
-                        // Binary operator with whitespace separation on both sides:
-                        operatorWithSurroundingWhitespace(normalBinaryOperator, 1)
-                    )],
-                    ['operand', this.binaryOperand().map(function(v) {
-                        return v
-                    })],
-                    ['closingBBPs',seq(
-                        alt(this.indentedWs().many(),
-                            this.expressionEndLine()
-                        ),
-                        this.closingBBPs(allowEndBracesAndParens)
-                    ).map(function(v) {
-                        return v[1]
-                    }).atMost(1)]
+                seq(notFollowedBy(this.operatorMatching(options.disallowOperator)),
+                    this.operator()
                 ).map(function(v){
-                    var result = v.operators.concat(v.operand)
-                    if(v.closingBBPs.length > 0) {
-                        result = result.concat(v.closingBBPs[0])
-                    }
-
-                    return result
-                })
-            )
-        },
-
-        // Parses the last possible line of an expression block, that must start with an end paren of some kind.
-        // Note: theoretically, we could allow the same semantics for any operator that an expression can't
-            // start with (but for now at least, we're just allowing the paren types).
-        // Returns any consumed whitespace.
-        expressionEndLine: function(){
-            return seq(
-                this.indentedWs(this.state.indent-1).map(function(v) {
-                    return v.ws
-                }),
-                lookahead(alt(']','}',')'))
-            ).map(function(v) {
-                return v[0]
-            })
-        },
-
-        // Parses a value with potential unary operators.
-        // Returns an array of superExpression parts.
-        binaryOperand: function() {
-            return seqObj(
-                ['binaryOperandPrefixAndAtom', this.binaryOperandPrefixAndAtom()],
-                ['postfixOperator', this.postfixOperator().atMost(1)],
-                ['closingBrackets', this.closingBrackets().atMost(1)]
-            ).map(function(v) {
-                if(v.closingBrackets.length > 0)
-                    v.closingBrackets = v.closingBrackets[0]
-                return v.binaryOperandPrefixAndAtom.concat(v.postfixOperator).concat(v.closingBrackets)
-            })
-        },
-            // Returns an array of superExpression parts.
-            binaryOperandPrefixAndAtom: function() {
-                return seqObj(
-                    ['basicOperators', this.basicOperator().atMost(1)],
-                    ['expressionAtom', this.expressionAtom().chain(function(v) {
+                    return v[1]
+                }).times(1),
+                this.expressionAtom().chain(function(v) {
                         var unknownMacrosAllowed = !this.state.consumeFirstlineMacros
                         if(unknownMacrosAllowed && v[0].type in {variable:1, superExpression:1}) {
                             return this.rawExpression().atMost(1).map(function(rawExpressions) {
@@ -167,140 +63,189 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
                         } else {
                             return succeed(v)
                         }
-                    }.bind(this))]
-                ).map(function(v) {
-                    var result = []
-                    if(v.basicOperators.length === 1) {
-                        v.basicOperators[0].opType = 'prefix'
-                        result.push(v.basicOperators[0])
+                    }.bind(this)),
+                this.indentedWs() // To support multiple atoms in a row without operators between them (eg function parameters)
+            ).atLeast(1).map(function(v) {
+                var parts = flatten(v).filter(function(node) {
+                    return !(node.type in {ws:1,indent:1})
+                })
+
+                if(!options.expressionContinuation && utils.isNodeType(parts[0], 'operator')) {
+                    // If the first node is an operator and has no space between it and the next node, its a prefix operator.
+                    if(!parts[0].spaceAfter && !isBBPOperator(parts[0].operator)) {
+                        parts[0].opType = 'prefix'
                     }
-                    result = result.concat(v.expressionAtom)
-
-                    return result
+                }
+                parts.forEach(function(node, n) {
+                    delete node.spaceAfter
                 })
-            },
 
-            // Parses a postfix operator.
-            // Returns an array of superExpression parts.
-            postfixOperator: function() {
+                return {type:'superExpression', parts:parts}
+            })
+        },
+
+    // Returns a list of nodes where the first is always a value node and the second node is a macroConsumption node if it exists.
+    expressionAtom: function() {
+        return this.value().mark().chain(function(v) {
+            v.value.start = v.start
+            v.value.end = v.end
+            if(this.state.consumeFirstlineMacros && v.value.type === 'variable') {
+                if(this.state.context.has(v.value.name)) {
+                    var value = this.state.context.get(v.value.name)
+                    if(value.meta.macro !== undefined) {
+                        // Evaluate macro consumption.
+                        //var startColumn = v.end.column-this.state.indent+1 // The +1 because the end.column is 1 behind the start column.
+                        return this.macro(value/*, startColumn*/).map(function(parts) {
+                            return [v.value].concat(parts)
+                        })
+                    }
+                }
+            }
+            // else
+            return P.succeed([v.value])
+        }.bind(this))
+    },
+
+        // Parses an operator that matches the passed allowOperator function.
+        // matchingOperator(opString) - A function determining if the opString is a matching operator or not.
+        operatorMatching: function(matchingOperator) {
+            return this.operator().chain(function(v){
+                if(matchingOperator && matchingOperator(v.operator)) {
+                    return succeed(v) // if
+                } else {
+                    return fail()
+                }
+            })
+        },
+
+        operator: function() {
+            return seqObj(
+                ['leadingWs', this.indentedWs().atMost(1)],
+                ['operator', alt(this.colonOperator(),
+                    this.basicOperator(),
+                    this.dotOperator(),
+                    this.openingBracket(),
+                    "(",
+                    this.closingBBP(),
+                    this.sameIndentClosingBBP()
+                ).mark()],
+                ['trailingWs', alt(seq(this.ws().many(), eof),
+                    lookahead(this.indentedWs())
+                ).atMost(1)]
+            ).map(function(v) {
+                if(isBBPOperator(v.operator.value)) {
+                    var opType = 'bbp'
+                } else {
+                    var L0 = v.leadingWs.length, L1 = v.trailingWs.length
+                    var spaceBefore = L0 !== 0
+                    var spaceAfter = L1 !== 0
+                    if(!spaceBefore && spaceAfter) {
+                        var opType = 'postfix'
+                    } else if(spaceBefore && !spaceAfter) {
+                        var opType = 'prefix'
+                    } else {
+                        var opType = 'binary'
+                    }
+                }
+
+                var result = {
+                    type:'operator', operator:v.operator.value, opType: opType,
+                    start: v.operator.start, end: v.operator.end
+                }
+                if(spaceAfter !== undefined) {
+                    result.spaceAfter = spaceAfter
+                }
+                return result
+            })
+        },
+
+            // returns an operator node
+            basicOperator: function() {
+                return alt(
+                    one('!$@%^&*-+/|\\/<>,?!=~'),
+                    seq("#",
+                        notFollowedBy(this.rawString()) // since strings are modified by the # symbol
+                    ).map(function(v){
+                        return v[0]
+                    })
+                ).atLeast(1).tie()
+            },
+            dotOperator: function() {
                 return seq(
-                    alt(this.basicOperator(),
-                        this.unaryTildeOperator()
-                    ).map(function(v) {
-                        v.opType = 'postfix'
-                        return v
-                    }),
-                    notFollowedBy(this.expressionAtom()) // To prevent capturing a binary operator.
-                ).map(function(v) {
-                    return v[0]
+                    str(".").atLeast(1),
+                    str("=").atMost(1)
+                ).tie()
+            },
+            colonOperator: function() {
+                // Colon operators must be at the end of the operator.
+                return seq(
+                    this.basicOperator().atMost(1),
+                    str(":").atLeast(1)
+                ).tie()
+            },
+            openingBracket: function() {
+                return seq(
+                    str("[").atLeast(1),
+                    str("=").atMost(1)
+                ).tie()
+            },
+            // Closing Brace, Bracket, and/or Paren.
+            closingBBP: function() {
+                return alt(
+                    '}',')', str(']').atLeast(1).tie()
+                )
+            },
+            // A closingBBP that is on the same line the expression started on.
+            sameIndentClosingBBP: function() {
+                return seq(this.indentedWs(this.state.indent-1),
+                    this.closingBBP()
+                ).map(function(v){
+                    return v[1]
                 })
             },
+
+
+
+
+
 
     // Evaluates the string of a rawExpression once it has been determined that the previous item was not a macro.
-    // Returns an object with the properties:
-        // current - An array of superExpression parts representing the continuation of the current expression.
-        // next - A list of super expressions that follow the current expression.
-    nonMacroExpressionContinuation: function(allowColonOperators/*=true*/) {
-        if(allowColonOperators === undefined) allowColonOperators = true
-        return seqObj(
-            ['postfix', this.postfixOperator().atMost(1)],
-            ['closingBBPs', this.closingBBPs(true).atMost(1).map(function(v){
-                if(v.length > 0)
-                    return v[0]
-                else
-                    return []
-            })],
-//            ['closingBBPsAndPostfix', seq(
-//                this.closingBBPs(true).map(function(v){
-//                    if(v.length > 0)
-//                        return v[0]
-//                    else
-//                        return []
-//                }),
-//                this.postfixOperator().atMost(1)
-//            ).atMost(1)],
-            ['binaryOperatorAndOperands', this.binaryOperatorAndOperand(allowColonOperators, true).many()],
-            ['superExpressions', this.superExpression(allowColonOperators, true).many()],
-            this.ws().many()
+    // Returns an array of superExpression parts representing the continuation of the current expression.
+    nonMacroExpressionContinuation: function() {
+        return seq(
+            this.rawSuperExpression({expressionContinuation:true}).atMost(1),
+            seq(this.ws().many(), eof).atMost(1)
         ).map(function(v) {
-//            var closingBBPs = []
-//            if(v.closingBBPsAndPostfix.length > 0) {
-//                closingBBPs = v.closingBBPsAndPostfix[0][0]
-//                var secondPostfixOperator = v.closingBBPsAndPostfix[0][1]
-//            }
-//
-//            return {current: v.postfix.concat([closingBBPs]).concat(secondPostfixOperator).concat(flatten(v.binaryOperatorAndOperands)),
-//                    next: v.superExpressions
-//            }
-
-            return {current: v.postfix.concat(v.closingBBPs).concat(flatten(v.binaryOperatorAndOperands)),
-                    next: v.superExpressions
+            if(v[0].length > 0) {
+                return v[0][0].parts
+            } else {
+                return []
             }
         })
     },
 
-    // Returns a list of nodes where the first is always a value node and the second node is a macroConsumption node if it exists.
-    expressionAtom: function() {
-        return alt(
-            this.value().mark().chain(function(v) {
-                if(this.state.consumeFirstlineMacros && v.value.type === 'variable') {
-                    if(this.state.context.has(v.value.name)) {
-                        var value = this.state.context.get(v.value.name)
-                        if(value.meta.macro !== undefined) {
-                            // Evaluate macro consumption.
-                            //var startColumn = v.end.column-this.state.indent+1 // The +1 because the end.column is 1 behind the start column.
-                            return this.macro(value/*, startColumn*/).map(function(parts) {
-                                return [v.value].concat(parts)
-                            })
-                        }
-                    }
-                }
-                // else
-                return P.succeed([v.value])
-            }.bind(this)),
+    // macro - A lima macro value.
+    // Returns a macroConsumption node.
+    macro: function(macro, startColumn) {
+        return P(function(input, i) {
+            var startColumn = '??'    // todo: support startColumn
+            // Create a new context with consumeFirstlineMacros potentially set to false (if the first line has passed)
+            var newContext = this.state.context.newStackContext(this.state.context.scope, this.state.consumeFirstlineMacros)
+            var consumeResult = utils.consumeMacro(newContext, macro, input.slice(i), startColumn)
+            var consumedCharsLimaValue = utils.getProperty(this.state.context, consumeResult, coreLevel1.StringObj('consume'))
+            var consumedChars = consumedCharsLimaValue.meta.primitive.numerator
+            var consumedString = input.slice(i, i+consumedChars)
+            maybeUnsetFirstline(this, consumedString)
 
-            seqObj('(',
-                ['superExpression', this.superExpression()],
-                ['end', seq(
-                    this.indentedWs(this.state.indent-1).many(),
-                    str(')')
-                ).atMost(1)]
-            ).map(function(v) {
-                if(v.superExpression.type === 'superExpression') {
-                    v.superExpression.parens = true
-                }
-
-                if(v.end.length !== 1) {// if the end paren hasn't been found
-                    v.superExpression.needsEndParen = true
-                }
-
-                if(v.superExpression.length === 1) { // && !v.superExpression.needsEndParen - I think needsEndParen is always false here
-                    return [v.superExpression.parts[0]] // return the lone part of the superExpression
-                } else {
-                    return [v.superExpression]
-                }
-            })
-        )
+            var nextIndex = i+consumedChars
+            var macroConsumption = {type:"macroConsumption", consume:consumedChars}
+            var rawExpression = {
+                type:"rawExpression", startColumn:startColumn, expression:input.slice(i, nextIndex),
+                start: {offset:i}, end: {offset:nextIndex-1}
+            }
+            return P.makeSuccess(nextIndex, [macroConsumption, rawExpression]);
+        }.bind(this))
     },
-        // macro - A lima macro value.
-        // Returns a macroConsumption node.
-        macro: function(macro, startColumn) {
-            return P(function(input, i) {
-                var startColumn = '??'    // todo: support startColumn
-                // Create a new context with consumeFirstlineMacros potentially set to false (if the first line has passed)
-                var newContext = this.state.context.newStackContext(this.state.context.scope, this.state.consumeFirstlineMacros)
-                var consumeResult = utils.consumeMacro(newContext, macro, input.slice(i), startColumn)
-                var consumedCharsLimaValue = utils.getProperty(this.state.context, consumeResult, coreLevel1.StringObj('consume'))
-                var consumedChars = consumedCharsLimaValue.meta.primitive.numerator
-                var consumedString = input.slice(i, i+consumedChars)
-                maybeUnsetFirstline(this, consumedString)
-
-                var nextIndex = i+consumedChars
-                var macroConsumption = {type:"macroConsumption", consume:consumedChars}
-                var rawExpression = {type:"rawExpression", startColumn:startColumn, expression:input.slice(i, nextIndex)}
-                return P.makeSuccess(nextIndex, [macroConsumption, rawExpression]);
-            }.bind(this))
-        },
 
     // operators and macros
 
@@ -323,115 +268,26 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
             ).many()
         ).tie().mark().map(function(v) {
             var startColumn = v.start.column-this.state.indent
-            return {type:'rawExpression', startColumn: startColumn, expression: v.value}
+            return {
+                type:'rawExpression', startColumn: startColumn, expression: v.value,
+                start: v.start, end: v.end
+            }
         }.bind(this))
     },
-
-    unaryTildeOperator: function() {
-        return str('~').atLeast(1).tie().map(function(operator) {
-            return {type:'operator', operator:operator}
-        })
-    },
-
-    colonOperator: function() {
-        return this.rawOperator().chain(function(v) {
-            if(v.operator in {':':1,'::':1}) {
-                v.opType = 'binary' // always binary
-                return succeed(v)
-            } else {
-                return fail()
-            }
-        })
-    },
-
-    // an operator that ends in equals
-    equalsOperator: function() {
-        return this.rawOperator().desc("an equals operator (eg = or +=) ").chain(function(v) {
-            if(v.operator.slice(-1) === '=' && v.operator.slice(-2) !== '==') {
-                v.opType = 'binary' // always binary
-                return succeed(v)
-            } else {
-                return fail()
-            }
-        })
-    },
-
-    // any operator excluding ones that end in equals and brackets
-    // returns an operator node
-    basicOperator: function() {
-        return this.rawOperator().chain(function(v) {
-            if(v.operator in {':':1,'::':1}
-               || v.operator.slice(-1) === '='     // no operators that end in equals
-                  && v.operator.slice(-2) !== '==' // except operators that end in more than one equals
-               || v.operator.slice(-1) === '~'     // no operators the end in tilde
-            ) {
-                return fail()
-            } else {
-                return succeed(v)
-            }
-        })
-        .desc("a basic operator")
-    },
-        // returns an operator node
-        rawOperator: function() {
-            return alt(
-                one('!$@%^&*-+/|\\/<>.,?!:=~'),
-                seq(one("#"),
-                    notFollowedBy(this.rawString()) // since strings are modified by the # symbol
-                ).map(function(v){
-                    return v[0]
-                })
-            ).atLeast(1).tie().map(function(v) {
-                return {type:'operator', operator:v} // opType will get filled in upstream with 'prefix', 'postfix', or 'binary'
+        // Parses the last possible line of an expression block, that must start with an end paren of some kind.
+        // Note: theoretically, we could allow the same semantics for any operator that an expression can't
+            // start with (but for now at least, we're just allowing the paren types).
+        // Returns any consumed whitespace.
+        expressionEndLine: function(){
+            return seq(
+                this.indentedWs(this.state.indent-1).map(function(v) {
+                    return v.ws
+                }),
+                lookahead(alt(']','}',')'))
+            ).map(function(v) {
+                return v[0]
             })
         },
-
-    // closing Braces, Brackets, and/or Parens
-    closingBBPs: function(allowEndBracesAndEndParens) {
-        if(allowEndBracesAndEndParens) {
-            return alt(
-                alt('}',')').map(function(v) {
-                    return {type:'operator', operator:v, opType:'postfix'}
-                }).atLeast(1),
-                this.closingBrackets()
-            )
-        } else {
-            return this.closingBrackets()
-        }
-    },
-
-    // Represents one or more closing single- or double- brackets.
-    // Can represent sequences of both.
-    // Returns a list of operator nodes.
-    closingBrackets: function() {
-        return seq(
-            this.closingBracket(),
-            seq(this.indentedWs(),
-                this.closingBracket()
-            ).map(function(v){
-                return v[1]
-            }).many()
-        ).map(function(v) {
-            return [v[0]].concat(v[1])
-        })
-    },
-
-    openingBracket: function() {
-        return this.braceParenBracket(
-            str('[').atLeast(1)
-        )
-    },
-    closingBracket: function() {
-        return this.braceParenBracket(
-            str(']').atLeast(1)
-        )
-    },
-
-    braceParenBracket: function(braceParser) {
-        return braceParser.tie().map(function(v) {
-            return {type:'operator', operator:v, opType:'postfix'}
-        })
-    },
     
     // values
 
@@ -458,7 +314,7 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
             this.objectDefinitionSpace(true),
             seq(this.indentedWs(this.state.indent-1).many(), str('}')).atMost(1)
         ).map(function(v) {
-            return {type:'object', expressions:v[1], needsEndBrace: v[2].length !== 1}
+            return {type:'object', expressions:v[1]}
         })
     },
 
@@ -470,7 +326,7 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
 
     module: function() {
         return seq(this.objectDefinitionSpace(), this.indentedWs(0).many()).map(function(v) {
-            return {type:'object', expressions:v[0], needsEndBrace: false}
+            return {type:'object', expressions:v[0]}
         })
     },
 
@@ -683,9 +539,8 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
     newlineFreeWs: function() {
         return this.ws(false)
     },
-    // a block of whitespace
-    // returns ['indent', indentChars]
-    ws: function(allowNewlines) {
+    // A block of whitespace.
+    ws: function(allowNewlines/*=true*/) {
         return this.whitespace(allowNewlines).atLeast(1).tie()
     },
     whitespace: function(allowNewlines/*=true*/) { // a single unit of whitespace
@@ -729,6 +584,11 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
 
 
 // util methods
+
+
+function isBBPOperator(operatorString) {
+    return operatorString[0] in {'}':1,'(':1,')':1,'[':1,']':1}
+}
 
 // flattens a 2D array into a 1D array of 2nd level parts in order
 function flatten(list) {

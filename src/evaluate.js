@@ -17,45 +17,53 @@ var coreLevel1 = require("./coreLevel1b")
     // case objectEndOperator might be ']' or ':'
 // context - A Context object.
 // objectEndOperator - The marker that the object definition space has ended before the objectNode's expressions are done.
-// implicitDeclarations - If true, undeclared variables that are set on the scope are declared as var typed variables.
 // curState - Holds the list of ast nodes in the object expressions.
-var resolveObjectSpace = function(context, curState, n, isObjectEnd, implicitDeclarations) {
+var resolveObjectSpace = function(context, curState, n, isObjectEnd) {
     while(curState.length > 0) {
         var node = curState[n]
-        if(isObjectEnd && isObjectEnd(node)) {
+        if(!utils.isNodeType(node, 'superExpression')) // Should never happen.
+            throw new Error("Something other than a superexpression found in object: "+node.type)
+        if(isObjectEnd && isObjectEnd(node.parts[0])) {
             break // found the end of the object space
         } else {
-            if(utils.isNodeType(node, "variable")) {
-                var value = context.get(node.name)
-                if(value === undefined) {
-                    throw new Error("Variable "+node.name+" not declared.")
-                } else {
-                    curState[n] = value // resolve that value
-                    curState.splice(n,1) // remove the item from the state
-                }
-            } else if(utils.isNodeType(node, "rawExpression")) {
-                if(node.expression === '') {
-                    curState.splice(n,1)
-                    value = coreLevel1.nil
-                } else {
-                    throw new Error("Got a dangling non-emtpy rawExpression : (")
-                }
-            } else { // some non-variable value
-                resolveValue(context, curState, n, true)
+//            if(utils.isNodeType(node, "variable")) {
+//                var value = context.get(node.name)
+//                if(value === undefined) {
+//                    throw new Error("Variable "+node.name+" not declared.")
+//                } else {
+//                    curState[n] = value // resolve that value
+//                    curState.splice(n,1) // remove the item from the state
+//                }
+//            } else if(utils.isNodeType(node, "rawExpression")) {
+//                if(node.expression === '') {
+//                    curState.splice(n,1)
+//                    value = coreLevel1.nil
+//                } else {
+//                    throw new Error("Got a dangling non-emtpy rawExpression : (")
+//                }
+//            } else { // some non-variable value
+//                resolveValue(context, curState, n, true)
+//
+//                if(utils.isNode(curState[n])) {
+//                    value = coreLevel1.nil
+//                } else {
+//                    value = curState[n]
+//                    curState.splice(n,1)
+//                }
+//            }
 
-                if(utils.isNode(curState[n])) {
-                    value = coreLevel1.nil
-                } else {
-                    value = curState[n]
-                    curState.splice(n,1)
-                }
+            var result = superExpression(context, node.parts)
+            var appendItems = []
+            if(result.remainingParts.length > 0) {
+                appendItems.push({type:'superExpression', parts: result.remainingParts})
             }
+            curState.splice.apply(curState, [n,1].concat(appendItems))
 
-            if(!utils.isNil(value)) {
+            if(!utils.isNil(result.value)) {
                 if(utils.hasProperties(context.get('this')))
                     throw new Error("All elements must come before any keyed properties")
 
-                utils.appendElement(context, value)
+                utils.appendElement(context, result.value)
             }
         }
     }
@@ -79,7 +87,7 @@ var superExpression = function(context, parts, options) {
     // curState can contain AST node parts *and* lima object values.
     var curState = parts.slice(0) // Shallow copy of the parts.
 
-    // resolve parens, dereference operators, and unary operators
+    // Resolve parens, dereference operators, and unary operators.
     var curIndex = 0
     while(curIndex !== undefined) {
         curIndex = resolveBinaryOperandFrom(context, curState, curIndex, options)
@@ -99,8 +107,8 @@ var superExpression = function(context, parts, options) {
 exports.superExpression = function(context, parts, options) {
     return superExpression(context, utils.cloneJsValue(parts), options)
 }
-exports.resolveObjectSpace = function(context, curState, n, isObjectEnd, implicitDeclarations) {
-    return resolveObjectSpace(context, utils.cloneJsValue(curState), n, isObjectEnd, implicitDeclarations)
+exports.resolveObjectSpace = function(context, curState, n, isObjectEnd) {
+    return resolveObjectSpace(context, utils.cloneJsValue(curState), n, isObjectEnd)
 }
 
 // options - Same options as superExpression gets.
@@ -113,7 +121,7 @@ function resolveBinaryOperations(context, curState, options) {
         var operator2 = curState[curIndex+3]
         var operand3 = curState[curIndex+4]
 
-        if(operand1 && operand2 && utils.isOperatorOfType(operator1, 'binary')) {
+        if(operand1 && operand2 && utils.isBinaryOperator(operator1) ) {
             if(options.endStatementAtColon && utils.isSpecificOperator(operator1, ':')) {
                 return // No more binary operators.
             }
@@ -123,7 +131,7 @@ function resolveBinaryOperations(context, curState, options) {
                 operator1ValueForOpInfo = coreLevel1.nil
             }
             var operator1Info = getOperatorInfo(context, operand1, operator1, operand2)
-            if(operand3 && !utils.isNodeType(operand3, 'operator') && utils.isOperatorOfType(operator2, 'binary')) {
+            if(operand3 && !utils.isNodeType(operand3, 'operator') && utils.isBinaryOperator(operator2)) {
                 var operator2Info = getOperatorInfo(context, operand2, operator2, operand3)
                 var op1Order = combinedOrder(operator1Info)
                 var op2Order = combinedOrder(operator2Info)
@@ -209,6 +217,9 @@ function resolveBinaryOperations(context, curState, options) {
                 curIndex+=2 // go to the next operator
             }
         } else { // no binary operands
+            if(utils.isNodeType(operand1, 'variable')) {
+                throw new Error("Variable "+operand1.name+" not defined.")
+            }
             return
         }
 
@@ -272,8 +283,7 @@ function resolveBinaryOperandFrom(context, curState, index, options) {
     while(n<curState.length) {
         var item = curState[n]
         if(utils.isSpecificOperator(item, '(')) {
-            curState = resolveParens(curState, n)
-            curState.splice(n,1) // remove the open paren
+            resolveParens(context, curState, n)
         } else if(!utils.isNodeType(item, 'operator')) {
             var nextItem = curState[n+1], nextItemExists = n+1 < curState.length
             if(utils.isNodeType(item, 'variable')) {
@@ -332,8 +342,7 @@ function resolveBinaryOperandFrom(context, curState, index, options) {
         var parser = require("./parser") // here to resolve a circular dependency
         var state = {indent:0, context:context, consumeFirstlineMacros: context.consumeFirstlineMacros}
         var continuation = parser.withState(state).nonMacroExpressionContinuation().tryParse(curState[n].expression)
-        var continuingAstSection = continuation.current
-        curState.splice.apply(curState, [n, 1].concat(continuingAstSection).concat(continuation.next)) // todo: deal with rawExprssion metaData
+        curState.splice.apply(curState, [n, 1].concat(continuation)) // todo: deal with rawExprssion metaData
     }
 
     // type - 'prefix' or 'postfix'
@@ -365,8 +374,7 @@ function resolveBinaryOperandFrom(context, curState, index, options) {
 
         if(operator === '.') {
             if(utils.isSpecificOperator(curState[valueItemIndex+2], '(')) {
-                curState = resolveParens(context, curState, valueItemIndex+2)
-                curState.splice(valueItemIndex+2,1) // remove the open paren
+                resolveParens(context, curState, valueItemIndex+2)
                 var operand = curState[valueItemIndex+2]
             } else if(utils.isNodeType(curState[valueItemIndex+2], 'variable')) {
                 var variableName = curState[valueItemIndex+2]
@@ -444,28 +452,22 @@ function resolveBinaryOperandFrom(context, curState, index, options) {
             var objectNode = curState[n]
             var limaObjectContext = coreLevel1.limaObjectContext(context)
             var isObjectEnd = function(node) {return utils.isSpecificOperator(node, '}')}
-            resolveObjectSpace(limaObjectContext, objectNode.expressions, 0, isObjectEnd, true)
-            curState.splice.apply(curState, [n, 1, limaObjectContext.get('this')].concat(objectNode.expressions))
+            resolveObjectSpace(limaObjectContext, objectNode.expressions, 0, isObjectEnd)
 
-            if(objectNode.needsEndBrace) {
-                if(curState.length-1 < n+1 || !utils.isSpecificOperator(curState[n+1], "}")) {
-                    throw new Error("Missing '}' in object literal.")
-                }
-
-                curState.splice(n+1,1)
+            if(objectNode.expressions.length === 0) {
+                throw new Error("Missing '}' in object literal.")
             }
+            var stateToInject = objectNode.expressions[0].parts.concat(objectNode.expressions.slice(1))
+            curState.splice.apply(curState, [n, 1, limaObjectContext.get('this')].concat(stateToInject))
+
+            if(curState.length-1 < n+1 || !utils.isSpecificOperator(curState[n+1], "}")) {
+                throw new Error("Missing '}' in object literal.")
+            }
+
+            curState.splice(n+1,1)
+
         } else { // if its not a basic value, variable, or object, it must be a superExpression
             var result = superExpression(context, item.parts)
-            if(item.needsEndParen) {
-                if(utils.isSpecificOperator(result.remainingParts[0], ')')) {
-                    result.remainingParts.splice(0, 1)
-                } else {
-                    throw new Error("Needs end paren!")
-                }
-            } else if(item.parens && result.remainingParts.length !== 0) {
-                throw new Error("Parentheses must contain only one expression.")
-            }
-
             curState[n] = result.value
             if(allowRemainingParts) {
                 curState.splice.apply(curState, [n+1,0].concat(result.remainingParts))
@@ -473,24 +475,21 @@ function resolveBinaryOperandFrom(context, curState, index, options) {
         }
     }
 
-    // Gets info needed to resolve parens or brackets. Returns an object with the properties:
-        // consumed - the number of nodes within the parens or brackets
-        // values - the list of values the expressions within the parens or brackets resolved to
+    // Gets info needed to resolve parens or brackets.
+    // Returns the list of values the expressions within the parens or brackets resolved to.
     // index - The index of the opening paren or bracket
-    function getParenOrBracketResolutionInfo(context, curState, index, closeOperator) {
-        var n = index+1, values=[]
+    function resolveParenOrBracket(context, curState, n, closeOperator) {
+        var values=[]
         while(!utils.isSpecificOperator(curState[n], closeOperator)) {
-            var subParts = curState.slice(n)
+            var subParts = curState.slice(n+1)
             var result = superExpression(context, subParts)
             values.push(result.value)
-            var consumed = subParts.length - result.remainingParts.length
-            n += consumed
+            curState.splice.apply(curState, [n, curState.length].concat(result.remainingParts))
         }
 
-        return {
-            consumed: n-index,
-            values: values
-        }
+        curState.splice(n,1)
+
+        return values
     }
 
 
@@ -507,7 +506,7 @@ function resolveBinaryOperandFrom(context, curState, index, options) {
                 return utils.isNodeType(node, 'operator') && node.operator.indexOf(closeOperator) === 0
             }
             resolveObjectSpace(bracketArgumentObject, argumentSpaceSuperExpressionList, 0, isObjectEnd)
-            curState.splice.apply(curState, [index,curState.length-index].concat(argumentSpaceSuperExpressionList))
+            curState.splice.apply(curState, [index,curState.length-index].concat(argumentSpaceSuperExpressionList[0].parts))
         }
 
         var endOperatorInfo = nextStateItemsIsEndBracketOperator(curState, index, closeOperator)
@@ -548,15 +547,14 @@ function resolveBinaryOperandFrom(context, curState, index, options) {
             }
         }
 
+    // This should be called when the current state item contains an open paren.
     function resolveParens(context, curState, index) {
-        var info = getParenOrBracketResolutionInfo(context, curState, index, ')')
-        if(info.values.length > 1 || info.values.length === 0) {
+        var values = resolveParenOrBracket(context, curState, index, ')')
+        if(values.length > 1 || values.length === 0) {
             throw new Error("Parentheses must contain exactly one expression.")
         }
-        // curState[index+info.consumed+1] should be the ')' operator at this point
 
-        curState.splice(index, 2+info.consumed) // remove the 2 parens and all the nodes between them
-        curState.splice(index, 0, info.values)  // insert the resolved values
+        curState.splice(index, 0, values[0])  // insert the resolved values
     }
 
 

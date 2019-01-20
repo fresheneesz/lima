@@ -7,41 +7,28 @@ var testUtils = require("./testUtils")
 // the following are set like this so i can block comment out the tests below
 var indentTests=[], indentedWsTests=[], commentTests=[]
 var validNumeralsTests=[], realTests=[], numberTests=[], stringTests=[], operatorTests=[]
-var binaryOperands={}, binaryOperatorAndOperandTests={state: {indent: 0}, inputs:{}}
 var rawExpressionTests=[{state: {indent: 0}, inputs: {}}, {state: {indent: 1}, inputs: {}}]
-var closingBrackets = []
 var superExpressionTests=[], nonMacroExpressionContinuationTests=[]
 var objectDefinitionSpaceTests = {}, objectTests = [], moduleTests=[]
 var macroTests=[]
 
+var basicOperatorTests = [], operatorIndent1ShouldFailTests = []
+var operatorIndent0Tests = {}, operatorIndent1Tests = {}
+operatorTests = [
+    {note:"Basic Operator Tests", state:{indent:0}, inputs: basicOperatorTests},
+    {note:"Operator Tests (Indent 0)", state:{indent:0}, inputs: operatorIndent0Tests},
+    {note:"Operator Tests (Indent 1)", state:{indent:1}, inputs: operatorIndent1Tests},
+    {note:"Operator Tests (should fail)", state:{indent:1}, shouldFail:true, inputs: operatorIndent1ShouldFailTests}
+]
+
+var _ = testUtils.anything
 
 
-//binaryOperatorAndOperandTests.inputs['[][]'] =
-//    [ { type: 'operator', operator: '==', opType: 'binary' },
-//      { type: 'variable', name: 'nil' },
-//      { type: 'rawExpression', startColumn: testUtils.anything, expression: '' } ]
 
 
-//nonMacroExpressionContinuationTests = getNonMacroExpressionContinuationTests()
-//function getNonMacroExpressionContinuationTests() {
-//    var tests = []
-//
-//    var randomTests = {state:{indent:0}, inputs: {}}
-//
-//
-//   randomTests.inputs['[1][2]'] =
-//           { current:
-//               [ { type: 'operator', operator: '[', opType: 'binary' },
-//                 { numerator: 5, denominator: 1, type: 'number' },
-//                 { type: 'operator', operator: ']', opType: 'binary' },
-//                 { type: 'operator', operator: '!', opType: 'postfix' } ],
-//              next: [] }
-//
-//
-//    tests.push(randomTests)
-//
-//    return tests
-//}
+
+
+
 
 
 //*
@@ -165,204 +152,203 @@ stringTests = {
     ]
 }
 
-operatorTests.push({
-    state: {indent:0},
-    inputs: [
-        "@","#","$","%","^","&","*","-","+","|","\\","/","<",">",".",",","?","!",
-        "=@", "=&^", "=&==$",
-        "==", "===", "+==", "#$%==", "=&^==",
-        ":::", ":>", "|:",
-        "..."
-    ]
-})
-operatorTests.push({
-    state: {indent:0}, shouldFail:true,
-    inputs: [
-        "=", "+=", "#$%=",
-        ":", "::", "~="
-    ]
-})
-
-binaryOperands = {
-   "1":     [ { type: 'number', numerator: 1, denominator: 1 } ],
-   "+1":    [ { type: 'operator', opType: 'prefix', operator: '+' },
-              { type: 'number', numerator: 1, denominator: 1 } ],
-   "1+":    [ { type: 'number', numerator: 1, denominator: 1 },
-              { type: 'operator', operator: '+', opType: 'postfix' } ],
-   "+1+":   [ { type: 'operator', opType: 'prefix', operator: '+' },
-              { type: 'number', numerator: 1, denominator: 1 },
-              { type: 'operator', operator: '+', opType: 'postfix' } ],
-   "@'a'":  [ { type: 'operator', opType: 'prefix', operator: '@' },
-              { type: 'string', string: "a" } ],
-   "a=1}":  [ { type: 'variable', name: 'a' },
-              { type: 'rawExpression', startColumn: testUtils.anything, expression: '=1}' } ],
-   "1~":    [ { type: 'number', numerator: 1, denominator: 1 },
-              { type: 'operator', operator: '~', opType: 'postfix' } ],
-   "1~~":    [ { type: 'number', numerator: 1, denominator: 1 },
-              { type: 'operator', operator: '~~', opType: 'postfix' } ],
-   "1~~~~~~~~~~~":    [ { type: 'number', numerator: 1, denominator: 1 },
-              { type: 'operator', operator: '~~~~~~~~~~~', opType: 'postfix' } ],
-}
-
-
-binaryOperatorAndOperandTests.inputs[' == nil'] =
-    [ { type: 'operator', operator: '==', opType: 'binary' },
-      { type: 'variable', name: 'nil' },
-      { type: 'rawExpression', startColumn: testUtils.anything, expression: '' } ]
-
-binaryOperatorAndOperandTests.inputs[' ~> nil'] =
-    [ { type: 'operator', operator: '~>', opType: 'binary' },
-      { type: 'variable', name: 'nil' },
-      { type: 'rawExpression', startColumn: testUtils.anything, expression: '' } ]
-binaryOperatorAndOperandTests.inputs[' ~~> nil'] =
-    [ { type: 'operator', operator: '~~>', opType: 'binary' },
-      { type: 'variable', name: 'nil' },
-      { type: 'rawExpression', startColumn: testUtils.anything, expression: '' } ]
-binaryOperatorAndOperandTests.inputs[' ~~~~~~~~> nil'] =
-    [ { type: 'operator', operator: '~~~~~~~~>', opType: 'binary' },
-      { type: 'variable', name: 'nil' },
-      { type: 'rawExpression', startColumn: testUtils.anything, expression: '' } ]
-binaryOperatorAndOperandTests.inputs[' ~>> nil'] =
-    [ { type: 'operator', operator: '~>>', opType: 'binary' },
-      { type: 'variable', name: 'nil' },
-      { type: 'rawExpression', startColumn: testUtils.anything, expression: '' } ]
-binaryOperatorAndOperandTests.inputs[' ~~>> nil'] =
-    [ { type: 'operator', operator: '~~>>', opType: 'binary' },
-      { type: 'variable', name: 'nil' },
-      { type: 'rawExpression', startColumn: testUtils.anything, expression: '' } ]
-binaryOperatorAndOperandTests.inputs[' ~~~~~~~~>> nil'] =
-    [ { type: 'operator', operator: '~~~~~~~~>>', opType: 'binary' },
-      { type: 'variable', name: 'nil' },
-      { type: 'rawExpression', startColumn: testUtils.anything, expression: '' } ]
-
-
 rawExpressionTests[0].inputs[
      "=abcdef\n"+
     "] 1*2"
-] = { type: 'rawExpression', startColumn: testUtils.anything, expression: '=abcdef\n] 1*2' }
+] = { type: 'rawExpression', startColumn: testUtils.anything, expression: '=abcdef\n] 1*2', start:_,end:_ }
 rawExpressionTests[0].inputs[
      "\n" +
      "}}" // first end brace here might be part of a if a is a macro
-] = { type: 'rawExpression', startColumn: testUtils.anything, expression: '\n}}' }
+] = { type: 'rawExpression', startColumn: testUtils.anything, expression: '\n}}', start:_,end:_ }
 
 rawExpressionTests[1].inputs[
      "\n" +
      "}}" // First end brace here might be part of a if a is a macro.
-] = { type: 'rawExpression', startColumn: testUtils.anything, expression: '\n}}' }
+] = { type: 'rawExpression', startColumn: testUtils.anything, expression: '\n}}', start:_,end:_ }
 
 
 closingBrackets = {state:{indent:0}, inputs: {}}
-closingBrackets.inputs['] ]'] = [{ type: 'operator', operator: ']', opType: 'postfix' },
-                                 { type: 'operator', operator: ']', opType: 'postfix' }]
-closingBrackets.inputs[']]'] = [{ type: 'operator', operator: ']]', opType: 'postfix' }]
+closingBrackets.inputs['] ]'] = [{ type: 'operator', operator: ']', opType: 'postfix', start:_,end:_ },
+                                 { type: 'operator', operator: ']', opType: 'postfix', start:_,end:_ }]
+closingBrackets.inputs[']]'] = [{ type: 'operator', operator: ']]', opType: 'postfix', start:_,end:_ }]
+
+
+
+basicOperatorTests.splice(0,0,
+    "@","#","$","%","^","&","*","-","+","|","\\","/","<",">",".",",","?","!",
+    '@#$%&%^@', "!^@!%!#=",
+    "=@", "=&^", "=&==$",
+    "==", "===", "+==", "#$%==", "=&^==",
+    "|:",
+    "=", "+=", "#$%=",
+    ":", "::", "~=",
+    '.', '..', '...', '...........',
+    '.=', '..=', '...=', '.......=',
+    ':', '::', ':::', '+:', '@#$*&:::',
+    '[', '[[', '[[[', '[[[[[[[[[', '[=', '[[=', '[[[=', '[[[[[=',
+    '(',
+    ')', '}', ']', ']]', ']]]', ']]]]]]]',
+    '~', '~~', '~~~~~~~~~~',
+    '~>', '~~>', '~~~~~~~~>',
+    '~>>', '~~>>', '~~~~~~~~~~>>'
+)
+
+// Note 1: spaceAfter is true for most of these because eof is treated like whitespace. A couple are also 'binary' for this reason too.
+// Note 2: testUtils.anything is used for the opType in cases where superExpression would override the opType that `operator` sets.
+operatorIndent0Tests['+'] = { type: 'operator', operator: '+', opType: _, spaceAfter:true, start:_,end:_}
+operatorIndent0Tests[' +'] = { type: 'operator', operator: '+', opType: 'binary', spaceAfter:true, start:_,end:_} // See Note 1.
+operatorIndent0Tests['+ '] = { type: 'operator', operator: '+', opType: 'postfix', spaceAfter:true, start:_,end:_}
+operatorIndent0Tests[' + '] = { type: 'operator', operator: '+', opType: 'binary', spaceAfter:true, start:_,end:_}
+operatorIndent1Tests[
+    '\n'
+   +' +'
+] = { type: 'operator', operator: '+', opType: 'binary', spaceAfter:true, start:_,end:_}
+operatorIndent1Tests[
+    '\n'
+   +')'
+] = { type: 'operator', operator: ')', opType: 'bbp', start:_,end:_}
+operatorIndent1Tests[
+    '\n'
+   +'}'
+] = { type: 'operator', operator: '}', opType: 'bbp', start:_,end:_}
+operatorIndent1Tests[
+    '\n'
+   +']'
+] = { type: 'operator', operator: ']', opType: 'bbp', start:_,end:_}
+operatorIndent1Tests[
+    '\n'
+   +']]'
+] = { type: 'operator', operator: ']]', opType: 'bbp', start:_,end:_}
+operatorIndent1Tests[
+    '\n'
+   +']]]]]'
+] = { type: 'operator', operator: ']]]]]', opType: 'bbp', start:_,end:_}
+
+operatorIndent1ShouldFailTests.splice(0,0,
+    '!.', ':=', ':+', '[+', ":>",
+    '\n'
+   +'+'
+)
+
 
 superExpressionTests = getSuperExpressionTests()
 function getSuperExpressionTests() {
     var tests = []
 
     // set like this so i can block comment out the tests below
-    var elementsTests={}, equalsTests={}, colonTests={}, variablesTests={}, parenTests={}
+    var elementsTests={}, equalsTests={}, colonTests={}, unaryOperatorTests={}, variablesTests={}, parenTests={}
     var sameIndentEndLineTests={}, sameIndentMacroEndLineTests={}, unfinishedParenTests = {}
     var otherTestGroup = {inputs:[]}, indent1TestGroup={inputs:[]}, indent3TestGroup={inputs:[]}
     var failureTestGroup={inputs:[]}
     var failureTestGroupIndent4 = {note:"fail with indent 4", shouldFail:true, state:{indent:4}, inputs:[]}
+    var failureTestGroupDisallowOperator = []
 
     equalsTests = {
         "1=1":      { type: 'superExpression',
                       parts:
-                       [ { type: 'number', numerator: 1, denominator: 1 },
-                         { type: 'operator', operator: '=', opType: 'binary' },
-                         { type: 'number', numerator: 1, denominator: 1 } ],
-                      needsEndParen: false },
+                       [ { type: 'number', numerator: 1, denominator: 1, start:_,end:_},
+                         { type: 'operator', operator: '=', opType: 'binary', start:_,end:_ },
+                         { type: 'number', numerator: 1, denominator: 1, start:_,end:_ } ] },
         "1= 'cat'": { type: 'superExpression',
                       parts:
-                       [ { type: 'number', numerator: 1, denominator: 1 },
-                         { type: 'operator', operator: '=', opType: 'binary' },
-                         { type: 'string', string: 'cat' } ],
-                      needsEndParen: false },
+                       [ { type: 'number', numerator: 1, denominator: 1, start:_,end:_ },
+                         { type: 'operator', operator: '=', opType: 'postfix', start:_,end:_ },
+                         { type: 'string', string: 'cat', start:_,end:_ } ] },
         "1 = 5":    { type: 'superExpression',
                       parts:
-                       [ { type: 'number', numerator: 1, denominator: 1 },
-                         { type: 'operator', operator: '=', opType: 'binary' },
-                         { type: 'number', numerator: 5, denominator: 1 } ],
-                      needsEndParen: false },
+                       [ { type: 'number', numerator: 1, denominator: 1, start:_,end:_ },
+                         { type: 'operator', operator: '=', opType: 'binary', start:_,end:_ },
+                         { type: 'number', numerator: 5, denominator: 1, start:_,end:_ } ] },
     }
     colonTests = {
         "2:4":      { type: 'superExpression',
                       parts:
-                       [ { type: 'number', numerator: 2, denominator: 1 },
-                         { type: 'operator', operator: ':', opType: 'binary' },
-                         { type: 'number', numerator: 4, denominator: 1 } ],
-                      needsEndParen: false },
+                       [ { type: 'number', numerator: 2, denominator: 1, start:_,end:_ },
+                         { type: 'operator', operator: ':', opType: 'binary', start:_,end:_ },
+                         { type: 'number', numerator: 4, denominator: 1, start:_,end:_ } ] },
 
         "3: 'moo'": { type: 'superExpression',
                       parts:
-                       [ { type: 'number', numerator: 3, denominator: 1 },
-                         { type: 'operator', operator: ':', opType: 'binary' },
-                         { type: 'string', string: 'moo' } ],
-                      needsEndParen: false },
+                       [ { type: 'number', numerator: 3, denominator: 1, start:_,end:_ },
+                         { type: 'operator', operator: ':', opType: 'postfix', start:_,end:_ },
+                         { type: 'string', string: 'moo', start:_,end:_ } ] },
 
         "'h' : 5":  { type: 'superExpression',
                       parts:
-                       [ { type: 'string', string: 'h' },
-                         { type: 'operator', operator: ':', opType: 'binary' },
-                         { type: 'number', numerator: 5, denominator: 1 } ],
-                      needsEndParen: false },
+                       [ { type: 'string', string: 'h', start:_,end:_ },
+                         { type: 'operator', operator: ':', opType: 'binary', start:_,end:_ },
+                         { type: 'number', numerator: 5, denominator: 1, start:_,end:_ } ] },
 
         "a : 5":  { type: 'superExpression',
                       parts:
-                       [ { type: 'variable', name: 'a' },
-                         { type: 'rawExpression', startColumn: testUtils.anything, expression: ' : 5' } ],
-                      needsEndParen: false },
+                       [ { type: 'variable', name: 'a', start:_,end:_ },
+                         { type: 'rawExpression', startColumn: testUtils.anything, expression: ' : 5', start:_,end:_ } ] },
 
         "2 :: 5":  { type: 'superExpression',
                       parts:
-                       [ { type: 'number', numerator: 2, denominator: 1 },
-                         { type: 'operator', operator: '::', opType: 'binary' },
-                         { type: 'number', numerator: 5, denominator: 1 } ],
-                      needsEndParen: false },
+                       [ { type: 'number', numerator: 2, denominator: 1, start:_,end:_ },
+                         { type: 'operator', operator: '::', opType: 'binary', start:_,end:_ },
+                         { type: 'number', numerator: 5, denominator: 1, start:_,end:_ } ] },
 
         "a :: 5":  { type: 'superExpression',
                       parts:
-                       [ { type: 'variable', name: 'a' },
-                         { type: 'rawExpression', startColumn: testUtils.anything, expression: ' :: 5' } ],
-                      needsEndParen: false },
+                       [ { type: 'variable', name: 'a', start:_,end:_ },
+                         { type: 'rawExpression', startColumn: testUtils.anything, expression: ' :: 5', start:_,end:_ } ] },
+    }
+    unaryOperatorTests = {
+        " !1":      { type: 'superExpression',
+                      parts:
+                       [ { type: 'operator', operator: '!', opType: 'prefix', start:_,end:_ },
+                         { type: 'number', numerator: 1, denominator: 1, start:_,end:_ } ] },
+        "1+ ":      { type: 'superExpression',
+                      parts:
+                       [ { type: 'number', numerator: 1, denominator: 1, start:_,end:_ },
+                         { type: 'operator', operator: '+', opType: 'postfix', start:_,end:_ } ] },
+        // Prefix operator at the beginning of the file:
+        "!1":      { type: 'superExpression',
+                      parts:
+                       [ { type: 'operator', operator: '!', opType: 'prefix', start:_,end:_ },
+                         { type: 'number', numerator: 1, denominator: 1, start:_,end:_ } ] },
+        // Postfix operator at the end of the file:
+        "1+":      { type: 'superExpression',
+                      parts:
+                       [ { type: 'number', numerator: 1, denominator: 1, start:_,end:_ },
+                         { type: 'operator', operator: '+', opType: 'postfix', start:_,end:_ } ] },
     }
     variablesTests = {
         "a=5":      { type: 'superExpression',
                       parts:
-                       [ { type: 'variable', name: 'a' },
-                         { type: 'rawExpression', startColumn: testUtils.anything, expression: '=5' } ],
-                      needsEndParen: false },
+                       [ { type: 'variable', name: 'a', start:_,end:_ },
+                         { type: 'rawExpression', startColumn: testUtils.anything, expression: '=5', start:_,end:_ } ] },
         "a[4]":     { type: 'superExpression',
                       parts:
-                       [ { type: 'variable', name: 'a' },
-                         { type: 'rawExpression', startColumn: testUtils.anything, expression: '[4]' } ],
-                      needsEndParen: false },
+                       [ { type: 'variable', name: 'a', start:_,end:_ },
+                         { type: 'rawExpression', startColumn: testUtils.anything, expression: '[4]', start:_,end:_ } ] },
         "a[]":      { type: 'superExpression',
                       parts:
-                       [ { type: 'variable', name: 'a' },
-                         { type: 'rawExpression', startColumn: testUtils.anything, expression: '[]' } ],
-                      needsEndParen: false },
+                       [ { type: 'variable', name: 'a', start:_,end:_ },
+                         { type: 'rawExpression', startColumn: testUtils.anything, expression: '[]', start:_,end:_ } ] },
 
         "3:b":      { type: 'superExpression',
                       parts:
-                       [ { type: 'number', numerator: 3, denominator: 1 },
-                         { type: 'operator', operator: ':', opType: 'binary' },
-                         { type: 'variable', name: 'b' },
-                         { type: 'rawExpression', startColumn: testUtils.anything, expression: '' } ],
-                      needsEndParen: false },
+                       [ { type: 'number', numerator: 3, denominator: 1, start:_,end:_ },
+                         { type: 'operator', operator: ':', opType: 'binary', start:_,end:_ },
+                         { type: 'variable', name: 'b', start:_,end:_ },
+                         { type: 'rawExpression', startColumn: testUtils.anything, expression: '', start:_,end:_ } ] },
     }
 
     parenTests = {
         "(1)":  { type: 'superExpression',
                   parts:
-                   [ { type: 'superExpression',
-                       parts: [ { numerator: 1, denominator: 1, type: 'number' } ],
-                       needsEndParen: false,
-                       parens: true },
-                     { type: 'rawExpression', startColumn: 3, expression: '' } ],
-                  needsEndParen: false }
+                    [  { type: 'operator', operator: '(', opType: 'bbp', start:_,end:_ },
+                       { numerator: 1, denominator: 1, type: 'number', start:_,end:_ },
+                       { type: 'operator', operator: ')', opType: 'bbp', start:_,end:_ } ] } ,
+        '[][]': { type: 'superExpression',
+                  parts:
+                   [ { type: 'operator', operator: '[', opType: 'bbp', start:_,end:_ },
+                     { type: 'operator', operator: ']', opType: 'bbp', start:_,end:_ },
+                     { type: 'operator', operator: '[', opType: 'bbp', start:_,end:_ },
+                     { type: 'operator', operator: ']', opType: 'bbp', start:_,end:_ } ] }
     }
 
     unfinishedParenTests["{a=4}"] =
@@ -371,21 +357,17 @@ function getSuperExpressionTests() {
           expressions:
            [ { type: 'superExpression',
                parts:
-                [ { type: 'variable', name: 'a' },
-                  { type: 'rawExpression', startColumn: testUtils.anything, expression: '=4}' } ],
-               needsEndParen: false } ],
-          needsEndBrace: true })
+                [ { type: 'variable', name: 'a', start:_,end:_ },
+                  { type: 'rawExpression', startColumn: testUtils.anything, expression: '=4}', start:_,end:_ } ]
+           } ],
+           start:_,end:_
+        })
     unfinishedParenTests["(b=4)"] =
-        { type: 'superExpression',
+       {  type: 'superExpression',
           parts:
-           [ { type: 'superExpression',
-               parts:
-                [ { type: 'variable', name: 'b' },
-                  { type: 'rawExpression', startColumn: 2, expression: '=4)' } ],
-               needsEndParen: true,
-               parens: true },
-             { type: 'rawExpression', startColumn: 5, expression: '' } ],
-          needsEndParen: false }
+           [ { type: 'operator', operator: '(', opType: 'bbp', start:_,end:_ },
+             { type: 'variable', name: 'b', start:_,end:_ },
+             { type: 'rawExpression', startColumn: 2, expression: '=4)', start:_,end:_ } ] }
 
     unfinishedParenTests[
         "{d=4\n"+
@@ -396,10 +378,10 @@ function getSuperExpressionTests() {
           expressions:
            [ { type: 'superExpression',
                parts:
-                [ { type: 'variable', name: 'd' },
-                  { type: 'rawExpression', startColumn: testUtils.anything, expression: '=4\n 1\n 2' } ],
-               needsEndParen: false } ],
-          needsEndBrace: true
+                [ { type: 'variable', name: 'd', start:_,end:_ },
+                  { type: 'rawExpression', startColumn: testUtils.anything, expression: '=4\n 1\n 2', start:_,end:_ } ]
+           } ],
+           start:_,end:_
     })
 
     // tests where end parens, curly braces, or brackets allow a same-indent end line (without a possible macro)
@@ -407,11 +389,17 @@ function getSuperExpressionTests() {
     sameIndentEndLineTests[
         "{ 1\n"+
         "}"
-    ] = expandToSuperExpression({
-          type: 'object',
-          expressions: [ expandToSuperExpression({ type: 'number', numerator: 1, denominator: 1 }) ],
-          needsEndBrace: false
-        })
+    ] = { type: 'superExpression',
+          parts:
+           [ { type: 'object',
+               expressions:
+                [ { type: 'superExpression',
+                    parts:
+                     [ { numerator: 1, denominator: 1, type: 'number', start:_,end:_ },
+                       { type: 'operator', operator: '}', opType: 'bbp', start:_,end:_ } ] } ],
+               start:_,end:_
+           } ]
+    }
 
     sameIndentEndLineTests[
         "( 1\n"+
@@ -419,12 +407,9 @@ function getSuperExpressionTests() {
     ] =
         { type: 'superExpression',
           parts:
-           [ { type: 'superExpression',
-               parts: [ { numerator: 1, denominator: 1, type: 'number' } ],
-               needsEndParen: false,
-               parens: true },
-             { type: 'rawExpression', startColumn: 1, expression: '' } ],
-          needsEndParen: false }
+           [ { type: 'operator', operator: '(', opType: 'bbp', start:_,end:_ },
+             { numerator: 1, denominator: 1, type: 'number', start:_,end:_ },
+             { type: 'operator', operator: ')', opType: 'bbp', start:_,end:_ } ] }
 
 
     // tests where a potential macro allows same-indent end line(s)
@@ -436,27 +421,24 @@ function getSuperExpressionTests() {
     ] =
         { type: 'superExpression',
           parts:
-           [ { type: 'variable', name: 'a' },
-             { type: 'rawExpression', startColumn: testUtils.anything, expression: '=abcdef\n] 1*2' } ],
-          needsEndParen: false }
+           [ { type: 'variable', name: 'a', start:_,end:_ },
+             { type: 'rawExpression', startColumn: testUtils.anything, expression: '=abcdef\n] 1*2', start:_,end:_ } ] }
     sameIndentMacroEndLineTests[
         "a=bearbearbear\n"+
         ") 1*2"
     ] =
         { type: 'superExpression',
           parts:
-           [ { type: 'variable', name: 'a' },
-             { type: 'rawExpression', startColumn: testUtils.anything, expression: '=bearbearbear\n) 1*2' } ],
-          needsEndParen: false }
+           [ { type: 'variable', name: 'a', start:_,end:_ },
+             { type: 'rawExpression', startColumn: testUtils.anything, expression: '=bearbearbear\n) 1*2', start:_,end:_ } ] }
     sameIndentMacroEndLineTests[
         "a=catceltcool\n"+
         "} 1*2"
     ] =
         { type: 'superExpression',
           parts:
-           [ { type: 'variable', name: 'a' },
-             { type: 'rawExpression', startColumn: testUtils.anything, expression: '=catceltcool\n} 1*2' } ],
-          needsEndParen: false }
+           [ { type: 'variable', name: 'a', start:_,end:_ },
+             { type: 'rawExpression', startColumn: testUtils.anything, expression: '=catceltcool\n} 1*2', start:_,end:_ } ] }
 
     sameIndentMacroEndLineTests[
         "a=datdoodiggery\n"+
@@ -466,10 +448,9 @@ function getSuperExpressionTests() {
     ] =
         { type: 'superExpression',
           parts:
-           [ { type: 'variable', name: 'a' },
+           [ { type: 'variable', name: 'a', start:_,end:_ },
              { type: 'rawExpression', startColumn: testUtils.anything,
-               expression: '=datdoodiggery\n] potentially\n] more\n]' } ],
-          needsEndParen: false }
+               expression: '=datdoodiggery\n] potentially\n] more\n]', start:_,end:_ } ] }
     sameIndentMacroEndLineTests[
         "a=elephant\n"+
         ") potentially\n" +
@@ -478,10 +459,9 @@ function getSuperExpressionTests() {
     ] =
         { type: 'superExpression',
           parts:
-           [ { type: 'variable', name: 'a' },
+           [ { type: 'variable', name: 'a', start:_,end:_ },
              { type: 'rawExpression',startColumn: testUtils.anything,
-               expression: '=elephant\n) potentially\n} more\n]]' } ],
-          needsEndParen: false }
+               expression: '=elephant\n) potentially\n} more\n]]', start:_,end:_ } ] }
     sameIndentMacroEndLineTests[
         "a=falcaroo\n"+
         "} potentially\n" +
@@ -490,10 +470,9 @@ function getSuperExpressionTests() {
     ] =
         { type: 'superExpression',
           parts:
-           [ { type: 'variable', name: 'a' },
+           [ { type: 'variable', name: 'a', start:_,end:_ },
              { type: 'rawExpression', startColumn: testUtils.anything,
-               expression: '=falcaroo\n} potentially\n]]]] more\n)' } ],
-          needsEndParen: false }
+               expression: '=falcaroo\n} potentially\n]]]] more\n)', start:_,end:_ } ] }
     sameIndentMacroEndLineTests[
         "a=goomba\n"+
         "} potentially\n" +
@@ -502,10 +481,9 @@ function getSuperExpressionTests() {
     ] =
         { type: 'superExpression',
           parts:
-           [ { type: 'variable', name: 'a' },
+           [ { type: 'variable', name: 'a', start:_,end:_ },
              { type: 'rawExpression', startColumn: testUtils.anything,
-               expression: '=goomba\n} potentially\n more\n)' } ],
-          needsEndParen: false }
+               expression: '=goomba\n} potentially\n more\n)', start:_,end:_ } ] }
     sameIndentMacroEndLineTests[
         "a=hairen\n"+
         "] potentially\n" +
@@ -514,10 +492,9 @@ function getSuperExpressionTests() {
     ] =
         { type: 'superExpression',
           parts:
-           [ { type: 'variable', name: 'a' },
+           [ { type: 'variable', name: 'a', start:_,end:_ },
              { type: 'rawExpression', startColumn: testUtils.anything,
-               expression: '=hairen\n] potentially\n more\n)' } ],
-          needsEndParen: false }
+               expression: '=hairen\n] potentially\n more\n)', start:_,end:_ } ] }
     sameIndentMacroEndLineTests[
         "a=igloobug\n"+
         ") potentially\n" +
@@ -526,14 +503,13 @@ function getSuperExpressionTests() {
     ] =
         { type: 'superExpression',
           parts:
-           [ { type: 'variable', name: 'a' },
+           [ { type: 'variable', name: 'a', start:_,end:_ },
              { type: 'rawExpression', startColumn: testUtils.anything,
-               expression: '=igloobug\n) potentially\n more\n}' } ],
-          needsEndParen: false }
+               expression: '=igloobug\n) potentially\n more\n}', start:_,end:_ } ] }
 
     sameIndentMacroEndLineTests[
         "{A\n" +
-        "}}" // first end brace here might be part of a if a is a macro
+        "}}" // first end brace here might be part of A if A is a macro
     ] =
         { type: 'superExpression',
           parts:
@@ -541,25 +517,20 @@ function getSuperExpressionTests() {
                expressions:
                 [ { type: 'superExpression',
                     parts:
-                     [ { type: 'variable', name: 'A' },
-                       { type: 'rawExpression', startColumn: 2, expression: '\n}}' } ],
-                    needsEndParen: false } ],
-               needsEndBrace: true } ],
-          needsEndParen: false }
+                     [ { type: 'variable', name: 'A', start:_,end:_ },
+                       { type: 'rawExpression', startColumn: 2, expression: '\n}}', start:_,end:_ } ] } ],
+               start:_,end:_
+           } ]
+        }
     sameIndentMacroEndLineTests[
         "(B\n" +
-        "))"  // first end paren here might be part of a if a is a macro
+        "))"  // first end paren here might be part of B if B is a macro
     ] =
         { type: 'superExpression',
           parts:
-           [ { type: 'superExpression',
-               parts:
-                [ { type: 'variable', name: 'B' },
-                  { type: 'rawExpression', startColumn: testUtils.anything, expression: '\n))' } ],
-               parens:true,
-               needsEndParen: true },
-             { type: 'rawExpression', startColumn: testUtils.anything, expression: '' } ],
-          needsEndParen: false }
+           [ { type: 'operator', operator: '(', opType: 'bbp', start:_,end:_ },
+             { type: 'variable', name: 'B', start:_,end:_ },
+             { type: 'rawExpression', startColumn: 2, expression: '\n))', start:_,end:_ } ] }
     sameIndentMacroEndLineTests[
         "{C[\n" +
         " 1 2 3\n" +
@@ -571,18 +542,20 @@ function getSuperExpressionTests() {
                expressions:
                 [ { type: 'superExpression',
                     parts:
-                     [ { type: 'variable', name: 'C' },
+                     [ { type: 'variable', name: 'C', start:_,end:_ },
                        { type: 'rawExpression',
                          startColumn: 2,
-                         expression: '[\n 1 2 3\n] 4}' } ],
-                    needsEndParen: false } ],
-               needsEndBrace: true } ],
-          needsEndParen: false }
+                         expression: '[\n 1 2 3\n] 4}',
+                         start:_,end:_
+                       } ]
+                } ],
+               start:_,end:_
+           } ] }
 
     sameIndentMacroEndLineTests[
         "{{\n" +
         " 11 21 31\n" +
-        "}" // no end brace
+        "}" // no second end brace
     ] =
         expandToSuperExpression({
           type: 'object',
@@ -590,12 +563,15 @@ function getSuperExpressionTests() {
            [ expandToSuperExpression({
                type: 'object',
                expressions:
-                [ expandToSuperExpression({ numerator: 11, denominator: 1, type: 'number' }),
-                  expandToSuperExpression({ numerator: 21, denominator: 1, type: 'number' }),
-                  expandToSuperExpression({ numerator: 31, denominator: 1, type: 'number' }) ],
-               needsEndBrace: false
+                [ { type: 'superExpression',
+                    parts:
+                       [ { numerator: 11, denominator: 1, type: 'number', start:_,end:_ },
+                         { numerator: 21, denominator: 1, type: 'number', start:_,end:_ },
+                         { numerator: 31, denominator: 1, type: 'number', start:_,end:_ } ] },
+                  expandToSuperExpression({ type: 'operator', operator: '}', opType: 'bbp', start:_,end:_ }) ],
+               start:_,end:_
            })],
-          needsEndBrace: true
+          start:_,end:_
         })
 
     indent1TestGroup = {note:'1 indent', state:{indent:1}, inputs: {}}
@@ -603,18 +579,16 @@ function getSuperExpressionTests() {
     indent1TestGroup.inputs["   a[]"] =  // no newlines
             { type: 'superExpression',
               parts:
-               [ { type: 'variable', name: 'a' },
-                 { type: 'rawExpression', startColumn: testUtils.anything, expression: '[]' } ],
-              needsEndParen: false }
+               [ { type: 'variable', name: 'a', start:_,end:_ },
+                 { type: 'rawExpression', startColumn: testUtils.anything, expression: '[]', start:_,end:_ } ] }
 
     indent1TestGroup.inputs[
         "   b[\n" +       // No whitespace should be stripped off from the raw expression
         "    1"           // because this is being treated like its starting in the middle of a line
     ] = { type: 'superExpression',
           parts:
-           [ { type: 'variable', name: 'b' },
-             { type: 'rawExpression', startColumn: testUtils.anything, expression: '[\n    1' } ],
-          needsEndParen: false }
+           [ { type: 'variable', name: 'b', start:_,end:_ },
+             { type: 'rawExpression', startColumn: testUtils.anything, expression: '[\n    1', start:_,end:_ } ] }
 
     indent1TestGroup.inputs[
         "   c[\n" +       // No whitespace should be stripped off from the raw expression
@@ -622,9 +596,8 @@ function getSuperExpressionTests() {
         "   ]"
     ] = { type: 'superExpression',
           parts:
-           [ { type: 'variable', name: 'c' },
-             { type: 'rawExpression', startColumn: testUtils.anything, expression: '[\n    1\n   ]' } ],
-          needsEndParen: false }
+           [ { type: 'variable', name: 'c', start:_,end:_ },
+             { type: 'rawExpression', startColumn: testUtils.anything, expression: '[\n    1\n   ]', start:_,end:_ } ] }
 
     // Test rawExpression startColumn:
     indent1TestGroup.inputs[
@@ -634,9 +607,8 @@ function getSuperExpressionTests() {
         "    ]"
     ] = { type: 'superExpression',
           parts:
-           [ { type: 'variable', name: 'e' },
-             { type: 'rawExpression', startColumn: 1, expression: '[\n 1\n]' } ],
-          needsEndParen: false }
+           [ { type: 'variable', name: 'e', start:_,end:_ },
+             { type: 'rawExpression', startColumn: 1, expression: '[\n 1\n]', start:_,end:_ } ] }
     indent1TestGroup.inputs[
         "\n"+
         "    2+e[\n" +
@@ -644,11 +616,10 @@ function getSuperExpressionTests() {
         "    ]"
     ] = { type: 'superExpression',
           parts:
-           [ { numerator: 2, denominator: 1, type: 'number' },
-             { type: 'operator', operator: '+', opType: 'binary' },
-             { type: 'variable', name: 'e' },
-             { type: 'rawExpression', startColumn: 3, expression: '[\n 1\n]' } ],
-          needsEndParen: false }
+           [ { numerator: 2, denominator: 1, type: 'number', start:_,end:_ },
+             { type: 'operator', operator: '+', opType: 'binary', start:_,end:_ },
+             { type: 'variable', name: 'e', start:_,end:_ },
+             { type: 'rawExpression', startColumn: 3, expression: '[\n 1\n]', start:_,end:_ } ] }
 
 
     indent3TestGroup = {note:'3 indent', state:{indent:3}, inputs: {}}
@@ -658,18 +629,16 @@ function getSuperExpressionTests() {
         "   1"        // the indented whitespace should be stripped off from the raw expression
     ] = { type: 'superExpression',
           parts:
-           [ { type: 'variable', name: 'd' },
-             { type: 'rawExpression', startColumn: testUtils.anything, expression: '[\n 1' } ],
-          needsEndParen: false }
+           [ { type: 'variable', name: 'd', start:_,end:_ },
+             { type: 'rawExpression', startColumn: testUtils.anything, expression: '[\n 1', start:_,end:_ } ] }
     indent3TestGroup.inputs[
           "e[\n" +    // `e` isn't indented because any whitespace in front of `e` will be treated as more indentation by parser.indent
         "   1\n" +    // the indented whitespace should be stripped off from the raw expression
         "  ]"         // ..
     ] = { type: 'superExpression',
           parts:
-           [ { type: 'variable', name: 'e' },
-             { type: 'rawExpression', startColumn: testUtils.anything, expression: '[\n 1\n]' } ],
-          needsEndParen: false }
+           [ { type: 'variable', name: 'e', start:_,end:_ },
+             { type: 'rawExpression', startColumn: testUtils.anything, expression: '[\n 1\n]', start:_,end:_ } ] }
 
 
     var otherTestGroup = {inputs:[
@@ -700,9 +669,14 @@ function getSuperExpressionTests() {
         "  1 2 3\n" +
         " )\n" +
         "} 4}",
-    ]}
+        "{\n" +
+        " (\n" +
+        " 1\n" +
+        " )\n" +
+        "} 4}",
 
-    failureTestGroup = {note:'failures', shouldFail:true, inputs:[
+        // unterminated bracket operator (left to the interpreter to error on)
+        '{}[',
 
         "{\n" +
         "}}",
@@ -711,15 +685,19 @@ function getSuperExpressionTests() {
         "(\n" +
         ") 1",
 
+        // Things that could represent multiple parameters as an inner super-expression
+        "1 + 2 @a",
+        "1 2 3 4",
 
-        // should fail because they definitely represent two superExpressions:
+        "{\n" +
+        "} 1",
+    ]}
+
+    failureTestGroup = {note:'failures', shouldFail:true, inputs:[
+        // should fail because they definitely represent multiple separate expressions:
 
         "a=awfjawiefijef\n"+
         "awijefiejawef",
-
-        "1 + 2 @a",
-
-        "1 2 3 4",
 
         "1 2 g[\n" +
         "3]",
@@ -738,8 +716,9 @@ function getSuperExpressionTests() {
         "(c 1\n" +
         "-1)",
 
-        "{\n" +
-        "} 1",
+        " (\n" +
+        " 1\n" +
+        " )",
 
         // should fail because of incorrect indenting
 
@@ -760,12 +739,6 @@ function getSuperExpressionTests() {
         "1\n" +
         " ]",
 
-        "{\n" +
-        " (\n" +
-        " 1\n" +
-        " )\n" +
-        "} 4}",
-
        '3\n' +
        '*\n' +
        '5',
@@ -773,8 +746,6 @@ function getSuperExpressionTests() {
         // unterminated string
         '"',
 
-        // unterminated bracket operator
-        '{}[',
     ]}
 
     // fails because the current indent is 4 while this construct is only indented by 3
@@ -791,10 +762,21 @@ function getSuperExpressionTests() {
         "   1"
     )
 
+    var failureTestGroupDisallowOperator = {
+        note:"fail with indent 4", shouldFail:"Error:  at line 1", inputs:["1 + 3"],
+        args: [{
+            expectedOperator: "an operator other than '+'",
+            disallowOperator:function(op){
+                return op === '+'
+            }
+        }]
+    }
+
     tests.push({state:{}, inputs: basicUtils.merge(
         elementsTests,
         equalsTests,
         colonTests,
+        unaryOperatorTests,
         variablesTests,
         parenTests,
         unfinishedParenTests,
@@ -806,6 +788,7 @@ function getSuperExpressionTests() {
     tests.push(otherTestGroup)
     tests.push(failureTestGroup)
     tests.push(failureTestGroupIndent4)
+    tests.push(failureTestGroupDisallowOperator)
 
     return tests
 }
@@ -816,92 +799,87 @@ function getNonMacroExpressionContinuationTests() {
     var tests = []
 
     var randomTests = {state:{indent:0}, inputs: {}}
+    var randomTestsIndented = {state:{indent:2}, inputs: {}}
 
+    randomTests.inputs[''] = []
+    randomTests.inputs['  '] = []
+    randomTests.inputs['\n'] = []
     randomTests.inputs['["hello world"]'] =
-            { current:
-               [ { type: 'operator', operator: '[', opType: 'postfix' }, //  note that the opType of bracket operators doesn't matter
-                 { type: 'string', string: 'hello world' },
-                 { type: 'operator', operator: ']', opType: 'postfix' } ],
-                 next: [] }
+            [ { type: 'operator', operator: '[', opType: 'bbp', start:_,end:_},
+              { type: 'string', string: 'hello world', start:_,end:_ },
+              { type: 'operator', operator: ']', opType: 'bbp', start:_,end:_ } ]
     randomTests.inputs['[]'] =
-            { current:
-               [ { type: 'operator', operator: '[', opType: 'postfix' },
-                 { type: 'operator', operator: ']', opType: 'postfix' } ],
-                 next: [] }
+            [ { type: 'operator', operator: '[', opType: 'bbp', start:_,end:_ },
+              { type: 'operator', operator: ']', opType: 'bbp', start:_,end:_ } ]
     randomTests.inputs[']'] =
-            { current:
-                [ { type: 'operator', operator: ']', opType: 'postfix' } ],
-                 next: [] }
+            [ { type: 'operator', operator: ']', opType: 'bbp', start:_,end:_ } ]
     randomTests.inputs['[] ]'] =
-            { current: [ { type: 'operator', operator: '[', opType: 'postfix' },
-                         { type: 'operator', operator: ']', opType: 'postfix' },
-                         { type: 'operator', operator: ']', opType: 'postfix' } ],
-                 next: [] }
+            [ { type: 'operator', operator: '[', opType: 'bbp', start:_,end:_ },
+              { type: 'operator', operator: ']', opType: 'bbp', start:_,end:_ },
+              { type: 'operator', operator: ']', opType: 'bbp', start:_,end:_ } ]
     randomTests.inputs['[3] wout[x]'] =
-            { current:
-               [ { type: 'operator', operator: '[', opType: 'postfix' },
-                 { numerator: 3, denominator: 1, type: 'number' },
-                 { type: 'operator', operator: ']', opType: 'postfix' } ],
-              next:
-               [ { type: 'superExpression',
-                   parts:
-                    [ { type: 'variable', name: 'wout' },
-                      { type: 'rawExpression', startColumn: testUtils.anything, expression: '[x]' } ],
-                   needsEndParen: false } ] }
+            [ { type: 'operator', operator: '[', opType: 'bbp', start:_,end:_ },
+              { numerator: 3, denominator: 1, type: 'number', start:_,end:_ },
+              { type: 'operator', operator: ']', opType: 'bbp', start:_,end:_ },
+              { type: 'variable', name: 'wout', start:_,end:_ },
+              { type: 'rawExpression', startColumn: _, expression: '[x]', start:_,end:_ } ]
    randomTests.inputs['[ 3 ]'] =
-            { current:
-               [ { type: 'operator', operator: '[', opType: 'postfix' },
-                 { numerator: 3, denominator: 1, type: 'number' },
-                 { type: 'operator', operator: ']', opType: 'postfix' } ],
-                 next: [] }
+            [ { type: 'operator', operator: '[', opType: 'bbp', start:_,end:_ },
+              { numerator: 3, denominator: 1, type: 'number', start:_,end:_ },
+              { type: 'operator', operator: ']', opType: 'bbp', start:_,end:_ } ]
 
    randomTests.inputs[' = 5}'] = // end brace
-            { current:
-               [ { type: 'operator', operator: '=', opType: 'binary' },
-                 { numerator: 5, denominator: 1, type: 'number' },
-                 { type: 'operator', operator: '}', opType: 'postfix' } ],
-                 next: [] }
+            [ { type: 'operator', operator: '=', opType: 'binary', start:_,end:_ },
+              { numerator: 5, denominator: 1, type: 'number', start:_,end:_ },
+              { type: 'operator', operator: '}', opType: 'bbp', start:_,end:_ } ]
    randomTests.inputs[' + 5)'] = // end paren
-            { current:
-               [ { type: 'operator', operator: '+', opType: 'binary' },
-                 { numerator: 5, denominator: 1, type: 'number' },
-                 { type: 'operator', operator: ')', opType: 'postfix' } ],
-                 next: [] }
+            [ { type: 'operator', operator: '+', opType: 'binary', start:_,end:_ },
+              { numerator: 5, denominator: 1, type: 'number', start:_,end:_ },
+              { type: 'operator', operator: ')', opType: 'bbp', start:_,end:_ } ]
 
    randomTests.inputs['}'] = // end brace
-            { current:
-               [ { type: 'operator', operator: '}', opType: 'postfix' } ],
-                 next: [] }
+            [ { type: 'operator', operator: '}', opType: 'bbp', start:_,end:_ } ]
    randomTests.inputs[')'] = // end paren
-            { current:
-               [ { type: 'operator', operator: ')', opType: 'postfix' } ],
-                 next: [] }
+            [ { type: 'operator', operator: ')', opType: 'bbp', start:_,end:_ } ]
    randomTests.inputs[':"c"}}'] = // two end braces
-           { current:
-               [ { type: 'operator', operator: ':', opType: 'binary' },
-                 { type: 'string', string: 'c' },
-                 { type: 'operator', operator: '}', opType: 'postfix' },
-                 { type: 'operator', operator: '}', opType: 'postfix' } ],
-              next: [] }
+            [ { type: 'operator', operator: ':', opType: 'binary', start:_,end:_ },
+              { type: 'string', string: 'c', start:_,end:_ },
+              { type: 'operator', operator: '}', opType: 'bbp', start:_,end:_ },
+              { type: 'operator', operator: '}', opType: 'bbp', start:_,end:_ } ]
 
    randomTests.inputs['=5!'] =
-           { current:
-               [ { type: 'operator', operator: '=', opType: 'binary' },
-                 { numerator: 5, denominator: 1, type: 'number' },
-                 { type: 'operator', operator: '!', opType: 'postfix' } ],
-              next: [] }
+            [ { type: 'operator', operator: '=', opType: 'binary', start:_,end:_ },
+              { numerator: 5, denominator: 1, type: 'number', start:_,end:_ },
+              { type: 'operator', operator: '!', opType: 'postfix', start:_,end:_ } ]
 
-    // todo:
-//   randomTests.inputs['[5]!'] =
-//           { current:
-//               [ { type: 'operator', operator: '[', opType: 'binary' },
-//                 { numerator: 5, denominator: 1, type: 'number' },
-//                 { type: 'operator', operator: ']', opType: 'binary' },
-//                 { type: 'operator', operator: '!', opType: 'postfix' } ],
-//              next: [] }
+   randomTests.inputs['[5]!'] =
+            [ { type: 'operator', operator: '[', opType: 'bbp', start:_,end:_ },
+              { numerator: 5, denominator: 1, type: 'number', start:_,end:_ },
+              { type: 'operator', operator: ']', opType: 'bbp', start:_,end:_ },
+              { type: 'operator', operator: '!', opType: 'postfix', start:_,end:_ } ]
 
+   randomTests.inputs['[1][2]'] =
+           [  { type: 'operator', operator: '[', opType: 'bbp', start:_,end:_ },
+              { numerator: 1, denominator: 1, type: 'number', start:_,end:_ },
+              { type: 'operator', operator: ']', opType: 'bbp', start:_,end:_ },
+              { type: 'operator', operator: '[', opType: 'bbp', start:_,end:_ },
+              { numerator: 2, denominator: 1, type: 'number', start:_,end:_ },
+              { type: 'operator', operator: ']', opType: 'bbp', start:_,end:_ } ]
+
+   randomTests.inputs["[] + 1"] =
+           [  { type: 'operator', operator: '[', opType: 'bbp', start:_,end:_ },
+              { type: 'operator', operator: ']', opType: 'bbp', start:_,end:_ },
+              { type: 'operator', operator: '+', opType: 'binary', start:_,end:_ },
+              { numerator: 1, denominator: 1, type: 'number', start:_,end:_ } ]
+
+
+
+    randomTestsIndented.inputs[''] = []
+    randomTestsIndented.inputs[' '] = []
+    randomTestsIndented.inputs['\n'] = []
 
     tests.push(randomTests)
+    tests.push(randomTestsIndented)
 
     return tests
 }
@@ -913,14 +891,12 @@ objectDefinitionSpaceTests[
 ] =
     [ { type: 'superExpression',
         parts:
-         [ { type: 'variable', name: 'a' },
-           { type: 'rawExpression', startColumn: testUtils.anything, expression: '=awfjawiefijef' } ],
-        needsEndParen: false },
+         [ { type: 'variable', name: 'a', start:_,end:_ },
+           { type: 'rawExpression', startColumn: testUtils.anything, expression: '=awfjawiefijef', start:_,end:_ } ] },
       { type: 'superExpression',
         parts:
-         [ { type: 'variable', name: 'awijefiejawef' },
-           { type: 'rawExpression', startColumn: testUtils.anything, expression: '' } ],
-        needsEndParen: false } ]
+         [ { type: 'variable', name: 'awijefiejawef', start:_,end:_ },
+           { type: 'rawExpression', startColumn: testUtils.anything, expression: '', start:_,end:_ } ] } ]
 
 objectTests = getObjectTests()
 function getObjectTests() {
@@ -930,11 +906,19 @@ function getObjectTests() {
 
     successTestGroup.inputs[
         "{}"
-    ] = { type: 'object', expressions: [], needsEndBrace: false }
+    ] = { type: 'object',
+          expressions:
+           [ { type: 'superExpression',
+               parts: [ { type: 'operator', operator: '}', opType: 'bbp', start:_,end:_ } ] } ]
+    }
 
     successTestGroup.inputs[
         "{ }"
-    ] = { type: 'object', expressions: [], needsEndBrace: false }
+    ] = { type: 'object',
+          expressions:
+           [ { type: 'superExpression',
+               parts: [ { type: 'operator', operator: '}', opType: 'bbp', start:_,end:_ } ] } ]
+    }
 
     successTestGroup.inputs[
         "{a\n"+
@@ -943,10 +927,9 @@ function getObjectTests() {
           expressions:
            [ { type: 'superExpression',
                parts:
-                [ { type: 'variable', name: 'a' },
-                  { type: 'rawExpression', startColumn: testUtils.anything, expression: '\n}}' } ],
-               needsEndParen: false } ],
-          needsEndBrace: true }
+                [ { type: 'variable', name: 'a', start:_,end:_ },
+                  { type: 'rawExpression', startColumn: testUtils.anything, expression: '\n}}', start:_,end:_ } ] } ]
+    }
 
     failureTestGroup = {
         note:'failures',
@@ -1004,10 +987,7 @@ exports.realTests = realTests
 exports.numberTests = numberTests
 exports.stringTests = stringTests
 exports.operatorTests = operatorTests
-exports.binaryOperandTests = {state:{indent:0}, inputs: binaryOperands}
-exports.binaryOperatorAndOperandTests = binaryOperatorAndOperandTests
 exports.rawExpressionTests = rawExpressionTests
-exports.closingBrackets = closingBrackets
 exports.superExpressionTests = superExpressionTests
 exports.nonMacroExpressionContinuationTests = nonMacroExpressionContinuationTests
 exports.objectDefinitionSpaceTests = {inputs: objectDefinitionSpaceTests}
@@ -1038,7 +1018,6 @@ function objectMap(object, mapFn) {
 function expandToSuperExpression(node) {
     return {
       type: 'superExpression',
-      parts: [node],
-      needsEndParen: false
+      parts: [node]
     }
 }

@@ -2,19 +2,18 @@
 var P = require("../src/limaParsimmon")
 var basicUtils = require("../src/basicUtils")
 var macroParsers = require("../src/macroParsers")
+var testUtils = require("./testUtils")
 
 // the following are set like this so i can block comment out the tests below
-var innerBlockTests = []
+var innerBlockTests = {args: ['someName', P.str("param")], state: {}, inputs:{}}
 var macroBlockTests=[]
 var rawFnInnerBlockTests=[], rawFnInnerTests = [], indentedBlockTests = []
 var retStatementTests=[]
 var macroInnerTests=[], ifInnerBlockTests=[]
 
+var _ = testUtils.anything
 
 //*
-
-
-innerBlockTests = {args: ['someName', P.str("param")], state: {}, inputs:{}}
 
 innerBlockTests.inputs[
     "someName param: whatever"
@@ -22,9 +21,8 @@ innerBlockTests.inputs[
  { body:
    [ { type: 'superExpression',
        parts:
-        [ { type: 'variable', name: 'whatever' },
-          { type: 'rawExpression', startColumn: 10, expression: '' } ],
-       needsEndParen: false } ],
+        [ { type: 'variable', name: 'whatever', start:_,end:_ },
+          { type: 'rawExpression', startColumn: 10, expression: '', start:_,end:_ } ] } ],
    parameters: 'param' }
 
 innerBlockTests.inputs[
@@ -33,9 +31,8 @@ innerBlockTests.inputs[
  { body:
    [ { type: 'superExpression',
        parts:
-        [ { type: 'variable', name: 'whatever' },
-          { type: 'rawExpression', startColumn: 10, expression: '' } ],
-       needsEndParen: false } ],
+        [ { type: 'variable', name: 'whatever', start:_,end:_ },
+          { type: 'rawExpression', startColumn: 10, expression: '', start:_,end:_ } ] } ],
    parameters: 'param' }
 
 innerBlockTests.inputs[
@@ -45,9 +42,8 @@ innerBlockTests.inputs[
  { body:
    [ { type: 'superExpression',
        parts:
-        [ { type: 'variable', name: 'whatever' },
-          { type: 'rawExpression', startColumn: 8, expression: '' } ],
-       needsEndParen: false } ],
+        [ { type: 'variable', name: 'whatever', start:_,end:_ },
+          { type: 'rawExpression', startColumn: 8, expression: '', start:_,end:_ } ] } ],
    parameters: 'param' }
 
 
@@ -104,17 +100,15 @@ rawFnInnerTests.inputs[
          body:
           [ { type: 'superExpression',
               parts:
-               [ { type: 'variable', name: 'whatever' },
-                 { type: 'rawExpression', startColumn: 10, expression: '' } ],
-              needsEndParen: false } ] },
+               [ { type: 'variable', name: 'whatever', start:_,end:_ },
+                 { type: 'rawExpression', startColumn: 10, expression: '', start:_,end:_ } ] } ] },
       run:
        { parameters: [],
          body:
           [ { type: 'superExpression',
               parts:
-               [ { type: 'variable', name: 'whatever' },
-                 { type: 'rawExpression', startColumn: 10, expression: '' } ],
-              needsEndParen: false } ] } }
+               [ { type: 'variable', name: 'whatever', start:_,end:_ },
+                 { type: 'rawExpression', startColumn: 10, expression: '', start:_,end:_ } ] } ] } }
 
 rawFnInnerTests.inputs[
     "match a: whatever\n"+  // on the first line of the macro
@@ -125,17 +119,15 @@ rawFnInnerTests.inputs[
          body:
           [ { type: 'superExpression',
               parts:
-               [ { type: 'variable', name: 'whatever' },
-                 { type: 'rawExpression', startColumn: 10, expression: '' } ],
-              needsEndParen: false } ] },
+               [ { type: 'variable', name: 'whatever', start:_,end:_ },
+                 { type: 'rawExpression', startColumn: 10, expression: '', start:_,end:_ } ] } ] },
       run:
        { parameters: ['b'],
          body:
           [ { type: 'superExpression',
               parts:
-               [ { type: 'variable', name: 'whatever' },
-                 { type: 'rawExpression', startColumn: 10, expression: '' } ],
-              needsEndParen: false } ] } }
+               [ { type: 'variable', name: 'whatever', start:_,end:_ },
+                 { type: 'rawExpression', startColumn: 10, expression: '', start:_,end:_ } ] } ] } }
 
 
 indentedBlockTests = [
@@ -163,17 +155,15 @@ macroInnerTests.inputs[
          body:
           [ { type: 'superExpression',
               parts:
-               [ { type: 'variable', name: 'whatever' },
-                 { type: 'rawExpression', startColumn: 10, expression: '' } ],
-              needsEndParen: false } ] },
+               [ { type: 'variable', name: 'whatever', start:_,end:_ },
+                 { type: 'rawExpression', startColumn: 10, expression: '', start:_,end:_ } ] } ] },
        run:
        { parameters: ['a'],
          body:
           [ { type: 'superExpression',
               parts:
-               [ { type: 'variable', name: 'whatever' },
-                 { type: 'rawExpression', startColumn: 10, expression: '' } ],
-              needsEndParen: false } ] } }
+               [ { type: 'variable', name: 'whatever', start:_,end:_ },
+                 { type: 'rawExpression', startColumn: 10, expression: '', start:_,end:_ } ] } ] } }
 
 
 ifInnerBlockTests = {inputs: {}, state: {indent: 0, scope:{get:function(name) {
@@ -184,9 +174,11 @@ ifInnerBlockTests.inputs[
 ] =
     [ { expressionBlock: {
            type: 'superExpression',
-           parts: [ { numerator: 1, denominator: 1, type: 'number' } ],
-           needsEndParen: false },
-        foundTrailingColon: true
+           parts: [
+               { numerator: 1, denominator: 1, type: 'number', start:_,end:_ },
+               { type: 'operator', operator: ':', opType: 'postfix', start:_,end:_ }
+           ] },
+        foundTrailingColon: false
       }
     ]
 

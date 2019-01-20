@@ -26,6 +26,6 @@ module.exports.coreLevel1Test = function(sourceString, args) {
 function evaluateModuleWithParentContext(sourceString, parentContext) {
     var moduleContext = coreLevel1.limaObjectContext(parentContext)
     var moduleAst = parser.withState({index:0}).module().tryParse(sourceString)
-    evaluate.resolveObjectSpace(moduleContext, moduleAst.expressions, 0, undefined, true)
+    evaluate.resolveObjectSpace(moduleContext, moduleAst.expressions, 0)
     return moduleContext
 }

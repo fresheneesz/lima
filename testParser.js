@@ -18,11 +18,11 @@ var tests = basicUtils.merge({
     real: tests.realTests,
     number: tests.numberTests,
     rawString: tests.stringTests,
-    basicOperator: tests.operatorTests,
-    binaryOperand: tests.binaryOperandTests,
-    binaryOperatorAndOperand: tests.binaryOperatorAndOperandTests,
+    operator: tests.operatorTests,
+//    binaryOperand: tests.binaryOperandTests,
+//    binaryOperatorAndOperand: tests.binaryOperatorAndOperandTests,
     rawExpression: tests.rawExpressionTests,
-    closingBrackets: tests.closingBrackets,
+//    closingBrackets: tests.closingBrackets,
     superExpression: tests.superExpressionTests,
     nonMacroExpressionContinuation: tests.nonMacroExpressionContinuationTests,
     objectDefinitionSpace: tests.objectDefinitionSpaceTests,
@@ -143,7 +143,16 @@ normalizedTests.forEach(function(testItem) {
             }
         } catch(e) {
             if(testItem.shouldFail) {
-                console.log(colors.green("Correctly failed!"))
+                if(testItem.shouldFail !== true && e.toString().indexOf(testItem.shouldFail) === -1) {
+                    failures++
+                    console.log(colors.red("X - Got unexpected result for "+JSON.stringify(testItem.content)+"!!!"))
+                    console.log(colors.magenta("Expected an error containing: "+util.inspect(testItem.shouldFail, {depth:null})))
+                    console.log(colors.red("Instead got: "))
+                    console.log(colors.red(e.toString()))
+                } else {
+                    console.log(colors.green("Correctly failed!"))
+                }
+
             } else {
                 failures++
                 console.log(colors.red("Error for: "+JSON.stringify(testItem.content)))

@@ -516,6 +516,20 @@ var hasOperatorOfType = exports.hasOperatorOfType = function(valueObject, operat
     var opInfo = valueObject.meta[operatorKey][operator.operator]
     return opInfo !== undefined
 }
+
+
+exports.isBinaryOperator = function(op) {
+    return isNodeType(op,'operator') && getOperatorType(op) === 'binary'
+}
+var getOperatorType = exports.getOperatorType = function(op) {
+    if(   op.operator in {':':1,'::':1}       // Colon and equals operators are always considered binary.
+       || op.operator[op.operator.length-1] in {'=':1}
+    ) {
+        return 'binary'
+    } else {
+        return op.opType
+    }
+}
 var isOperatorOfType = exports.isOperatorOfType = function(x, opType) {
     return isNodeType(x, 'operator') && x.opType === opType
 }

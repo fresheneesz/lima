@@ -1,5 +1,13 @@
-coreLevel1['wout']['test']
-wout = coreLevel1['wout']~
+
+nil = coreLevel1['nil']
+true = coreLevel1['true']
+false = coreLevel1['false']
+wout = coreLevel1['wout']
+
+; macros
+rawFn = coreLevel1['rawFn']~
+macro = coreLevel1['macro']~
+if = coreLevel1['if']~
 
 ;[
 
