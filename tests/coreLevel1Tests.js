@@ -13,7 +13,6 @@ function getPropertyOld(oldScope, key) { // deprecated
 var tests = exports.tests = {
 
 
-
     //*
     emptySource:                    "",
     hello:                          "wout['hello world']\r\n",
@@ -98,7 +97,7 @@ var tests = exports.tests = {
     addIntegerAndReal:    {content:'1+1.3', check: function(module) {
         var element0 = getFirstProperty(module).value
         return isSpecificRatio(element0, 23, 10)
-    }},    
+    }},
     addIntegerAndReal2:    {content:'1.3+1', check: function(module) {
         var element0 = getFirstProperty(module).value
         return isSpecificRatio(element0, 23, 10)
@@ -120,7 +119,7 @@ var tests = exports.tests = {
         return isSpecificRatio(element0, -3, 10)
     }},
 
-    
+
 
     // strings
 

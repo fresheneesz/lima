@@ -120,7 +120,7 @@ var Scope = module.exports.Scope = proto(function() {
     }
 
     this.has = function(name) {
-        return name in this.variables || this.upperScope.has(name)
+        return name in this.variablesMeta || this.upperScope.has(name)
     }
     this.aSubScopeHasNonshadowable = function(name) {
         return this.subScopes.some(function(subScope) {
@@ -128,7 +128,7 @@ var Scope = module.exports.Scope = proto(function() {
         })
     }
     this.get = function(name) {
-        if(name in this.variables) {
+        if(name in this.variablesMeta) {
             return this.variables[name]
         } else {
             return this.upperScope.get(name)
@@ -198,7 +198,7 @@ var Scope = module.exports.Scope = proto(function() {
                 })
             }
 
-            this.variables[name] = coreLevel1a.nil
+//            this.variables[name] = basicUtils.copyValue(coreLevel1a.nil)
             this.variablesMeta[name] = {initialized: false}
             if(allowShadow)
                 this.variablesMeta[name].allowShadow = true

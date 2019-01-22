@@ -859,6 +859,7 @@ var varMacro = functionLikeMacro(function(infoObject) {
         var parts = expressions[n].parts
         if(parts.length === 1 && utils.isNodeType(parts[0], 'variable')) {
             modifiedCallingContext.declare(parts[0].name, anyType)
+            modifiedCallingContext.set(parts[0].name, basicUtils.copyValue(nil))
             var remainingParts = []
         } else {
             var remainingParts = evaluate.superExpression(modifiedCallingContext, parts)
