@@ -186,7 +186,11 @@ function resolveBinaryOperations(context, curState, options) {
                     var returnValue = coreLevel1.nil
                 } else {
                     if(utils.isNodeType(operand1, 'variable')) {
-                        if(context.scope.inObjectSpace) {
+                        var implicitDeclarationsAllowed = context.scope.inObjectSpace
+                        if(context.atr.declarationModifiers !== undefined && context.atr.declarationModifiers.scope === context.scope) {
+                            implicitDeclarationsAllowed = true
+                        }
+                        if(implicitDeclarationsAllowed) {
                             if(operator1.operator === '=') {
                                 var newValue = basicUtils.copyValue(coreLevel1.nil)
                                 newValue.name = operand1.name

@@ -529,7 +529,7 @@ function macro(macroFns) {
 
                 if(statementInfo !== undefined) {
                     var parts = statementInfo.expression.parts
-                    var consumed = statementInfo.consumed
+//                    var consumed = statementInfo.consumed
                     closeExpression(statementInfo.expression)
                     var consumed = findExpressionEndOffset(statementInfo.expression)
                 } else {
@@ -634,6 +634,7 @@ function closeExpression(expression) {
 
     return [].concat(trailingExpressions)
 
+
     function buildReturnValue(n) {
         var result = []
         var remainingParts = expression.parts.splice(n)
@@ -676,6 +677,17 @@ function closeObject(objectNode) {
             }
         }
     }
+
+function closeExpressions(expressions) {
+    for(var n=0; n<expressions.length;) {
+        var remainingExpressions = closeExpression(expressions[n])
+        if(remainingExpressions.length > 0) {
+            expressions.splice.apply(expressions, [n, 0].concat(remainingExpressions))
+        } else {
+            n++
+        }
+    }
+}
 
 // The context passed into run is the context the macro was called in.
 function macroWithConventionsACD(name, macroParser, run) {
@@ -745,7 +757,6 @@ var macroMacro = macroWithConventionsACD('macro', 'macroInner', function run(ast
 var ifMacro = macroWithConventionsACD('macro', 'ifInner', function run(ast) {
     for(var n=0; n<ast.length; n++) {
         var blockItem = ast[n]
-//        var info = getBlockInfo(ast[n])
 
         // Create a temp-read scope with 'else' defined in it.
         var tempReadScope = this.scope.tempReadScope()
@@ -799,31 +810,69 @@ var ifMacro = macroWithConventionsACD('macro', 'ifInner', function run(ast) {
     // else
     return nil
 })
-    // Finds the parameter (before the colon) and the body of a block (eg for `if`).
-    function getBlockInfo(blockItem) {
-        var expressionBlock = blockItem.expressionBlock
-        if(expressionBlock.parts.length === 1 && blockItem.foundTrailingColon) {
-            return {condition: expressionBlock}
-        }
 
-        for(var n=0; n<expressionBlock.parts.length; n++) {
-            var item = expressionBlock.parts[n]
-            if(utils.isSpecificOperator(item, ':')) {
-                if(blockItem.foundTrailingColon)
-                    throw new Error("Invalid `if` block, found invalid trailing colon in the body of a conditional block.")
-                var body = {type:'superExpression', parts:expressionBlock.parts.slice(n+1)}
-                expressionBlock.parts.splice(n+1)
-                return {
-                    condition: expressionBlock,
-                    body: body
-                }
+function functionLikeMacro(runFn) {
+    return macro({
+        match: function(rawInputLima) {
+            var rawInput = utils.getPrimitiveStr(this, rawInputLima)
+            var statementInfo = macroParsers.withState({
+                context: this,
+                consumeFirstlineMacros: true
+            }).functionLikeMacro().tryParse(rawInput)
+
+            if(statementInfo !== undefined) {
+                var expressions = statementInfo.expressions
+                closeExpressions(statementInfo.expressions)
+                var consumed = findExpressionEndOffset(statementInfo.expressions[statementInfo.expressions.length-1])
+            } else {
+                var expressions = []
+                var consumed = 0
             }
-        }
-        // else
-        if(!blockItem.foundTrailingColon)
-            throw new Error("Invalid `if` statement, didn't find any conditional block.")
+
+            return LimaObject({
+                consume: NumberObj(consumed),
+                arg:  createJsPrimitive(expressions)
+            })
+        },
+        run: runFn
+    })
+}
+
+function createDeclarationModifiers(context) {
+    var newDeclarationModifiers = {scope: context.scope, modifiers: {}}
+    var curDeclarationModifiers = context.atr.declarationModifiers
+    if(curDeclarationModifiers !== undefined && curDeclarationModifiers.scope === this) {
+        basicUtils.merge(newDeclarationModifiers.modifiers, curDeclarationModifiers.modifiers)
     }
 
+    return newDeclarationModifiers
+}
+
+var varMacro = functionLikeMacro(function(infoObject) {
+    var callingContext = this.callingContext()
+    var newDeclarationModifiers = createDeclarationModifiers(callingContext)
+    // newDeclarationModifiers.type = something // todo
+    var modifiedCallingContext = callingContext.subAtrContext({declarationModifiers: newDeclarationModifiers})
+
+    var expressions = getFromJsPrimitive(infoObject)
+    for(var n=0; n<expressions.length;) {
+        var parts = expressions[n].parts
+        if(parts.length === 1 && utils.isNodeType(parts[0], 'variable')) {
+            modifiedCallingContext.declare(parts[0].name, anyType)
+            var remainingParts = []
+        } else {
+            var remainingParts = evaluate.superExpression(modifiedCallingContext, parts)
+        }
+
+        if(remainingParts.length > 0) {
+            expressions.splice(n, 0, {type:"superExpression", parts:remainingParts})
+        } else {
+            n++
+        }
+    }
+
+    return nil
+})
 
 
 var wout = FunctionObj({
@@ -870,6 +919,7 @@ var coreLevel1Variables = {
     rawFn: rawFn,
     macro: macroMacro,
     if: ifMacro,
+    'var': varMacro,
 }
 
 // makes the minimal core scope where some core constructs are missing operators and members that are derivable using

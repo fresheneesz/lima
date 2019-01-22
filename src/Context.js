@@ -39,7 +39,12 @@ var Context = module.exports = proto(function() {
         }
         var publicDeclaration = this.atr.publicDeclarations && this.atr.publicDeclarations.indexOf(this.scope) !== -1
         var allowShadow = this.atr.allowShadowDeclarations && this.atr.allowShadowDeclarations.indexOf(this.scope) !== -1
-        this.scope.set(name, value, publicDeclaration, allowShadow)
+        var options = {}
+        if(this.atr.declarationModifiers && this.atr.declarationModifiers.scope === this.scope) {
+            options.declarationModifiers = this.atr.declarationModifiers.modifiers
+        }
+
+        this.scope.set(name, value, publicDeclaration, allowShadow, options)
     }
     this.declare = function(nameIn, type) {
         var name = basicUtils.normalizedVariableName(nameIn)
@@ -136,16 +141,25 @@ var Scope = module.exports.Scope = proto(function() {
             return this.upperScope.getMeta(name)
         }
     }
-    this.set = function(name, value, isPublic, allowShadow) {
+    // options
+        // declarationModifiers
+            // type
+    this.set = function(name, value, isPublic, allowShadow, options) {
+        if(!options) options = {}
+
         if(this.tempRead) {
-            return this.upperScope.set(name, value, isPublic, allowShadow)
+            return this.upperScope.set(name, value, isPublic, allowShadow, options)
         } else {
             if(this.inObjectSpace) {
                 if(!this.has(name) || this.getMeta(name).initialized) {
                     this.declare(name, coreLevel1a.anyType, isPublic, allowShadow)
                 }
             } else if(!this.has(name)) {
-                throw new Error("Variable '"+name+"' not declared.")
+                if(options.declarationModifiers !== undefined) {
+                    this.declare(name, coreLevel1a.anyType, isPublic, allowShadow)
+                } else {
+                    throw new Error("Variable '"+name+"' not declared.")
+                }
             } else if(this.macroRead && !(name in this.variables)) {
                 throw new Error("Can't overwrite variable "+name+" from an upper scope inside a macro " +
                     "`match` block (mutations should be done in the `run` block).")
@@ -153,9 +167,14 @@ var Scope = module.exports.Scope = proto(function() {
 
             this.variables[name] = value
             this.variablesMeta[name].initialized = true
+            if(options.declarationModifiers !== undefined) {
+                // todo
+            }
         }
     }
-    this.declare = function(name, type, isPublic, allowShadow) {
+    this.declare = function(name, type, isPublic, allowShadow, options) {
+        if(options) options = {}
+
         if(this.tempRead) {
             return this.upperScope.declare(name, type, isPublic, allowShadow)
         } else {
@@ -178,6 +197,7 @@ var Scope = module.exports.Scope = proto(function() {
                   }
                 })
             }
+
             this.variables[name] = coreLevel1a.nil
             this.variablesMeta[name] = {initialized: false}
             if(allowShadow)

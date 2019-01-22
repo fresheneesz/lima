@@ -367,7 +367,7 @@ var tests = exports.tests = {
     // todo:
 //    stringToString:    {content:'"a".str', check: function(module) {
 //         var element0 = getFirstProperty(module).value
-//         return isFalse(element0)
+//         return element0.primitive.string === 'a'
 //    }},
 
 
@@ -1155,6 +1155,48 @@ var tests = exports.tests = {
 //            return isSpecificInt(element0, 1)
 //        }
     },
+
+    // var
+
+    basicVarDeclaration: {
+        content:'f = rawFn match: ret {arg: {}}\n'+
+                ' run: \n' +
+                '  var x\n'+
+                '  x=40\n'+
+                '  ret x\n'+
+                '\n' +
+                'f[]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 40)
+        }
+    },
+    varDeclarationWithInit: {
+        content:'f = rawFn match: ret {arg: {}}\n'+
+                ' run: \n' +
+                '  var x=4\n'+
+                '  ret x\n'+
+                '\n' +
+                'f[]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 4)
+        }
+    },
+
+    // jump
+
+//    basicJumpWithinFunction: {
+//        content:'f = rawFn match: ret {arg: {}}\n'+
+//                ' run: \n' +
+//                '   var \n'+
+//                '\n' +
+//                'f[]',
+//        check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return isSpecificInt(element0, 5)
+//        }
+//    },
 
     // other
 

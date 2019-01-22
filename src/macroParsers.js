@@ -171,7 +171,40 @@ module.exports = P.createLanguage({context:{}}, {
         ).map(function(v) {
             if(v.expression.value.length > 0) {
                 var node = v.expression.value[0]
-                return {expression: node, consumed: v.expression.end.offset- v.ws.start.offset}
+                return {expression: node}//, consumed: v.expression.end.offset- v.ws.start.offset}
+            }
+        })
+    },
+
+    // Parses a macro that can be called with or without brackets, can operate on 0 or 1 statement when not using brackets, and
+    //  0 or more statements when using brackets.
+    // Returns either undefined if there's no expression, or an object with the properties:
+        // expressions - A list of superExpression nodes.
+        // needsClosingBracket - If true, the expressions should contain a closing bracket to end the statement modifier.
+    functionLikeMacro: function() {
+        var parserState = getParser().withState(this.state)
+        return seqObj(
+            ['ws',parserState.indentedWs(0).many().mark()], // Breaking with convention because the ret macro was already parsed,
+                                                            // but any trailing whitespace won't have been.
+            ['expressions', alt(
+                parserState.superExpression().map(function(v) {
+                    return {list:[v]}
+                }),
+                seq('[',
+                    parserState.superExpression().many()
+                ).map(function(v) {
+                    return {list:v[1], needsClosingBracket:true}
+                })
+            ).mark()],
+            any.many() // Eat anything else, since parsimmon requires the whole input to be matched.
+        ).map(function(v) {
+            if(v.expressions.value.list.length > 0) {
+                var nodes = v.expressions.value.list
+                var needsClosingBracket = v.expressions.value.needsClosingBracket
+                return {
+                    expressions: nodes,
+                    needsClosingBracket:needsClosingBracket
+                }
             }
         })
     },
