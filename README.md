@@ -48,21 +48,25 @@ These are all under the `src/` directory.
 
 ##### Value Nodes:
 
-**`{type:"number", numerator:_, denominator:_, postfix:_}`** - Represents a number literal. The `postfix` property is optional, but if exists contains a string starting with a letter from a-z
+**`{type:"number", numerator:_, denominator:_, postfix:_, start:_, end:_}`** - Represents a number literal. The `postfix` property is optional, but if exists contains a string starting with a letter from a-z
 
-**`{type:"string", string:_}`** - Represents a string literal.
+**`{type:"string", string:_, start:_, end:_}`** - Represents a string literal.
 
-**`{type:"variable", name:_}`**   Represents a basic variable.
+**`{type:"variable", name:_, start:_, end:_}`**   Represents a basic variable.
 
-**`{type:"object", expressions:_}`** - Represents an object literal. The `expressions` is a list of superExpression nodes.
+**`{type:"object", expressions:_, start:_}`** - Represents an object literal. The `expressions` is a list of superExpression nodes.
 
 **`{type:"superExpression", parts:_}`** - Represents a block of code that may contain one or more actual expressions. The `parts` is a list of values nodes, operator nodes, or rawExpressions.
-* **`{type:"rawExpression", startColumn:_, expression:_, meta:_}`** - Represents a block of code that may contain one or more actual expressions. `expression` is the raw expression string. `startColumn` is the 0-indexed column the rawExpression starts at relative to the indent of the expression that contains it. `meta` contains an object with an `index` representing the index in the source code the rawExpression starts at. `index` has the structure `{ offset: _, line: _, column: _ }`. *Note: this isn't a value node.*
-* **`{type:"macroConsumption", consume:_}`** - Indicates that the previous value is expected to consumes `consume` number of characters (eg because its consumption was evaluated as part of the first line of a block macro). Can also be inserted after values not expected to be a macro (with `consume:0`). This is intended to be used in evaluation to double-check that the macro consumes the expected number of characters when run for real, and facilitate throwing an error if the consumption doesn't match when run.
+* **`{type:"rawExpression", startColumn:_, expression:_, start:_, end:_}`** - Represents a block of code that may contain one or more actual expressions. `expression` is the raw expression string. `startColumn` is the 0-indexed column the rawExpression starts at relative to the indent of the expression that contains it. `meta` contains an object with an `index` representing the index in the source code the rawExpression starts at. `index` . *Note: this isn't a value node.*
+* **`{type:"macroConsumption", consume:_, start:_, end:_}`** - Indicates that the previous value is expected to consumes `consume` number of characters (eg because its consumption was evaluated as part of the first line of a block macro). Can also be inserted after values not expected to be a macro (with `consume:0`). This is intended to be used in evaluation to double-check that the macro consumes the expected number of characters when run for real, and facilitate throwing an error if the consumption doesn't match when run.
 
 ##### Operator Nodes:
 
-**`{type:"operator", operator:_, opType:_}`** - Represents an operator that might be a binary, prefix, or postfix operator. In addition to normal lima operators, `operator` can contain `}`, `)`, which will be used in cases where a possible macro makes it unclear where an object literal or paren statement ends. `opType` can either be "binary", "prefix", "postfix", or "bbp" (which stands for brace, bracket, or paren).
+**`{type:"operator", operator:_, opType:_, start:_, end:_}`** - Represents an operator that might be a binary, prefix, or postfix operator. In addition to normal lima operators, `operator` can contain `}`, `)`, which will be used in cases where a possible macro makes it unclear where an object literal or paren statement ends. `opType` can either be "binary", "prefix", "postfix", or "bbp" (which stands for brace, bracket, or paren).
+
+##### The `start` and `end` ast properties
+
+`start` represents where the construct starts, and `end` represents where that construct ends. The `start` and `end` properties both have the structure `{ offset: _, line: _, column: _ }`. Note that an `object` ast node only has `start`.
 
 ## Core Level 1 Roadmap
 
@@ -201,7 +205,6 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
     * list
   * core objects
     * selectively `mix`ing in the standardLibrary
-    * contin
     * ref
        * ~
        * ~>
@@ -228,7 +231,6 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
     * ready
     * outReady
     * const
-    * while
     * throw
     * try
     * atry
@@ -238,7 +240,6 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
     * change
     * override
     * future
-    * jump
     * assert
     * optimize
   * core attributes
@@ -309,8 +310,12 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
     * `==`
     * basic single-argument bracket operator `[ ]`
 * fn.raw function creation
+* core objects
+  * contin
 * core macros
   * if
+* core functions
+  * jump
 
 #### Migrations from Core Level 1 to Level 2
 
@@ -432,6 +437,8 @@ These are things that were done in Core Level 1, but should be moved to Core Lev
      * bits
 * core objects
   * chan
+* core macros
+  * while
 
 
 #### Core Level 2 Done:
@@ -444,6 +451,7 @@ These are things that were done in Core Level 1, but should be moved to Core Lev
 
 ## Change log
 
+* 0.0.22 - contin and jump
 * 0.0.21
   * Greatly simplifying the parser logic and at the same time fixing bugs that were disallowing certain operator combinations (like a bracket operator followed by a bracket operator).
   * Adding "bbp" opType

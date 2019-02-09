@@ -252,6 +252,7 @@ var Scope = module.exports.Scope = proto(function() {
 
 var blockFn = function() {throw new Error("Calling scope not accessible.")}
 var inaccessibleScope = module.exports.inaccessibleScope = {has: blockFn, get:blockFn, set:blockFn, declare:blockFn}
+module.exports.inaccessibleContext = Context(inaccessibleScope)
 
 // Lima implementation of the above (some things are now missing from the below that have been added to the above)
 /**

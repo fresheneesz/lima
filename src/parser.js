@@ -135,6 +135,8 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
             ).map(function(v) {
                 if(isBBPOperator(v.operator.value)) {
                     var opType = 'bbp'
+                } else if(isUnconditionallyBinary(v.operator.value)) {
+                    var opType = 'binary'
                 } else {
                     var L0 = v.leadingWs.length, L1 = v.trailingWs.length
                     var spaceBefore = L0 !== 0
@@ -588,6 +590,9 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
 
 function isBBPOperator(operatorString) {
     return operatorString[0] in {'}':1,'(':1,')':1,'[':1,']':1}
+}
+function isUnconditionallyBinary(operatorString) {
+    return operatorString in {':':1,'::':1} || operatorString[operatorString-1] in {'=':1}
 }
 
 // flattens a 2D array into a 1D array of 2nd level parts in order

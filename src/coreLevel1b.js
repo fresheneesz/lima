@@ -184,7 +184,7 @@ nil.meta.operators['='] = {
     dispatch: makeParamInfo([
         {params: [{rvalue:anyType}], fn: function(rvalue) { // assignment operator
             if(this.get('this').meta.const)
-                throw new Error("Can't assign a const variable")
+                throw new Error("Can't assign to a constant.")
             basicUtils.overwriteValue(this.get('this'), rvalue)
         }},
         {params: [], fn: function() { // copy operator
@@ -235,6 +235,20 @@ zero.meta.operators['-'] = nonSymmetricalOperator({order:4, scope:0, paramType: 
         return NumberObj(leftNumeratorScaled-rightNumeratorScaled, commonDenominator)
     }
 })
+//zero.meta.preOperators['!'] = {
+//    scope: 0,
+//    dispatch: makeParamInfo([{params: [], fn: function() {
+//        var primitive = this.get('this').meta.primitive
+//        if(primitive.denominator === 1 && primitive.numerator === 1) {
+//            return False
+//        } else if(primitive.numerator === 0) {
+//            return True
+//        } else {
+//            throw new Error("Not (!) operator not supported on non-binary numbers.")
+//        }
+//        return StringObj(this.get('this').meta.primitive.string+'\n')
+//    }}])
+//}
 
 
 var emptyString = exports.emptyString = basicUtils.copyValue(nil)
@@ -267,6 +281,21 @@ emptyObj.meta.operators['['] = { // Basic single-operand bracket operator (multi
         return utils.getProperty(this, this.get('this'), key)
     }}])
 }
+
+
+var emptyContin = basicUtils.copyValue(nil)
+delete emptyContin.meta.primitive
+emptyContin.meta.operators['='] = {
+    order:9, backward:true, scope: 0,
+    dispatch: makeParamInfo([
+        {params: [], fn: function() { // copy operator
+            var continCopy = basicUtils.copyValue(this.get('this'))
+            continCopy.meta.primitive.contin = this.get('this').meta.primitive.getContinInfo()
+            return continCopy
+        }}
+    ])
+}
+
 
 var nilReference = exports.nilReference = coreLevel1a.nilReference
 Object.defineProperty(nilReference, '_d', {
@@ -477,8 +506,13 @@ function macro(macroFns) {
 }
 
     function runFunctionStatements(declarationContext, callingContext, body, parameters, args) {
-        var retPtr = {}
-        var functionContext = createFunctionContext(declarationContext.scope, callingContext, retPtr)
+        var retPtr = {}, parts, j
+        var contin = createContinObject(function getContinInfo() {
+            return {
+                bodyIndex: j
+            }
+        })
+        var functionContext = createFunctionContext(declarationContext.scope, callingContext, retPtr, contin)
 
         parameters.forEach(function(parameter, n) {
             var arg = args[n]
@@ -489,36 +523,59 @@ function macro(macroFns) {
             functionContext.set(parameter, param)
         })
 
-        for(var j=0; j<body.length; j++) {
+        for(j=0; j<body.length; j++) {
             var node = body[j]
             if(utils.isNodeType(node, 'superExpression')) {
-                var parts = node.parts
+                parts = node.parts
             } else {
-                var parts = node
+                parts = node
             }
 
             while(parts.length > 0) {
-                var result = evaluate.superExpression(functionContext, parts)
-                parts = result.remainingParts
-                if(retPtr.returnValue !== undefined) {
-                    return retPtr.returnValue
+                try {
+                    var result = evaluate.superExpression(functionContext, parts)
+                    parts = result.remainingParts
+                } catch(e) {
+                    if(e.contin !== undefined) {
+                        j = e.contin.bodyIndex
+                    } else if(e.returnValue !== undefined) {
+                        return e.returnValue
+                    } else throw e
                 }
             }
         }
     }
 
-    function createFunctionContext(declarationScope, callingContext, retPtr) {
-        var functionContext = callingContext.newStackContext(declarationScope.subScope(false))
+    function createContinObject(getContinInfo) {
+        var contin = basicUtils.copyValue(emptyContin)
+        contin.meta.primitive = {getContinInfo: getContinInfo}
+        return contin
+    }
+
+    function createExecContext(declarationScope, callingContext) {
+        return callingContext.newStackContext(declarationScope.subScope(false))
+    }
+
+    function createFunctionContext(declarationScope, callingContext, retPtr, continObj) {
+        var functionContext = createExecContext(declarationScope, callingContext)
         functionContext.scope.declare('ret', coreLevel1a.anyType, undefined, true)
-        functionContext.set('ret', createRetMacro(retPtr, functionContext))
+        functionContext.set('ret', createRetMacro(functionContext))
+        functionContext.scope.declare('contin', coreLevel1a.anyType, undefined, true)
+        functionContext.set('contin', continObj)
         return functionContext
     }
 
     function createMacroConsumptionContext(context) {
-        return createFunctionContext(context.scope.macroReadScope(), context, {})
+        var macroConsumptionContext = createExecContext(context.scope.macroReadScope(), context)
+
+        // Todo: this feels like a hack. Revisit this.
+        macroConsumptionContext.scope.declare('ret', coreLevel1a.anyType, undefined, true)
+        macroConsumptionContext.set('ret', createRetMacro(macroConsumptionContext))
+
+        return macroConsumptionContext
     }
 
-    function createRetMacro(retPtr, functionContext) {
+    function createRetMacro(functionContext) {
         var retMacro = macro({
             match: function(rawInputLima) {
                 var rawInput = utils.getPrimitiveStr(this, rawInputLima)
@@ -545,8 +602,7 @@ function macro(macroFns) {
             run: function(infoObject) {
                 var parts = getFromJsPrimitive(infoObject)
                 var result = evaluate.superExpression(functionContext, parts)
-                retPtr.returnValue = result.value
-                return nil
+                throw {returnValue: result.value}
             }
         })
         retMacro.name = 'ret'
@@ -875,6 +931,14 @@ var varMacro = functionLikeMacro(function(infoObject) {
     return nil
 })
 
+var jump = FunctionObjThatMatches(function(args) {
+    var continObj = utils.getProperty(this, args, zero)
+    if(continObj.meta.primitive.contin === undefined) {
+        throw new Error("jump called with something other than a continuation object.")
+    } else {
+        throw {contin: continObj.meta.primitive.contin}
+    }
+})
 
 var wout = FunctionObj({
     match: function(args) {
@@ -915,6 +979,7 @@ var coreLevel1Variables = {
     true: True,
     false: False,
     wout: wout,
+    jump: jump,
 
     // macros
     rawFn: rawFn,

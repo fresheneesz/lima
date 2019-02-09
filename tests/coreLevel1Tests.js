@@ -1,17 +1,16 @@
 
+var Context = require("../src/Context")
 var coreLevel1 = require("../src/coreLevel1b")
 var utils = require("../src/utils")
 
-var inaccessibleScope = require("../src/Context").inaccessibleScope
 function getProperty(obj, key) {
-    return utils.getProperty(inaccessibleScope, obj, key)
+    return utils.getProperty(Context.inaccessibleContext, obj, key)
 }
 function getPropertyOld(oldScope, key) { // deprecated
     return getProperty(oldScope.this, key)
 }
 
 var tests = exports.tests = {
-
 
     //*
     emptySource:                    "",
@@ -64,6 +63,13 @@ var tests = exports.tests = {
     //     var element0 = getFirstProperty(module).value
     //     return isFalse(element0)
     // }},
+
+                // should fail
+
+    undefinedInitializer: {
+        content:'c = blarg',
+        shouldFail: "Variable 'blarg' not declared"
+    },
 
     // numbers
 
@@ -746,8 +752,11 @@ var tests = exports.tests = {
     },
     // doubly nested macro on first-line
     rawFunctionValueWithNestedMacros: {
-        //                                            (      (  null   ))
-        content:'a = rawFn[match: ret {weak:true arg: ret {0:ret "fake"}}\n'+
+        content:'nilMacro5 = macro match: ret {consume:5 arg:nil}\n' +
+                ' run: ret nil\n' +
+                'm3 = macro match: ret {consume:3 arg:nil}\n' +
+                ' run: ret nil\n' +
+                'a = rawFn[match: ret {weak:true arg: nilMacro5 m3 2}}\n'+
                 ' run:   ret 5\n' +
                 ']\n'+
                 'a[]',
@@ -756,17 +765,18 @@ var tests = exports.tests = {
             return isSpecificInt(element0, 5)
         }
     },
-    rawFunctionValueWithNestedMacros2: {
-        content:'a = rawFn[match: ret {weak:true arg: ret {0:ret x}}\n'+
-                ' run:   ret 5\n' +
-                ']\n' +
-                'x = 5\n'+
-                'a[]',
-        check: function(module) {
-            var element0 = getFirstProperty(module).value
-            return isSpecificInt(element0, 5)
-        }
-    },
+    //todo: make this work
+//    rawFunctionValueWithNestedMacros2: {
+//        content:'a = rawFn[match: ret {weak:true arg: if[true: {0:if[true:x]}]}\n'+
+//                ' run:   ret 5\n' +
+//                ']\n' +
+//                'x = 5\n'+
+//                'a[]',
+//        check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return isSpecificInt(element0, 5)
+//        }
+//    },
     // Also tests multi-line return statements:
     rawFunctionNesting: {
         content:'a = rawFn[\n' +
@@ -1026,6 +1036,23 @@ var tests = exports.tests = {
 //        }
 //    },
 
+    // Todo:
+//    // Ideally the following should report that nilMacro5 is undefined (rather than a macro consumption error)
+//    undefinedVariableNestedInsideAMacro: {
+//        content:'nilMacro4 = macro match: ret {consume:5 arg:nil}\n' +
+//                ' run: ret nil\n' +
+//                'm3 = macro match: ret {consume:3 arg:nil}\n' +
+//                ' run: ret nil\n' +
+//                'a = rawFn[match: ret {weak:true arg: nilMacro5 m3 2}}\n'+
+//                ' run:   ret 5\n' +
+//                ']\n'+
+//                'a[]',
+//        check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return isSpecificInt(element0, 5)
+//        }
+//    },
+
     macroTildeOperator: {
         content:'a = macro\n'+
                 ' match: \n' +
@@ -1112,11 +1139,41 @@ var tests = exports.tests = {
                 '  ret {arg:a}\n'+
                 ' run a:   \n' +
                 '  if a==true: ret true' +
-                '   else:   ret false\n'+
+                '   else:      ret false\n'+
                 'a[1]',
         check: function(module) {
             var element0 = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
             return isSpecificInt(element0, 1)
+        }
+    },
+    // todo:
+//    // doubly nested macro on first-line
+//    rawFunctionValueWithNestedIfs: {
+//        content:'a = rawFn[match: ret {weak:true arg: if[true: {0:if[true:"fake"]}]}\n'+
+//                ' run:   ret 5\n' +
+//                ']\n'+
+//                'a[]',
+//        check: function(module) {
+//            var element0 = getFirstProperty(module).value
+//            return isSpecificInt(element0, 5)
+//        }
+//    },
+
+    // Tests to make sure ret properly returns from within an if statement (and doesn't execute things after it).
+    earlyReturnWithinIfStatment: {
+        content:'x = 0\n'+
+                'f = rawFn match: ret {arg: {}}\n'+
+                ' run: \n' +
+                '   if true: \n'+
+                '     ret "hi"\n'+
+                '   x = "bad"\n'+
+                '   ret "nah"\n'+
+                '\n' +
+                'y = f[]',
+        check: function(module) {
+            var x = utils.getThisPrivilegedMember(Context.inaccessibleContext, module, coreLevel1.StringObj("x"))
+            var y = utils.getThisPrivilegedMember(Context.inaccessibleContext, module, coreLevel1.StringObj("y"))
+            return isSpecificInt(x, 0) && y.meta.primitive.string === 'hi'
         }
     },
 
@@ -1185,17 +1242,22 @@ var tests = exports.tests = {
 
     // jump
 
-//    basicJumpWithinFunction: {
-//        content:'f = rawFn match: ret {arg: {}}\n'+
-//                ' run: \n' +
-//                '   var \n'+
-//                '\n' +
-//                'f[]',
-//        check: function(module) {
-//            var element0 = getFirstProperty(module).value
-//            return isSpecificInt(element0, 5)
-//        }
-//    },
+    basicJumpWithinFunction: {
+        content:'f = rawFn match: ret {arg: {}}\n'+
+                ' run: \n' +
+                '   var keepGoing = true\n'+
+                '   var c = contin\n'+
+                '   if keepGoing: \n'+
+                '     keepGoing = false\n'+
+                '     jump[c]\n'+
+                '   ret keepGoing\n'+
+                '\n' +
+                'f[]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isFalse(element0)
+        }
+    },
 
     // other
 
@@ -1237,9 +1299,9 @@ function isSpecificRatio(obj, numerator, denominator) {
            && obj.meta.primitive.denominator === denominator
 }
 function isTrue(obj) {
-    return isSpecificInt(obj, 1) && obj.name === 'true'
+    return isSpecificInt(obj, 1)
 }
 function isFalse(obj) {
-    return isSpecificInt(obj, 0) && obj.name === 'false'
+    return isSpecificInt(obj, 0)
 }
 

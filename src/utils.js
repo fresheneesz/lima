@@ -505,15 +505,18 @@ var hasOperatorOfType = exports.hasOperatorOfType = function(valueObject, operat
     if(!isNodeType(operator, 'operator')) {
         return false
     }
-    if(operator.operator in {':':1,'::':1}) {
-        return opType === 'binary'
-    }
 
     if(opType === 'binary') var operatorKey = 'operators'
     else if(opType === 'prefix') var operatorKey = 'preOperators'
     else if(opType === 'postfix') var operatorKey = 'postOperators'
 
-    var opInfo = valueObject.meta[operatorKey][operator.operator]
+    if(operator.operator in {':':1,'::':1}) { // Treat colon operators like assignment
+        var symbol = '='
+    } else {
+        var symbol = operator.operator
+    }
+
+    var opInfo = valueObject.meta[operatorKey][symbol]
     return opInfo !== undefined
 }
 
@@ -522,13 +525,7 @@ exports.isBinaryOperator = function(op) {
     return isNodeType(op,'operator') && getOperatorType(op) === 'binary'
 }
 var getOperatorType = exports.getOperatorType = function(op) {
-    if(   op.operator in {':':1,'::':1}       // Colon and equals operators are always considered binary.
-       || op.operator[op.operator.length-1] in {'=':1}
-    ) {
-        return 'binary'
-    } else {
-        return op.opType
-    }
+    return op.opType
 }
 var isOperatorOfType = exports.isOperatorOfType = function(x, opType) {
     return isNodeType(x, 'operator') && x.opType === opType

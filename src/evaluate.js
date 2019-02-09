@@ -154,7 +154,7 @@ function resolveBinaryOperations(context, curState, options) {
                     // value by `resolveBinaryOperandFrom`. But it won't for things in parens or superExpressions that
                     // aren't the first in an object.
                     if(utils.isNodeType(operand2, 'variable'))
-                        throw new Error("Variable "+operand2.name+" not declared.")
+                        throw undeclaredError(operand2.name)
 
                     if(utils.hasProperty(context, context.get('this'), propertyKeyObject)
                        || context.get('this').meta.nilProperties
@@ -178,9 +178,9 @@ function resolveBinaryOperations(context, curState, options) {
                     // If operand1 or operand2 were declared, they would have already been resolved into a
                     // value by `resolveBinaryOperandFrom`.
                     if(utils.isNodeType(operand1, 'variable'))
-                        throw new Error("Variable "+operand1.name+" not declared.")
+                        throw undeclaredError(operand1.name)
                     if(utils.isNodeType(operand2, 'variable'))
-                        throw new Error("Variable "+operand2.name+" not declared.")
+                        throw undeclaredError(operand2.name)
 
                     utils.setProperty(context, operand1, operand2)
                     var returnValue = coreLevel1.nil
@@ -200,17 +200,19 @@ function resolveBinaryOperations(context, curState, options) {
                             } else if(utils.isReferenceAssignmentOperator(operator1)) {
                                 throw new Error("~> operator not yet supported.")
                             } else {
-                                throw new Error("Variable "+operand1.name+" not defined.")
+                                throw undeclaredError(operand1.name)
                             }
                         } else {
-                            throw new Error("Variable "+operand1.name+" not defined.")
+                                throw undeclaredError(operand1.name)
                         }
                     }
 
                     // When inObjectSpace is true, reassignments to values in scope are illegal
                     if(context.scope.inObjectSpace && !allowReassignment && operator1.operator === '=') {
-                        throw new Error("Variable "+operand1.name+" can't be redefined.")
+                        throw new Error("Variable '"+operand1.name+"' can't be redefined.")
                     }
+                    if(utils.isNodeType(operand2, 'variable'))
+                        throw undeclaredError(operand2.name)
 
                     var returnValue = utils.callOperator(context, operator1.operator, [operand1, operand2]) // execute operator1
                 }
@@ -222,7 +224,7 @@ function resolveBinaryOperations(context, curState, options) {
             }
         } else { // no binary operands
             if(utils.isNodeType(operand1, 'variable')) {
-                throw new Error("Variable "+operand1.name+" not defined.")
+                throw undeclaredError(operand1.name)
             }
             return
         }
@@ -232,6 +234,10 @@ function resolveBinaryOperations(context, curState, options) {
 
         if(curIndex > curState.length)
             throw new Error("Couldn't execute all binary operators in this expression : (")
+
+        function undeclaredError(name) {
+            throw new Error("Variable '"+name+"' not declared.")
+        }
     }
 }
     // returns either
@@ -315,11 +321,19 @@ function resolveBinaryOperandFrom(context, curState, index, options) {
                 resolveDereferenceOperation(context, curState, n)
             } else {
                 var prevItem = curState[n-1], prevItemExists = n > 0
-                if(prevItemExists && utils.hasOperatorOfType(item, prevItem, 'prefix')) {
-                    resolveUnaryOperator(context, curState, n, 'prefix')
+                if(prevItemExists && utils.isOperatorOfType(prevItem, 'prefix')) {
+                    if(utils.hasOperatorOfType(item, prevItem, 'prefix')) {
+                        resolveUnaryOperator(context, curState, n, 'prefix')
+                    } else {
+                        throw new Error("Object doesn't have prefix operator '"+prevItem.operator+"'")
+                    }
                 } else if(nextItemExists) {
-                    if(utils.hasOperatorOfType(item, nextItem, 'postfix')) {
-                        resolveUnaryOperator(context, curState, n, 'postfix')
+                    if(utils.isOperatorOfType(nextItem, 'postfix')) {
+                        if(utils.hasOperatorOfType(item, nextItem, 'postfix')) {
+                            resolveUnaryOperator(context, curState, n, 'postfix')
+                        } else {
+                            throw new Error("Object doesn't have postfix operator '"+prevItem.operator+"'")
+                        }
                     } else if(utils.hasOperatorOfType(item, nextItem, 'binary')) {
                         return n+1   // Next item.
                     } else { // the is a new expression
