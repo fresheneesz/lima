@@ -1,8 +1,18 @@
 
+var x=1
+wout[x]
+
+;[
+y = rawFn
+ match: ret {arg: nil}
+ run:
+  wout[4]
+  ret 44
+
 
 wout['test2']
 
-;[
+
 x = rawFn
  match: ret {arg: nil}
  run: ret 5
@@ -11,5 +21,7 @@ wout[ x[] ]
 
 if x[] == 5:
   wout['Hello']
+
+
 
 ;]

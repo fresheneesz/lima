@@ -166,11 +166,11 @@ rawExpressionTests[1].inputs[
      "}}" // First end brace here might be part of a if a is a macro.
 ] = { type: 'rawExpression', startColumn: testUtils.anything, expression: '\n}}', start:_,end:_ }
 
-
-closingBrackets = {state:{indent:0}, inputs: {}}
-closingBrackets.inputs['] ]'] = [{ type: 'operator', operator: ']', opType: 'postfix', start:_,end:_ },
-                                 { type: 'operator', operator: ']', opType: 'postfix', start:_,end:_ }]
-closingBrackets.inputs[']]'] = [{ type: 'operator', operator: ']]', opType: 'postfix', start:_,end:_ }]
+// Possibly get rid of this? Not sure how end-bracket is handled now, but seems like not as an operator
+// closingBrackets = {state:{indent:0}, inputs: {}}
+// closingBrackets.inputs['] ]'] = [{ type: 'operator', operator: ']', opType: 'postfix', start:_,end:_ },
+//                                  { type: 'operator', operator: ']', opType: 'postfix', start:_,end:_ }]
+// closingBrackets.inputs[']]'] = [{ type: 'operator', operator: ']]', opType: 'postfix', start:_,end:_ }]
 
 
 
@@ -236,13 +236,19 @@ function getSuperExpressionTests() {
     var tests = []
 
     // set like this so i can block comment out the tests below
-    var elementsTests={}, equalsTests={}, colonTests={}, unaryOperatorTests={}, variablesTests={}, parenTests={}
+    var numberTests={}, equalsTests={}, colonTests={}, unaryOperatorTests={}, variablesTests={}, parenTests={}
     var sameIndentEndLineTests={}, sameIndentMacroEndLineTests={}, unfinishedParenTests = {}
     var otherTestGroup = {inputs:[]}, indent1TestGroup={inputs:[]}, indent3TestGroup={inputs:[]}
     var failureTestGroup={inputs:[]}
     var failureTestGroupIndent4 = {note:"fail with indent 4", shouldFail:true, state:{indent:4}, inputs:[]}
     var failureTestGroupDisallowOperator = []
 
+    numberTests = {
+      '1 .3':  {  type: 'superExpression',
+                  parts:
+                      [ { type: 'number', numerator: 1, denominator: 1, start:_,end:_},
+                        { type: 'number', numerator: 3, denominator: 10, start:_,end:_ } ] },
+    }
     equalsTests = {
         "1=1":      { type: 'superExpression',
                       parts:
@@ -270,7 +276,7 @@ function getSuperExpressionTests() {
         "3: 'moo'": { type: 'superExpression',
                       parts:
                        [ { type: 'number', numerator: 3, denominator: 1, start:_,end:_ },
-                         { type: 'operator', operator: ':', opType: 'postfix', start:_,end:_ },
+                         { type: 'operator', operator: ':', opType: 'binary', start:_,end:_ },
                          { type: 'string', string: 'moo', start:_,end:_ } ] },
 
         "'h' : 5":  { type: 'superExpression',
@@ -773,7 +779,7 @@ function getSuperExpressionTests() {
     }
 
     tests.push({state:{}, inputs: basicUtils.merge(
-        elementsTests,
+        numberTests,
         equalsTests,
         colonTests,
         unaryOperatorTests,

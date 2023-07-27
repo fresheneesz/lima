@@ -28,6 +28,11 @@ var tests = exports.tests = {
 
     // numbers
 
+    three:    {content:'3', check: function(module) {
+        var element0 = getFirstProperty(module).value
+        return element0.meta.primitive.numerator === 3
+    }},
+
         // operators
 
             // ==
@@ -857,6 +862,20 @@ var tests = exports.tests = {
             return isSpecificInt(element0, 5)
         }
     },
+
+    // Requires additional coreLevel2 stuff
+    // basicRawFunctionValueNilParameter: {
+    //     content:'a = rawFn\n'+
+    //         ' match a: ' +
+    //         '  ret {arg:a[0]}\n'+
+    //         ' run a:   \n' +
+    //         '  ret a+4\n'+
+    //         'a[nil]',
+    //     check: function(module) {
+    //         var element0 = getFirstProperty(module).value
+    //         return isSpecificInt(element0, 5)
+    //     }
+    // },
     // expressions on same line as marker
     basicRawFunctionValue2p: {
         content:'a = rawFn\n'+
@@ -1130,6 +1149,22 @@ var tests = exports.tests = {
         check: function(module) {
             var element0 = getPropertyOld({this:module}, coreLevel1.StringObj('a'))
             return isSpecificInt(element0, 2)
+        }
+    },
+    ifWithBrackets: {
+        content:'if[true:44]',
+        check: function(module) {
+            var element0 = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
+            return isSpecificInt(element0, 44)
+        }
+    },ifWithBracketsMultipleConditions: {
+        content:'if[\n' +
+            ' false:34\n' +
+            ' true:44\n' +
+            ']',
+        check: function(module) {
+            var element0 = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
+            return isSpecificInt(element0, 44)
         }
     },
 

@@ -123,6 +123,10 @@ function makeParamInfo(parameterSets) {
         })
     }
 
+    // param - An object where each value is either a function representing the type of the parameter or
+    //         an 'info' object that might contain:
+    // * type
+    // * default
     function expandParameter(param) {
         for(var name in param) {
             var info = param[name]
@@ -346,6 +350,14 @@ function addPublicPrivilegedMember(obj, name, value) {
 
 // privileged members
 
+
+// todo: move zero.str to coreLevel2
+addPublicPrivilegedMember(nil, 'str', FunctionObj(nil, makeParamInfo([
+    {params: [], fn: function() {
+        return StringObj('nil')
+    }}
+])))
+
 // todo: define hashcode and str as a function for now (when I figure out how to make accessors, we'll use that instead)
 addPublicPrivilegedMember(zero, 'hashcode', FunctionObj(zero, makeParamInfo([
     {params: [], fn: function() {
@@ -433,6 +445,8 @@ function jsArrayToLimaObj(jsArray) {
 
     return result
 }
+exports.jsArrayToLimaObj = jsArrayToLimaObj
+
 // Transforms a js string or number to a Lima value, or returns the passed value (which can be a lima value).
 function jsValueToLimaValue(value) {
     var type = typeof(value)
@@ -746,6 +760,7 @@ function closeExpressions(expressions) {
 }
 
 // The context passed into run is the context the macro was called in.
+// run(ast) - A function to call when the macro matches.
 function macroWithConventionsACD(name, macroParser, run) {
     var macroObject = macro({
         match: function(rawInput) {
@@ -755,13 +770,16 @@ function macroWithConventionsACD(name, macroParser, run) {
 
             /* Plan:
                 If its possible the macro is a one-liner, parse the macro with an option that indicates that words on the first
-                line first line should be evaluated for macro consumption.
+                line should be evaluated for macro consumption.
                 The parser should insert a `macroConsumption` ast node after any first-line value to mark how many characters
                 each is expected to consume.
              */
-            // todo: ast.openingBracket needs to be passed up somehow so if there's a parsing error, the runtime can tell you it might be macro weirdness in the function's first line. This would happen either if a macro was expected to consume input and didn't, or if it was expected not to consume some output and did.
-            // todo: ast should possibly contain a whole map of macroConsumption information to use with all nested macros in a first-line situation
-            // todo: startColumn (and maybe the indent) needs to be passed somehow so inner macros get the right column
+            // todo: ast.openingBracket needs to be passed up somehow so if there's a parsing error, the runtime can tell you
+            //       it might be macro weirdness in the function's first line. This would happen either if a macro was expected
+            //       to consume input and didn't, or if it was expected not to consume some output and did.
+            // todo: ast should possibly contain a whole map of macroConsumption information to use with all nested macros in
+            //       a first-line situation.
+            // todo: startColumn (and maybe the indent) needs to be passed somehow so inner macros get the right column.
 
             return LimaObject({
                 consume: NumberObj(javascriptRawInput.length),
@@ -780,12 +798,17 @@ function macroWithConventionsACD(name, macroParser, run) {
 
 var rawFn = macroWithConventionsACD('rawFn', 'rawFnInner', function run(ast) {
     var functionDeclarationContext = this
+    var astMatch = ast.result.match, astRun = ast.result.run
     return FunctionObj({
         match: function(args) {
-            return runFunctionStatements(functionDeclarationContext, this.callingContext(), ast.match.body, ast.match.parameters, [args])
+            return runFunctionStatements(
+                functionDeclarationContext, this.callingContext(), astMatch.body, astMatch.parameters, [args]
+            )
         },
         run: function(callInfo) {
-            return runFunctionStatements(functionDeclarationContext, this.callingContext(), ast.run.body, ast.run.parameters, [callInfo])
+            return runFunctionStatements(
+                functionDeclarationContext, this.callingContext(), astRun.body, astRun.parameters, [callInfo]
+            )
         }
     })
 })
@@ -793,15 +816,17 @@ var rawFn = macroWithConventionsACD('rawFn', 'rawFnInner', function run(ast) {
 
 var macroMacro = macroWithConventionsACD('macro', 'macroInner', function run(ast) {
     var macroDeclarationContext = this
+    var astMatch = ast.result.match, astRun = ast.result.run
     var rawMacroObject = macro({
         match: function(rawInput, startColumn) {
             return runFunctionStatements(
-                macroDeclarationContext, this.callingContext(), ast.match.body, ast.match.parameters, [rawInput, startColumn]
+                macroDeclarationContext, this.callingContext(), astMatch.body, astMatch.parameters,
+                [rawInput, startColumn]
             )
         },
         run: function(arg) {
             return runFunctionStatements(
-                macroDeclarationContext, this.callingContext(), ast.run.body, ast.run.parameters, [arg]
+                macroDeclarationContext, this.callingContext(), astRun.body, astRun.parameters, [arg]
             )
         }
     })
@@ -810,9 +835,9 @@ var macroMacro = macroWithConventionsACD('macro', 'macroInner', function run(ast
 })
 
 
-var ifMacro = macroWithConventionsACD('macro', 'ifInner', function run(ast) {
-    for(var n=0; n<ast.length; n++) {
-        var blockItem = ast[n]
+var ifMacro = macroWithConventionsACD('if', 'ifInner', function run(ast) {
+    for(var n=0; n<ast.result.length; n++) {
+        var blockItem = ast.result[n]
 
         // Create a temp-read scope with 'else' defined in it.
         var tempReadScope = this.scope.tempReadScope()
@@ -844,7 +869,7 @@ var ifMacro = macroWithConventionsACD('macro', 'ifInner', function run(ast) {
         var remainingSuperExpressions = closeExpression(conditionalBody)
         if(remainingSuperExpressions.length > 0) {
             // Add any remaining parts as the next expression block.
-            ast.splice.apply(ast, [n+1, 0].concat(
+            ast.result.splice.apply(ast.result, [n+1, 0].concat(
                 remainingSuperExpressions.map(function(remainingSuperExpression) {
                     return {expressionBlock: remainingSuperExpression}
                 })

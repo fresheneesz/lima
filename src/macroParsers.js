@@ -21,9 +21,9 @@ module.exports = P.createLanguage({context:{}}, {
             return seq(
                 innerBlockParser.language.withState(state)[innerBlockParser.parser](),
                 parserState.indentedWs().many(),
-                str(']').times(v.length)
+                str(']').atMost(v.length)
             ).map(function(v) {
-                return v[0]
+                return {result:v[0], needsEndBrace: v[2].length > 0}
             })
         }.bind(this))
     },
@@ -148,7 +148,7 @@ module.exports = P.createLanguage({context:{}}, {
 //            var newState = basicUtils.merge({}, this.state, {indent:this.state.indent+2})
             var parserState = getParser().withState(this.state)
             return seq(
-                parserState.superExpression(false),
+                parserState.superExpression(),
                 parserState.indentedWs().many(),
                 seq(':',
                     parserState.indentedWs().many()

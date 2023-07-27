@@ -3,11 +3,15 @@ nil = coreLevel1['nil']
 true = coreLevel1['true']
 false = coreLevel1['false']
 wout = coreLevel1['wout']
+jump = coreLevel1['jump']
 
 ; macros
 rawFn = coreLevel1['rawFn']~
 macro = coreLevel1['macro']~
 if = coreLevel1['if']~
+var = coreLevel1['var']~
+
+
 
 ;[
 

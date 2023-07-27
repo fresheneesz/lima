@@ -174,7 +174,7 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
             },
             dotOperator: function() {
                 return seq(
-                    str(".").atLeast(1),
+                    seq(notFollowedBy(this.number()), str(".").atLeast(1)).map(v => v[1]),
                     str("=").atMost(1)
                 ).tie()
             },

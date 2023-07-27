@@ -91,6 +91,7 @@ var Context = module.exports = proto(function() {
     // Maybe the scope should store what each member's friend modules are.
     // Then there needs to be some way to find the module that's trying to access that private member...
 
+// A Scope represents the execution scope in a particular code location.
 // Note that this should almost never be used directly. Usually a scope should be created from another scope (eg with subScope).
 // Only the top-level scope should create a scope directly.
 var Scope = module.exports.Scope = proto(function() {
@@ -119,6 +120,7 @@ var Scope = module.exports.Scope = proto(function() {
         }
     }
 
+    // Returns true if the scope or any of its containing scopes
     this.has = function(name) {
         return name in this.variablesMeta || this.upperScope.has(name)
     }
@@ -250,9 +252,11 @@ var Scope = module.exports.Scope = proto(function() {
     }
 })
 
-var blockFn = function() {throw new Error("Calling scope not accessible.")}
+// inaccessibleScope is a scope that can't have variables in it. It exists solely for better error messaging.
 var inaccessibleScope = module.exports.inaccessibleScope = {has: blockFn, get:blockFn, set:blockFn, declare:blockFn}
+// inaccessibleContext is a Context with an inas
 module.exports.inaccessibleContext = Context(inaccessibleScope)
+function blockFn() {throw new Error("Calling scope not accessible.")}
 
 // Lima implementation of the above (some things are now missing from the below that have been added to the above)
 /**

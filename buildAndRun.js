@@ -3,6 +3,10 @@ var fs = require("fs")
 var limaInterpreter = require("./src/interpreter")
 
 var filename = process.argv[2]
+if(typeof(filename) !== 'string') {
+    console.log("No filename passed.")
+    process.exit()
+}
 if(filename.slice(-5) !== '.lima') {
     filename+='.lima'
 }

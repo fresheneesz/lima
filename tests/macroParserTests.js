@@ -171,15 +171,28 @@ ifInnerBlockTests = {inputs: {}, state: {indent: 0, scope:{get:function(name) {
 }}}}
 ifInnerBlockTests.inputs[
     "1:"
-] =
+    ] =
     [ { expressionBlock: {
-           type: 'superExpression',
-           parts: [
-               { numerator: 1, denominator: 1, type: 'number', start:_,end:_ },
-               { type: 'operator', operator: ':', opType: 'postfix', start:_,end:_ }
-           ] },
-        foundTrailingColon: false
-      }
+        type: 'superExpression',
+        parts: [
+          { type: 'number', numerator: 1, denominator: 1, start:_,end:_ },
+          { type: 'operator', operator: ':', opType: 'binary', start:_,end:_ }
+        ] },
+      foundTrailingColon: false
+    }
+    ]
+ifInnerBlockTests.inputs[
+    "1: 5"
+    ] =
+    [ { expressionBlock: {
+        type: 'superExpression',
+        parts: [
+          { type: 'number', numerator: 1, denominator: 1, start:_,end:_ },
+          { type: 'operator', operator: ':', opType: 'binary', start:_,end:_ },
+          { type: 'number', numerator: 5, denominator: 1, start:_,end:_ }
+        ] },
+      foundTrailingColon: false
+    }
     ]
 
 //*/

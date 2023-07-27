@@ -4,9 +4,9 @@ var basicUtils = require("./basicUtils")
 var Context = require("./Context")
 
 
-// Utils for interacting with lima objects
+// Utils for interacting with lima objects.
 
-// calls an operator on its operands (ie operandArgs)
+// Calls an operator on its operands (ie operandArgs).
 // parameters:
     // callingContext - A Context object.
     // operator - A string representing the operator.
@@ -128,11 +128,13 @@ var callOperator = exports.callOperator = function(callingContext, operator, ope
         }
     }
 
-// determines which operand's operator to use and returns the operator dispatch info for that operand's operator (in the
-    // same form as getOperatorDispatch returns)
-// parameters:
-    // operand1 and operand2 should both be lima objects
+// Determines which operand's operator to use and returns the operator dispatch info for that operand's operator (in the
+    // same form as getOperatorDispatch returns).
+// Parameters:
+    // context - A Context object.
+    // operand1 - A lima object
     // operator - A string representing the operator.
+    // operand2 - A lima object
 var getBinaryDispatch = exports.getBinaryDispatch = function(context, operand1, operator, operand2) {
     var operand1Dispatch = getOperatorDispatch(
         context, operand1, operator, coreLevel1.LimaObject([operand1, operand2], true)
@@ -166,6 +168,7 @@ var getBinaryDispatch = exports.getBinaryDispatch = function(context, operand1, 
 
     // Returns info (see below) about the first dispatch element who's parameters match the args of a binary or bracket operator.
     // parameters:
+        // context - A Context object.
         // operator - A primitive string representing the operator
         // args - A lima object representing the arguments where
             // the elements are unnamed arguments
@@ -334,8 +337,8 @@ var setProperty = exports.setProperty = function(context, key, value) {
     items.push({key:key, value:value})
 }
 
-// returns the value at the passed key in the obj or nil if no value exists at that key
-// key is a lima value
+// Returns the value at the passed key in the obj or nil if no value exists at that key.
+// `key` - A lima value.
 var getProperty = exports.getProperty = function(context, object, key) {
     var property = getPropertyInternal(context, object, key)
     if(property === undefined) {
@@ -348,8 +351,9 @@ var hasProperty = exports.hasProperty = function(context, object, key) {
     return getPropertyInternal(context, object, key) !== undefined
 }
 
-// returns the value at the passed key in the obj or nil if no value exists at that key
-// key is a lima value
+// Returns the lima value at the passed key in the object or nil if no value exists at that key.
+// `object` - A lima object.
+// `key` - A lima value.
 function getPropertyInternal(context, object, key) {
     var items = object.meta.properties[getHashCode(context, key)]
     if(items === undefined)
@@ -383,16 +387,16 @@ var getName = exports.getName = function(value, isKey) {
 // Gets a human readable value string.
 var getValueString = exports.getValueString = function(value, isKey) {
     if(value.meta.primitive !== undefined) {
-        if(value.meta.primitive.numerator !== undefined) {
-            var name = value.meta.primitive.numerator+""
-            if(value.meta.primitive.denominator !== 1)
-                name += '/'+value.meta.primitive.denominator
+        if (value.meta.primitive.numerator !== undefined) {
+            var name = value.meta.primitive.numerator + ""
+            if (value.meta.primitive.denominator !== 1)
+                name += '/' + value.meta.primitive.denominator
             return name
-        } else if(value.meta.primitive.string !== undefined) {
-            if(isKey) {
+        } else if (value.meta.primitive.string !== undefined) {
+            if (isKey) {
                 return value.meta.primitive.string
             } else {
-                return '"'+value.meta.primitive.string+'"'
+                return '"' + value.meta.primitive.string + '"'
             }
         }
     } else {

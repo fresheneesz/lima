@@ -111,6 +111,8 @@ exports.resolveObjectSpace = function(context, curState, n, isObjectEnd) {
     return resolveObjectSpace(context, utils.cloneJsValue(curState), n, isObjectEnd)
 }
 
+// Resolve all operators in the curState and returns the result.
+// curState - A list of superExpression parts.
 // options - Same options as superExpression gets.
 function resolveBinaryOperations(context, curState, options) {
     var curIndex = 0
@@ -274,8 +276,8 @@ function resolveBinaryOperations(context, curState, options) {
             }
         }
 
-    // returns the operator order combined with the associativity
-    // (since left-to-right executes before right-to-left for a given precedence level)
+    // Returns the operator order combined with the associativity
+    // (since left-to-right executes before right-to-left for a given precedence level).
     function combinedOrder(operatorInfo) {
         if(operatorInfo === undefined) {
             return Infinity

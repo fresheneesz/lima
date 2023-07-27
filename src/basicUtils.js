@@ -1,4 +1,5 @@
 
+// Lowers the case of all letters except the first.
 exports.normalizedVariableName = function(name) {
     return name[0]+name.slice(1).toLowerCase()
 }

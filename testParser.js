@@ -6,32 +6,31 @@ var colors = require("colors/safe")
 var limaParser = require("./src/parser")
 var macroParsers = require("./src/macroParsers")
 var basicUtils = require("./src/basicUtils")
-var tests = require("./tests/parserTests")
+var parserTests = require("./tests/parserTests")
 var macroParserTests = require("./tests/macroParserTests")
 var testUtils = require("./tests/testUtils")
 
-var tests = basicUtils.merge({
-    indentedWs: tests.indentedWsTests,
-    indent: tests.indentTests,
-    comment: tests.commentTests,
-    validNumerals: tests.validNumeralsTests,
-    real: tests.realTests,
-    number: tests.numberTests,
-    rawString: tests.stringTests,
-    operator: tests.operatorTests,
-//    binaryOperand: tests.binaryOperandTests,
-//    binaryOperatorAndOperand: tests.binaryOperatorAndOperandTests,
-    rawExpression: tests.rawExpressionTests,
-//    closingBrackets: tests.closingBrackets,
-    superExpression: tests.superExpressionTests,
-    nonMacroExpressionContinuation: tests.nonMacroExpressionContinuationTests,
-    objectDefinitionSpace: tests.objectDefinitionSpaceTests,
-    object: tests.objectTests,
-    module: tests.moduleTests,
-    macro: tests.macroTests,
-},  basicUtils.objMap(macroParserTests, function(key, value) {
-    return {key:'macroParsers.'+key, value:value}
-}))
+var tests = {
+
+    indentedWs: parserTests.indentedWsTests,
+    indent: parserTests.indentTests,
+    comment: parserTests.commentTests,
+    validNumerals: parserTests.validNumeralsTests,
+    real: parserTests.realTests,
+    number: parserTests.numberTests,
+    rawString: parserTests.stringTests,
+    operator: parserTests.operatorTests,
+    rawExpression: parserTests.rawExpressionTests,
+    superExpression: parserTests.superExpressionTests,
+    nonMacroExpressionContinuation: parserTests.nonMacroExpressionContinuationTests,
+    objectDefinitionSpace: parserTests.objectDefinitionSpaceTests,
+    object: parserTests.objectTests,
+    module: parserTests.moduleTests,
+    macro: parserTests.macroTests,
+    ...basicUtils.objMap(macroParserTests, function(key, value) {
+        return {key:'macroParsers.'+key, value:value}
+    })
+}
 
 
 
@@ -170,6 +169,7 @@ if(failures > 0) {
     console.log(colors.green("---"+testUtils.successMessage()+"---"))
 }
 
+// Changes expectedResult values of testUtils.anything into the actual result when found in objects, arrays, or stand alone.
 function normalizeExpectedResult(expectedResult, actualResult) {
     if(expectedResult === testUtils.anything) {
         return actualResult
