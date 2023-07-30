@@ -1,8 +1,6 @@
 
 var coreLevel1 = require("./coreLevel1b")
-var basicUtils = require("./basicUtils")
-var Context = require("./Context")
-
+var ExecutionError = require("./errors").ExecutionError
 
 // Utils for interacting with lima objects.
 
@@ -11,113 +9,128 @@ var Context = require("./Context")
     // callingContext - A Context object.
     // operator - A string representing the operator.
     // operands - Will have one element for unary operations, and two for binary operations.
-        // Each element is a lima object, with the following exception:
+        // Each element is a valueNode lima object, with the following exception:
             // For non-macro bracket operators, the first operand should be the main object, and the second operand should be
                 // an `arguments` object of the same type `getOperatorDispatch` takes.
     // operatorType - Either 'prefix', 'postfix', or undefined (for binary, bracket, and else operators)
-var callOperator = exports.callOperator = function(callingContext, operator, operands, operatorType) {
-    // todo: implement chaining and multiple dispatch
-    var operatorsKey = 'operators'
-    if(operatorType === 'prefix') operatorsKey = 'preOperators'
-    else if(operatorType === 'postfix') operatorsKey = 'postOperators'
+var callOperator = exports.callOperator = function(callingContext, operator, inputOperands, operatorType) {
+    try {
+        // todo: implement chaining and multiple dispatch
+        var operatorsKey = 'operators'
+        if (operatorType === 'prefix') operatorsKey = 'preOperators'
+        else if (operatorType === 'postfix') operatorsKey = 'postOperators'
 
-    // Unbox if necessary.
-    function unboxOperand(operand, unboxedOperands) {
-        if(operand === undefined) return
+        // Unbox if necessary.
+        function unboxOperand(operand, unboxedOperands) {
+            if (operand === undefined) return
 
-        if(operand.meta.primitive && operand.meta.primitive.boxed) {
-            unboxedOperands.push(operand.meta.primitive.boxed)
+            var operandMeta = getNodeValue(operand).meta
+            if (operandMeta.primitive && operandMeta.primitive.boxed) {
+                unboxedOperands.push(valueNode(operandMeta.primitive.boxed, getNode(operand)))
+            } else {
+                unboxedOperands.push(operand)
+            }
+        }
+
+        var unboxedOperands = []
+        unboxOperand(inputOperands[0], unboxedOperands)
+        unboxOperand(inputOperands[1], unboxedOperands)
+        let operands = unboxedOperands
+
+        var operatorInfo1 = getNodeValue(operands[0]).meta[operatorsKey][operator]
+        // If operator is already else, avoid an infinite loop.
+        if (operatorInfo1 === undefined && operator !== 'else') {
+            operands = [operands[0], internalValueNode(coreLevel1.jsArrayToLimaObj([operator, operands.slice(1)]))]
+            var proxyObject = callOperator(callingContext, 'else', operands)
+            if (proxyObject !== coreLevel1.nil) {
+                operands = [proxyObject].concat(operands.slice(1))
+                operatorInfo1 = proxyObject.meta[operatorsKey][operator]
+            }
+        }
+
+        if (operatorType !== undefined) { // unary
+            if (operatorInfo1 === undefined)
+                throw new ExecutionError("Object doesn't have a '" + operator + "' " + operatorType + " operator", operands[0])
+            var match = operatorInfo1.dispatch.match
+            var run = operatorInfo1.dispatch.run
+            var lvalueScopeIndex = operatorInfo1.scope
+            var args = coreLevel1.LimaObject([])
+            var objectBeingCalled = getNodeValue(operands[0])
+        } else if (operator === '.') {            // dot operator
+            if (operatorInfo1 === undefined)
+                throw new ExecutionError("Object " + getName(operands[0]) + " doesn't have a '" + operator + "' operator", operands[0])
+
+            var name = coreLevel1.StringObj(getPrimitiveStr(callingContext, getNodeValue(operands[1])))
+            var args = coreLevel1.LimaObject([name])
+            var match = operatorInfo1.dispatch.match
+            var run = operatorInfo1.dispatch.run
+            var lvalueScopeIndex = operatorInfo1.scope
+            var objectBeingCalled = getNodeValue(operands[0])
         } else {
-            unboxedOperands.push(operand)
-        }
-    }
-    var unboxedOperands = []
-    unboxOperand(operands[0], unboxedOperands)
-    unboxOperand(operands[1], unboxedOperands)
-    operands = unboxedOperands
+            if (operator[0] === '[') {  // bracket operator
+                var bracketArgs = operands[1] ? getNodeValue(operands[1]) : coreLevel1.LimaObject([])
+                var objectBeingCalled = getNodeValue(operands[0])
+                var dispatchInfo = getOperatorDispatch(callingContext, getNodeValue(operands[0]), operator, bracketArgs)
+                if (dispatchInfo === undefined) {
+                    throw new ExecutionError("Parameters don't match for arguments to " + operands[0].name, operands[0])
+                }
+            } else if (isAssignmentOperator({type: 'operator', operator: operator})) {
+                if (operator !== '=') {
+                    var baseOperator = operator.slice(0, -1)
+                    var baseResult = callOperator(callingContext, baseOperator, operands) // execute operator1
+                    operands = [operands[0], valueNode(baseResult, getNode(operands[0]))]
+                }
 
-    var operatorInfo1 = operands[0].meta[operatorsKey][operator]
-    if(operatorInfo1 === undefined) {
-        var operands = [operands[0], coreLevel1.jsArrayToLimaObj([operator, operands.slice(1)])]
-        var proxyObject = callOperator(callingContext, 'else', operands)
-        if(proxyObject !== coreLevel1.nil) {
-            operands = [proxyObject].concat(operands.slice(1))
-            operatorInfo1 = proxyObject.meta[operatorsKey][operator]
-        }
-    }
+                var rvalueDispatchInfo = getOperatorDispatch(callingContext, getNodeValue(operands[1]), operator, coreLevel1.LimaObject([]))
+                var rvalueScope = getNodeValue(operands[1]).meta.scopes[rvalueDispatchInfo.operatorInfo.scope]
+                var rvalueContext = callingContext.newStackContext(
+                    rvalueScope, false
+                ).subLocation({filepath: callingContext.location.file})
 
-    if(operatorType !== undefined) { // unary
-        if(operatorInfo1 === undefined)
-            throw new Error("Object doesn't have a '"+operator+"' "+operatorType+" operator")
-        var match = operatorInfo1.dispatch.match
-        var run = operatorInfo1.dispatch.run
-        var lvalueScopeIndex = operatorInfo1.scope
-        var args = coreLevel1.LimaObject([])
-        var objectBeingCalled = operands[0]
-    } else if(operator === '.') {            // dot operator
-        if(operatorInfo1 === undefined)
-            throw new Error("Object "+getName(operands[0])+" doesn't have a '"+operator+"' operator")
+                // get rvalue's copy value
+                var rvalueRunArgs = getRunArgsFromMatch(
+                    rvalueContext, rvalueDispatchInfo.operatorInfo.dispatch.match, coreLevel1.LimaObject([])
+                )
+                var rvalue = applyOperator(rvalueDispatchInfo.operatorInfo.dispatch.run, rvalueContext, rvalueRunArgs)
 
-        var name = coreLevel1.StringObj(getPrimitiveStr(callingContext, operands[1]))
-        var args = coreLevel1.LimaObject([name])
-        var match = operatorInfo1.dispatch.match
-        var run = operatorInfo1.dispatch.run
-        var lvalueScopeIndex = operatorInfo1.scope
-        var objectBeingCalled = operands[0]
-    } else {
-        if(operator[0] === '[') {  // bracket operator
-            var bracketArgs = operands[1] || coreLevel1.LimaObject([])
-            var objectBeingCalled = operands[0]
-            var dispatchInfo = getOperatorDispatch(callingContext, operands[0], operator, bracketArgs)
-            if(dispatchInfo === undefined) {
-                throw new Error("Parameters don't match for arguments to "+operands[0].name)
-            }
-        } else if(isAssignmentOperator({type:'operator', operator:operator})) {
-            if(operator !== '=') {
-                var baseOperator = operator.slice(0, -1)
-                var baseResult = callOperator(callingContext, baseOperator, operands) // execute operator1
-                operands = [operands[0], baseResult]
+                // setup lvalue for assignment
+                var lvalueDispatchInfo = getOperatorDispatch(callingContext, getNodeValue(operands[0]), operator, coreLevel1.LimaObject([rvalue]))
+                var dispatchInfo = lvalueDispatchInfo
+                var objectBeingCalled = getNodeValue(operands[0])
+
+            } else { // normal binary operator
+                var dispatchInfo = getBinaryDispatch(callingContext, getNodeValue(operands[0]), operator, getNodeValue(operands[1]))
+                if (!dispatchInfo) {
+                    throw new Error(`Can't execute '${operator}' operation`)
+                }
+
+                if (dispatchInfo.operatorInfo === getNodeValue(operands[0]).meta.operators[operator]) {
+                    var objectBeingCalled = getNodeValue(operands[0])
+                } else {
+                    var objectBeingCalled = getNodeValue(operands[1])
+                }
             }
 
-            var rvalueDispatchInfo = getOperatorDispatch(callingContext, operands[1], operator, coreLevel1.LimaObject([]))
-            var rvalueScope = operands[1].meta.scopes[rvalueDispatchInfo.operatorInfo.scope]
-            var rvalueContext = callingContext.newStackContext(rvalueScope, false)
+            if (dispatchInfo.operatorInfo.boundObject !== undefined)
+                objectBeingCalled = dispatchInfo.operatorInfo.boundObject
 
-            // get rvalue's copy value
-            var rvalueRunArgs = getRunArgsFromMatch(
-                rvalueContext, rvalueDispatchInfo.operatorInfo.dispatch.match, coreLevel1.LimaObject([])
-            )
-            var rvalue = applyOperator(rvalueDispatchInfo.operatorInfo.dispatch.run, rvalueContext, rvalueRunArgs)
-
-            // setup lvalue for assignment
-            var lvalueDispatchInfo = getOperatorDispatch(callingContext, operands[0], operator, coreLevel1.LimaObject([rvalue]))
-            var dispatchInfo = lvalueDispatchInfo
-            var objectBeingCalled = operands[0]
-
-        } else { // normal binary operator
-            var dispatchInfo = getBinaryDispatch(callingContext, operands[0], operator, operands[1])
-            if(dispatchInfo.operatorInfo === operands[0].meta.operators[operator]) {
-                var objectBeingCalled = operands[0]
-            } else { 
-                var objectBeingCalled = operands[1]
-            }
+            var runArgs = dispatchInfo.arg
+            var run = dispatchInfo.operatorInfo.dispatch.run
+            var lvalueScopeIndex = operatorInfo1.scope
         }
 
-        if(dispatchInfo.operatorInfo.boundObject !== undefined)
-            objectBeingCalled = dispatchInfo.operatorInfo.boundObject
+        var lvalueScope = objectBeingCalled.meta.scopes[lvalueScopeIndex]
+        var lvalueContext = callingContext.newStackContext(lvalueScope)
+        if (args !== undefined) {
+            var runArgs = getRunArgsFromMatch(lvalueContext, match, args, operator)
+        }
 
-        var runArgs = dispatchInfo.arg
-        var run = dispatchInfo.operatorInfo.dispatch.run
-        var lvalueScopeIndex = operatorInfo1.scope
+        return applyOperator(run, lvalueContext, runArgs)
+    } catch(e) {
+        // Need to respect return value throws (See createRetMacro for example).
+        if (e.returnValue) throw e
+        throw ensureExecutionError(e, getNode(inputOperands[0]))
     }
-
-    var lvalueScope = objectBeingCalled.meta.scopes[lvalueScopeIndex]
-    var lvalueContext = callingContext.newStackContext(lvalueScope)
-    if(args !== undefined) {
-        var runArgs = getRunArgsFromMatch(lvalueContext, match, args, operator)
-    }
-
-    return applyOperator(run, lvalueContext, runArgs)
 }
     function applyOperator(run, context, args) {
         var returnValue = run.call(context, args)
@@ -127,6 +140,12 @@ var callOperator = exports.callOperator = function(callingContext, operator, ope
             return returnValue
         }
     }
+
+function ensureExecutionError(e, node) {
+    if (!(e instanceof ExecutionError) || e.info.start === 'internal') {
+        return new ExecutionError(e, node)
+    } else return e
+}
 
 // Determines which operand's operator to use and returns the operator dispatch info for that operand's operator (in the
     // same form as getOperatorDispatch returns).
@@ -180,8 +199,9 @@ var getBinaryDispatch = exports.getBinaryDispatch = function(context, operand1, 
         // weak - True if the matching parameters are weak dispatch.
     function getOperatorDispatch(context, object, operator, args) {
         var operatorInfo = object.meta.operators[operator]
-        if(operatorInfo === undefined) {
-            var operands = [object, coreLevel1.jsArrayToLimaObj([operator, args])]
+        // If operator is already else, avoid an infinite loop.
+        if (operatorInfo === undefined && operator !== 'else') {
+            var operands = [internalValueNode(object), internalValueNode(coreLevel1.jsArrayToLimaObj([operator, args]))]
             var proxyObject = callOperator(context, 'else', operands)
             if(proxyObject !== coreLevel1.nil) {
                 object = proxyObject
@@ -312,10 +332,12 @@ var consumeMacro = exports.consumeMacro = function(context, obj, rawInput, start
     var startColumnLima = coreLevel1.NumberObj(startColumn)
     try {
         var matchArgs = coreLevel1.LimaObject([rawInputLima, startColumnLima])
-        var matchResult = callOperator(context, '[', [obj.meta.macro.match, matchArgs], undefined)
+        var matchResult = callOperator(context, '[', [
+            valueNode(getNodeValue(obj).meta.macro.match, getNode(obj)), internalValueNode(matchArgs)
+        ], undefined)
         var consumedCharsLimaValue = getProperty(context, matchResult, coreLevel1.StringObj('consume'))
         if(consumedCharsLimaValue.meta.primitive.denominator !== 1) {
-            throw new Error("The 'consume' property returned from the macro '"+getName(obj)+"' isn't an integer.")
+            throw new ExecutionError("The 'consume' property returned from the macro '"+getName(obj)+"' isn't an integer.", obj)
         }
         return matchResult
     } catch(e) {
@@ -426,15 +448,17 @@ var limaEquals = exports.limaEquals = function(context, a,b) {
         }
     }
     // else
-    var equalsComparisonResult = callOperator(context, '==', [a,b])
+    var equalsComparisonResult = callOperator(context, '==', [internalValueNode(a),internalValueNode(b)])
     return primitiveEqualsInteger(equalsComparisonResult, 1)
-           || primitiveEqualsInteger(callOperator(context, '==', [equalsComparisonResult,coreLevel1.one]), 1)
+           || primitiveEqualsInteger(callOperator(context, '==', [
+               internalValueNode(equalsComparisonResult), internalValueNode(coreLevel1.one)
+              ]), 1)
 }
 
 // gets a privileged member as if it was accessed like this.member
 // thisObj and memberName must both be lima objects
 var getThisPrivilegedMember = exports.getThisPrivilegedMember = function(callingContext, thisObj, memberName) {
-    return callOperator(callingContext, '.', [thisObj, memberName])
+    return callOperator(callingContext, '.', [internalValueNode(thisObj), internalValueNode(memberName)])
 }
 
 // gets the primitive hashcode for a lima object
@@ -449,7 +473,7 @@ var getHashCode = exports.getHashCode = function(context, obj) {
         }
 
         var hashcodeFunction = getThisPrivilegedMember(context, obj, coreLevel1.StringObj('hashcode'))
-        obj = callOperator(context, '[', [hashcodeFunction])
+        obj = callOperator(context, '[', [internalValueNode(hashcodeFunction)])
     }
 
     return obj.meta.primitive.numerator // now a primitive
@@ -476,7 +500,7 @@ var getPrimitiveStr = exports.getPrimitiveStr = function(context, obj) {
         }
 
         var hashcodeFunction = getThisPrivilegedMember(context, obj, coreLevel1.StringObj('str'))
-        obj = callOperator(context, '[', [hashcodeFunction])
+        obj = callOperator(context, '[', [internalValueNode(hashcodeFunction)])
     }
 }
 
@@ -490,7 +514,7 @@ var isNil = exports.isNil = function(x) {
 }
 
 exports.isMacro = function(x) {
-    return x.meta.macro !== undefined
+    return getNodeValue(x).meta.macro !== undefined
 }
 
 exports.hasProperties = function(obj) {
@@ -571,6 +595,32 @@ var isNodeType = exports.isNodeType = function isNodeType(x, type) { // returns 
 }
 var isNode = exports.isNode = function(x) { // returns true if the expression item is an AST node
     return x.type in {superExpression:1, rawExpression:1, operator:1,number:1,string:1,variable:1,object:1}
+}
+
+// Returns a wrapped lima value that contains its ast node.
+// value - A lima object.
+// node - An AST node.
+var valueNode = exports.valueNode = function(value, node) {
+    return {value, node}
+}
+var internalValueNode = exports.internalValueNode = function(value) {
+    return {value, node: {start: 'internal', end: 'internal'}}
+}
+// Returns the value if there is one, or the raw ast node if not.
+var getNodeValue = exports.getNodeValue = function(node) {
+    if (isNode(node)) {
+        return node
+    } else {
+        return node.value
+    }
+}
+// Returns the node of the valueNode.
+var getNode = exports.getNode = function(node) {
+    if (isNode(node)) {
+        return node
+    } else {
+        return node.node
+    }
 }
 
 

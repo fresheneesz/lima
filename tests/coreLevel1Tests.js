@@ -11,7 +11,7 @@ function getPropertyOld(oldScope, key) { // deprecated
 }
 
 var tests = exports.tests = {
-
+    
     //*
     emptySource:                    "",
     hello:                          "wout['hello world']\r\n",

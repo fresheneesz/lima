@@ -13,7 +13,7 @@ for(var name in normalizedTests) {
     console.log(colors.cyan(name+":\n"))
 
     try {
-        var module = limaInterpreter.coreLevel1Test(test.content)
+        var module = limaInterpreter.coreLevel1Test(test.content, './tests/interpreterTests: '+name)
         if(test.check) {
             if(test.check(module)) {
                 console.log(colors.green("success!"))
@@ -36,7 +36,7 @@ for(var name in normalizedTests) {
                 failures++
                 console.log(colors.red(
                     "Didn't correctly fail for:\n"+test.content+'\n'+
-                    "Expected an exception containing: '"+test.shouldFail+"'\nbut got the exception: \n"+e
+                    "Expected an exception containing: '"+test.shouldFail+"'\nbut got the exception: \n"+e.stack
                 ))
             }
         } else {

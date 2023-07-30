@@ -292,6 +292,7 @@ delete emptyContin.meta.primitive
 emptyContin.meta.operators['='] = {
     order:9, backward:true, scope: 0,
     dispatch: makeParamInfo([
+        // Assignment operator is inherited from nil.
         {params: [], fn: function() { // copy operator
             var continCopy = basicUtils.copyValue(this.get('this'))
             continCopy.meta.primitive.contin = this.get('this').meta.primitive.getContinInfo()
@@ -422,7 +423,7 @@ var LimaObject = exports.LimaObject = function(jsObjOrArray) {
         return jsArrayToLimaObj(jsObjOrArray)
     } else if(typeof(jsObjOrArray) === 'object') {
         return jsObjToLimaObj(jsObjOrArray)
-    } else throw ": ("
+    } else throw new Error(": (")
 }
 
 function jsObjToLimaObj(jsObj) {
@@ -980,7 +981,7 @@ wout.name = 'wout'
 
 // Returns a new context that contains nothing (this is meant to be above the module context).
 var topLevelContext = exports.topLevelContext = function() {
-    return Context(Context.Scope(undefined, false))
+    return Context(Context.Scope(undefined, false), undefined, {file: 'lima/src/coreLevel2.lima', line: 1, column: 1, offset: 0})
 }
 
 // Returns a context with a new empty object value as `this`.

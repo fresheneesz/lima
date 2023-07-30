@@ -233,7 +233,8 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
             var startColumn = '??'    // todo: support startColumn
             // Create a new context with consumeFirstlineMacros potentially set to false (if the first line has passed)
             var newContext = this.state.context.newStackContext(this.state.context.scope, this.state.consumeFirstlineMacros)
-            var consumeResult = utils.consumeMacro(newContext, macro, input.slice(i), startColumn)
+                             .subLocation({file: "??", line: '??', column: startColumn, offset: i}) // Offset is probably within the macro too.
+            var consumeResult = utils.consumeMacro(newContext, utils.valueNode(macro, 'todo'), input.slice(i), startColumn)
             var consumedCharsLimaValue = utils.getProperty(this.state.context, consumeResult, coreLevel1.StringObj('consume'))
             var consumedChars = consumedCharsLimaValue.meta.primitive.numerator
             var consumedString = input.slice(i, i+consumedChars)
@@ -245,7 +246,7 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
                 type:"rawExpression", startColumn:startColumn, expression:input.slice(i, nextIndex),
                 start: {offset:i}, end: {offset:nextIndex-1}
             }
-            return P.makeSuccess(nextIndex, [macroConsumption, rawExpression]);
+            return P.makeSuccess(nextIndex, [macroConsumption, rawExpression])
         }.bind(this))
     },
 

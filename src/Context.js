@@ -10,13 +10,15 @@ var Context = module.exports = proto(function() {
 
     // scope - Defaults to an empty scope
     // callingContext - Defaults to an empty object.
-    this.init = function(scope, callingContext) {
+    // location - An object like {filename}
+    this.init = function(scope, callingContext, location) {
         this.scope = scope || new Scope()
         if(callingContext === undefined) callingContext = {}
 
         this.callingScope = callingContext.scope
-        this.atr = callingContext.atr
-        this.matr = callingContext.matr
+        this.location = location || callingContext.location
+        this.atr = callingContext.atr   // Stack attributes
+        this.matr = callingContext.matr // Module attributes
         this.consumeFirstlineMacros = callingContext.consumeFirstlineMacros // See parser.js for what this does.
     }
 
@@ -54,6 +56,12 @@ var Context = module.exports = proto(function() {
         this.scope.declare(name, type, this.atr.publicDeclarations, this.atr.allowShadowDeclarations)
     }
 
+    // Returns a new context with a new location, retaining everything else from the current context.
+    // location - See init.
+    this.subLocation = function (location) {
+        return Context(this.scope, this, location)
+    }
+    
     // Returns a new context with a new scope, retaining `callingScope`, `atr`, and matr from the current context.
     // consumeFirstlineMacros - If not undefined, overrides the `consumeFirstlineMacros` property of the newContext.
     this.newStackContext = function(scope, consumeFirstlineMacros) {
@@ -79,6 +87,7 @@ var Context = module.exports = proto(function() {
 //        newContext.callingScope = blockCallingScope
 //    }
     // Returns a context object who's scope is the current context's callingScope (and the callingScope is inaccessible).
+    // Todo: elaborate on why removing the callingScope is useful.
     this.callingContext = function() {
         var newContext = Context(this.callingScope, this)
         delete newContext.callingScope

@@ -15,4 +15,4 @@ var filepath = __dirname+'/'+filename
 var entrypointFileContents = fs.readFileSync(filepath, {encoding: 'utf8'}).toString()
     .replace(/\t/g, "    ") // lima doesn't accept tabs
 
-limaInterpreter(entrypointFileContents)
+limaInterpreter(entrypointFileContents, filepath)

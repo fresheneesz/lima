@@ -276,6 +276,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 
 #### Core Level 1 Done:
 
+* variable declarations with var
 * basic token parser
 * Built core structure for operator and macro evaluation
 * indent delimited blocks
@@ -329,6 +330,7 @@ These are things that were done in Core Level 1, but should be moved to Core Lev
 #### Core Level 2 Todo:
 
 * core objects are constant (can't be overwritten or modified even if pointed to by a reference)
+  
   * includes nil, true, false, meta, etc
 * nil
   * Operators
@@ -436,8 +438,10 @@ These are things that were done in Core Level 1, but should be moved to Core Lev
      * values
      * bits
 * core objects
+  
   * chan
 * core macros
+  
   * while
 
 
