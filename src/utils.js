@@ -50,7 +50,7 @@ var callOperator = exports.callOperator = function(callingContext, operator, inp
 
         if (operatorType !== undefined) { // unary
             if (operatorInfo1 === undefined)
-                throw new ExecutionError("Object doesn't have a '" + operator + "' " + operatorType + " operator", operands[0])
+                throw new ExecutionError("Object doesn't have a '" + operator + "' " + operatorType + " operator", operands[0], callingContext)
             var match = operatorInfo1.dispatch.match
             var run = operatorInfo1.dispatch.run
             var lvalueScopeIndex = operatorInfo1.scope
@@ -58,7 +58,7 @@ var callOperator = exports.callOperator = function(callingContext, operator, inp
             var objectBeingCalled = getNodeValue(operands[0])
         } else if (operator === '.') {            // dot operator
             if (operatorInfo1 === undefined)
-                throw new ExecutionError("Object " + getName(operands[0]) + " doesn't have a '" + operator + "' operator", operands[0])
+                throw new ExecutionError("Object " + getName(operands[0]) + " doesn't have a '" + operator + "' operator", operands[0], callingContext)
 
             var name = coreLevel1.StringObj(getPrimitiveStr(callingContext, getNodeValue(operands[1])))
             var args = coreLevel1.LimaObject([name])
@@ -72,7 +72,7 @@ var callOperator = exports.callOperator = function(callingContext, operator, inp
                 var objectBeingCalled = getNodeValue(operands[0])
                 var dispatchInfo = getOperatorDispatch(callingContext, getNodeValue(operands[0]), operator, bracketArgs)
                 if (dispatchInfo === undefined) {
-                    throw new ExecutionError("Parameters don't match for arguments to " + operands[0].name, operands[0])
+                    throw new ExecutionError("Parameters don't match for arguments to " + operands[0].name, operands[0], callingContext)
                 }
             } else if (isAssignmentOperator({type: 'operator', operator: operator})) {
                 if (operator !== '=') {
@@ -85,7 +85,7 @@ var callOperator = exports.callOperator = function(callingContext, operator, inp
                 var rvalueScope = getNodeValue(operands[1]).meta.scopes[rvalueDispatchInfo.operatorInfo.scope]
                 var rvalueContext = callingContext.newStackContext(
                     rvalueScope, false
-                ).subLocation({filepath: callingContext.location.file})
+                )
 
                 // get rvalue's copy value
                 var rvalueRunArgs = getRunArgsFromMatch(
@@ -129,7 +129,7 @@ var callOperator = exports.callOperator = function(callingContext, operator, inp
     } catch(e) {
         // Need to respect return value throws (See createRetMacro for example).
         if (e.returnValue) throw e
-        throw ensureExecutionError(e, getNode(inputOperands[0]))
+        throw ensureExecutionError(e, getNode(inputOperands[0]), callingContext)
     }
 }
     function applyOperator(run, context, args) {
@@ -141,9 +141,9 @@ var callOperator = exports.callOperator = function(callingContext, operator, inp
         }
     }
 
-function ensureExecutionError(e, node) {
+function ensureExecutionError(e, node, context) {
     if (!(e instanceof ExecutionError) || e.info.start === 'internal') {
-        return new ExecutionError(e, node)
+        return new ExecutionError(e, node, context)
     } else return e
 }
 
@@ -323,21 +323,21 @@ var getBinaryDispatch = exports.getBinaryDispatch = function(context, operand1, 
 
 // Evaluates the consumption of a lima macro object
 // rawInput - a javascript string containing the raw input to the macro
-// startColumn - a javascript integer representing the column the rawInput starts at
+// startLocation - A javascript object like {line, column, offset}
 // returns a lima object with the following properties:
     // consumed - a lima integer representing the number of characters consumed
     // run - a lima function to run when the macro is called
-var consumeMacro = exports.consumeMacro = function(context, obj, rawInput, startColumn) {
+var consumeMacro = exports.consumeMacro = function(context, obj, rawInput, startLocation) {
     var rawInputLima = coreLevel1.StringObj(rawInput)
-    var startColumnLima = coreLevel1.NumberObj(startColumn)
+    var startLocationLima = coreLevel1.LimaObject(startLocation)
     try {
-        var matchArgs = coreLevel1.LimaObject([rawInputLima, startColumnLima])
+        var matchArgs = coreLevel1.LimaObject([rawInputLima, startLocationLima])
         var matchResult = callOperator(context, '[', [
             valueNode(getNodeValue(obj).meta.macro.match, getNode(obj)), internalValueNode(matchArgs)
         ], undefined)
         var consumedCharsLimaValue = getProperty(context, matchResult, coreLevel1.StringObj('consume'))
         if(consumedCharsLimaValue.meta.primitive.denominator !== 1) {
-            throw new ExecutionError("The 'consume' property returned from the macro '"+getName(obj)+"' isn't an integer.", obj)
+            throw new ExecutionError("The 'consume' property returned from the macro '"+getName(obj)+"' isn't an integer.", obj, context)
         }
         return matchResult
     } catch(e) {

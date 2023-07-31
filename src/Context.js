@@ -10,13 +10,15 @@ var Context = module.exports = proto(function() {
 
     // scope - Defaults to an empty scope
     // callingContext - Defaults to an empty object.
-    // location - An object like {filename}
-    this.init = function(scope, callingContext, location) {
+    // startLocation - The location the execution context starts at. An object like {filename, line, column, offset}. 
+    //                 Usually the line, column, and offset start at 1, 1, 0 respectively, but in the context of a macro
+    //                 execution, it will be the location of the macro.  
+    this.init = function(scope, callingContext, startLocation) {
         this.scope = scope || new Scope()
         if(callingContext === undefined) callingContext = {}
 
         this.callingScope = callingContext.scope
-        this.location = location || callingContext.location
+        this.startLocation = startLocation || callingContext.startLocation
         this.atr = callingContext.atr   // Stack attributes
         this.matr = callingContext.matr // Module attributes
         this.consumeFirstlineMacros = callingContext.consumeFirstlineMacros // See parser.js for what this does.
@@ -56,10 +58,10 @@ var Context = module.exports = proto(function() {
         this.scope.declare(name, type, this.atr.publicDeclarations, this.atr.allowShadowDeclarations)
     }
 
-    // Returns a new context with a new location, retaining everything else from the current context.
-    // location - See init.
-    this.subLocation = function (location) {
-        return Context(this.scope, this, location)
+    // Returns a new context with a new startLocation, retaining everything else from the current context.
+    // startLocation - See init. Will inherit any undefined location values.
+    this.subLocation = function (startLocation) {
+        return Context(this.scope, this, {...this.startLocation, ...startLocation})
     }
     
     // Returns a new context with a new scope, retaining `callingScope`, `atr`, and matr from the current context.

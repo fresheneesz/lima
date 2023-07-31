@@ -1,8 +1,10 @@
 
-var x+1
-x = A
 
-;[
+
+var z = 1
+wout[z]
+
+;;[
 y = rawFn
  match: ret {arg: nil}
  run:

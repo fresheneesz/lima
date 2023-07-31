@@ -5,6 +5,7 @@ var macroParsers = require("./macroParsers")
 var evaluate = require("./evaluate")
 var coreLevel1a = require("./coreLevel1a")
 var Context = require("./Context")
+var ExecutionError = require("./errors").ExecutionError
 
 var anyType = exports.anyType = coreLevel1a.anyType
 var nil = exports.nil = coreLevel1a.nil
@@ -494,8 +495,8 @@ False.name = 'false'
 // macroFns is an object that contains:
     // match(rawInput, startColumn) - A javascript function that:
         // has parameters:
-            // rawInput - a lima string of input
-            // startColumn - a lima number
+            // rawInput - A lima string of input.
+            // startLocation - A lima object like {offset, line, column}.
         // returns a lima object with the properties:
             // consume
             // arg
@@ -503,11 +504,12 @@ False.name = 'false'
 function macro(macroFns) {
     var macroObject = basicUtils.copyValue(nil)
     delete macroObject.meta.primitive
+    // Note that `this` within these functions is a Context object.
     macroObject.meta.macro = {
         match: FunctionObjThatMatches(function(args) {
             var rawInput = utils.getProperty(this, args, zero)
-            var startColumn = utils.getProperty(this, args, NumberObj(1))
-            return macroFns.match.call(this, rawInput, startColumn)
+            var startLocation = utils.getProperty(this, args, NumberObj(1))
+            return macroFns.match.call(this, rawInput, startLocation)
         }),
         run: FunctionObjThatMatches(function(info) {
             return macroFns.run.call(this, info)
@@ -819,10 +821,10 @@ var macroMacro = macroWithConventionsACD('macro', 'macroInner', function run(ast
     var macroDeclarationContext = this
     var astMatch = ast.result.match, astRun = ast.result.run
     var rawMacroObject = macro({
-        match: function(rawInput, startColumn) {
+        match: function(rawInput, startLocation) {
             return runFunctionStatements(
                 macroDeclarationContext, this.callingContext(), astMatch.body, astMatch.parameters,
-                [rawInput, startColumn]
+                [rawInput, startLocation]
             )
         },
         run: function(arg) {
@@ -854,7 +856,7 @@ var ifMacro = macroWithConventionsACD('if', 'ifInner', function run(ast) {
                 throw new Error("Invalid `if` statement, didn't find any conditional block.")
         } else if(utils.isNode(conditionResult.value)) {
             if(utils.isNodeType(conditionResult.value, 'variable')) {
-                throw new Error("Undefined variable '"+conditionResult.value.name+"'.")
+                throw new ExecutionError("Undefined variable '"+conditionResult.value.name+"'.", blockItem.expressionBlock.parts[0], conditionContext)
             } else {
                 throw new Error("Unevaluated expression '"+conditionResult.value+"'. This might be a bug in the interpreter.")
             }
@@ -895,7 +897,7 @@ var ifMacro = macroWithConventionsACD('if', 'ifInner', function run(ast) {
 
 function functionLikeMacro(runFn) {
     return macro({
-        match: function(rawInputLima) {
+        match: function(rawInputLima, startLocationLima) {
             var rawInput = utils.getPrimitiveStr(this, rawInputLima)
             var statementInfo = macroParsers.withState({
                 context: this,
@@ -913,7 +915,7 @@ function functionLikeMacro(runFn) {
 
             return LimaObject({
                 consume: NumberObj(consumed),
-                arg:  createJsPrimitive(expressions)
+                arg:  createJsPrimitive({expressions, startLocation: startLocationLima})
             })
         },
         run: runFn
@@ -932,11 +934,13 @@ function createDeclarationModifiers(context) {
 
 var varMacro = functionLikeMacro(function(infoObject) {
     var callingContext = this.callingContext()
+    var args = getFromJsPrimitive(infoObject)
+    
     var newDeclarationModifiers = createDeclarationModifiers(callingContext)
     // newDeclarationModifiers.type = something // todo
     var modifiedCallingContext = callingContext.subAtrContext({declarationModifiers: newDeclarationModifiers})
-
-    var expressions = getFromJsPrimitive(infoObject)
+    
+    var expressions = args.expressions
     for(var n=0; n<expressions.length;) {
         var parts = expressions[n].parts
         if(parts.length === 1 && utils.isNodeType(parts[0], 'variable')) {
@@ -981,7 +985,7 @@ wout.name = 'wout'
 
 // Returns a new context that contains nothing (this is meant to be above the module context).
 var topLevelContext = exports.topLevelContext = function() {
-    return Context(Context.Scope(undefined, false), undefined, {file: 'lima/src/coreLevel2.lima', line: 1, column: 1, offset: 0})
+    return Context(Context.Scope(undefined, false), undefined, {filename: 'coreLevel2.lima', line: 1, column: 1, offset: 0})
 }
 
 // Returns a context with a new empty object value as `this`.

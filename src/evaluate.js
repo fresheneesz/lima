@@ -23,7 +23,7 @@ var resolveObjectSpace = function(context, curState, n, isObjectEnd) {
         var node = curState[n]
         try {
             if (!utils.isNodeType(node, 'superExpression')) // Should never happen.
-                throw new ExecutionError("Something other than a superexpression found in object: " + node.type, node)
+                throw new ExecutionError("Something other than a superexpression found in object: " + node.type, node, context)
             if (isObjectEnd && isObjectEnd(node.parts[0])) {
                 break // found the end of the object space
             } else {
@@ -62,7 +62,7 @@ var resolveObjectSpace = function(context, curState, n, isObjectEnd) {
 
                 if (!utils.isNil(result.value)) {
                     if (utils.hasProperties(context.get('this')))
-                        throw new ExecutionError("All elements must come before any keyed properties", node)
+                        throw new ExecutionError("All elements must come before any keyed properties", node, context)
 
                     utils.appendElement(context, result.value)
                 }
@@ -71,7 +71,7 @@ var resolveObjectSpace = function(context, curState, n, isObjectEnd) {
             if (e instanceof ExecutionError) {
                 throw e
             } else {
-                throw new ExecutionError(e, node)
+                throw new ExecutionError(e, node, context)
             }
         }
     }
@@ -173,7 +173,7 @@ function resolveBinaryOperations(context, curState, options) {
                              },false)
                     ) {
                         var propertyStr = utils.getPrimitiveStr(context, propertyKeyObject)
-                        throw new ExecutionError("Property "+propertyStr+" can't be redefined.", operand1)
+                        throw new ExecutionError("Property "+propertyStr+" can't be redefined.", operand1, context)
                     }
 
                     if(utils.isNil(utils.getNodeValue(operand2))) {
@@ -208,7 +208,7 @@ function resolveBinaryOperations(context, curState, options) {
                                 operand1 = utils.valueNode(newValue, utils.getNode(operand1))
                                 var allowReassignment = true
                             } else if(utils.isReferenceAssignmentOperator(operator1)) {
-                                throw new ExecutionError("~> operator not yet supported.", operand1)
+                                throw new ExecutionError("~> operator not yet supported.", operand1, context)
                             } else {
                                 throw undeclaredError(operand1)
                             }
@@ -219,7 +219,7 @@ function resolveBinaryOperations(context, curState, options) {
 
                     // When inObjectSpace is true, reassignments to values in scope are illegal
                     if(context.scope.inObjectSpace && !allowReassignment && operator1.operator === '=') {
-                        throw new ExecutionError("Variable '"+operand1.name+"' can't be redefined.", operand1)
+                        throw new ExecutionError("Variable '"+utils.getNodeValue(operand1).name+"' can't be redefined.", operand1, context)
                     }
                     if(utils.isNodeType(operand2, 'variable'))
                         throw undeclaredError(operand2)
@@ -246,10 +246,10 @@ function resolveBinaryOperations(context, curState, options) {
             break
 
         if(curIndex > curState.length)
-            throw new ExecutionError("Couldn't execute all binary operators in this expression : (", operand1)
+            throw new ExecutionError("Couldn't execute all binary operators in this expression : (", operand1, context)
 
         function undeclaredError(operand) {
-            throw new ExecutionError("Variable '"+utils.getNodeValue(operand).name+"' not declared.", operand)
+            throw new ExecutionError("Variable '"+utils.getNodeValue(operand).name+"' not declared.", operand, context)
         }
     }
 }
@@ -338,14 +338,14 @@ function resolveBinaryOperandFrom(context, curState, index, options) {
                     if(utils.hasOperatorOfType(item.value, prevItem, 'prefix')) {
                         resolveUnaryOperator(context, curState, n, 'prefix')
                     } else {
-                        throw new ExecutionError("Object doesn't have prefix operator '"+prevItem.operator+"'", item)
+                        throw new ExecutionError("Object doesn't have prefix operator '"+prevItem.operator+"'", item, context)
                     }
                 } else if(nextItemExists) {
                     if(utils.isOperatorOfType(nextItem, 'postfix')) {
                         if(utils.hasOperatorOfType(item.value, nextItem, 'postfix')) {
                             resolveUnaryOperator(context, curState, n, 'postfix')
                         } else {
-                            throw new ExecutionError("Object doesn't have postfix operator '"+prevItem.operator+"'", item)
+                            throw new ExecutionError("Object doesn't have postfix operator '"+prevItem.operator+"'", item, context)
                         }
                     } else if(utils.hasOperatorOfType(item.value, nextItem, 'binary')) {
                         return n+1   // Next item.
@@ -401,7 +401,7 @@ function resolveBinaryOperandFrom(context, curState, index, options) {
         var operator = curState[valueItemIndex+1].operator
         var operatorInfo = utils.getNodeValue(valueItem).meta.operators[operator]
         if(operatorInfo === undefined)
-            throw new ExecutionError("Object doesn't have a '"+operator+"'", valueItem)
+            throw new ExecutionError("Object doesn't have a '"+operator+"'", valueItem, context)
 
         if(operator === '.') {
             if(utils.isSpecificOperator(curState[valueItemIndex+2], '(')) {
@@ -422,7 +422,7 @@ function resolveBinaryOperandFrom(context, curState, index, options) {
                 curState.splice(valueItemIndex+1, 1) // remove the bracket operator so it resembles a normal macro
                 resolveMacro(context, curState, valueItemIndex)
                 if(curState[valueItemIndex+1] !== closeBracketOperator(valueItem, operator)) {
-                    throw new ExecutionError("Missing end bracket '"+closeBracketOperator(valueItem, operator)+"'!", valueItem)
+                    throw new ExecutionError("Missing end bracket '"+closeBracketOperator(valueItem, operator)+"'!", valueItem, context)
                 }
                 curState.splice(valueItemIndex+1, 1) // remove the closing bracket operator
             } else {
@@ -438,7 +438,7 @@ function resolveBinaryOperandFrom(context, curState, index, options) {
         function closeBracketOperator(valueItem, operator) {
             if(utils.isBracketOperator({type:'operator',operator:operator}, '[')) {
                 return basicUtils.strMult(']', operator.length)
-            } else new ExecutionError(operator+" doesn't have closing brackets", valueItem)
+            } else new ExecutionError(operator+" doesn't have closing brackets", valueItem, context)
         }
 
     function resolveMacro(context, curState, valueItemIndex) {
@@ -451,22 +451,25 @@ function resolveBinaryOperandFrom(context, curState, index, options) {
         var rawExpressionIndex = valueItemIndex+1
         var rawExpression = curState[rawExpressionIndex]
         var macroInput = rawExpression.expression // For any item that is a macro, its expected that a rawExpression follows it.
-        var consumeResult = utils.consumeMacro(context, macroObject, macroInput, rawExpression.startColumn)
-        var consumedCharsLimaValue = utils.getProperty(context, consumeResult, coreLevel1.StringObj('consume'))
+
+        var startLocation = rawExpression.start
+        var macroContext = context.subLocation(startLocation)
+        var consumeResult = utils.consumeMacro(macroContext, macroObject, macroInput, startLocation)
+        var consumedCharsLimaValue = utils.getProperty(macroContext, consumeResult, coreLevel1.StringObj('consume'))
         var consumedChars = consumedCharsLimaValue.meta.primitive.numerator
         if(expectedConsumption !== undefined && consumedChars !== expectedConsumption) {
-            throw new ExecutionError("Macro "+macroObject.name+" had an inconsistent number of consumed characters between parsing ("+expectedConsumption+" characters) and dynamic execution ("+consumedChars+" characters). Make sure that any macro that needs to be known at parse time (eg a macro within the first line of another macro like `fn` or `if`) is known before that outer macro executes (at very least, some macro of the same name that consumes the exact same number of characters must be in scope before that outer macro executes).", macroObject)
+            throw new ExecutionError("Macro "+macroObject.name+" had an inconsistent number of consumed characters between parsing ("+expectedConsumption+" characters) and dynamic execution ("+consumedChars+" characters). Make sure that any macro that needs to be known at parse time (eg a macro within the first line of another macro like `fn` or `if`) is known before that outer macro executes (at very least, some macro of the same name that consumes the exact same number of characters must be in scope before that outer macro executes).", macroObject, context)
         }
 
-        if(utils.hasProperty(context, consumeResult, coreLevel1.StringObj('arg'))) {
+        if(utils.hasProperty(macroContext, consumeResult, coreLevel1.StringObj('arg'))) {
             var arg = utils.valueNode(
-                utils.getProperty(context, consumeResult, coreLevel1.StringObj('arg')), utils.getNode(macroObject)
+                utils.getProperty(macroContext, consumeResult, coreLevel1.StringObj('arg')), utils.getNode(macroObject)
             )
         } else {
             var arg = utils.internalValueNode(coreLevel1.nil)
         }
 
-        var runResult = utils.callOperator(context, '[', [
+        var runResult = utils.callOperator(macroContext, '[', [
             utils.valueNode(utils.getNodeValue(macroObject).meta.macro.run, utils.getNode(macroObject)),
             arg
         ])
@@ -494,13 +497,13 @@ function resolveBinaryOperandFrom(context, curState, index, options) {
             resolveObjectSpace(limaObjectContext, objectNode.expressions, 0, isObjectEnd)
 
             if(objectNode.expressions.length === 0) {
-                throw new ExecutionError("Missing '}' in object literal.", objectNode)
+                throw new ExecutionError("Missing '}' in object literal.", objectNode, context)
             }
             var stateToInject = objectNode.expressions[0].parts.concat(objectNode.expressions.slice(1))
             curState.splice.apply(curState, [n, 1, utils.valueNode(limaObjectContext.get('this'), objectNode)].concat(stateToInject))
 
             if(curState.length-1 < n+1 || !utils.isSpecificOperator(curState[n+1], "}")) {
-                throw new ExecutionError("Missing '}' in object literal.", objectNode)
+                throw new ExecutionError("Missing '}' in object literal.", objectNode, context)
             }
 
             curState.splice(n+1,1)
@@ -557,7 +560,7 @@ function resolveBinaryOperandFrom(context, curState, index, options) {
                 curState.splice(index,endOperatorInfo.nodes) // remove end brackets
             }
         } else {
-            throw new ExecutionError("Missing '"+closeOperator+"' for bracket operation.". curState[index])
+            throw new ExecutionError("Missing '"+closeOperator+"' for bracket operation.". curState[index], context)
         }
 
         return bracketArgumentObject
@@ -592,7 +595,7 @@ function resolveBinaryOperandFrom(context, curState, index, options) {
         var node = curState[index]
         var values = resolveParenOrBracket(context, curState, index, ')')
         if(values.length > 1 || values.length === 0) {
-            throw new ExecutionError("Parentheses must contain exactly one expression.", node)
+            throw new ExecutionError("Parentheses must contain exactly one expression.", node, context)
         }
 
         curState.splice(index, 0, utils.valueNode(values[0], utils.getNode(node)))  // insert the resolved values

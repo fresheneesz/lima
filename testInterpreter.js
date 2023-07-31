@@ -36,7 +36,7 @@ for(var name in normalizedTests) {
                 failures++
                 console.log(colors.red(
                     "Didn't correctly fail for:\n"+test.content+'\n'+
-                    "Expected an exception containing: '"+test.shouldFail+"'\nbut got the exception: \n"+e.stack
+                    "Expected an exception containing: '"+test.shouldFail+"'\nbut got the exception:"
                 ))
             }
         } else {

@@ -18,11 +18,14 @@ module.exports = function(sourceString, filepath, args) {
     } catch(e) {
         if (e instanceof ExecutionError) {
             if (e.info && e.info.start) {
-                var startLine = ` on line ${e.info.start.line}`
+                var startLine = ` in ${e.info.filename} on line ${e.info.start.line}`
             }
+
+            var errorSource = fs.readFileSync(__dirname+"/"+e.info.filename).toString()
             console.log(`${e.message}${startLine}:`)
-            console.log(getLine(sourceString, e.info.start.line))
-            console.log(multchar(' ', e.info.start.column-1)+'^')
+            console.log(getLine(errorSource, e.info.start.line))
+            console.log(multchar(' ', e.info.start.column - 1)+'^')
+            if (e.causeStack) console.log(e.causeStack)
         } else {
             throw e
         }
@@ -59,5 +62,5 @@ function getLine(source, line) {
 }
 
 function createStartLocation(filepath) {
-    return {filepath}
+    return {filepath, line: 1, column: 1, offset: 0}
 }
