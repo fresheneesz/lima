@@ -30,16 +30,10 @@ var = coreLevel1['var']~
     * meta
 ;]
 
-var false = 0
-var true = 1
-
 var private = rawMacro chars:
     ; ...
 
 var access = rawMacro chars:
-    ; ...
-
-var macro = rawMacro chars:
     ; ...
 
 var while = macro charsBefore charsInside:

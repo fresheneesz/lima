@@ -1,3 +1,5 @@
+var path = require("path")
+
 var basicUtils = require("./basicUtils")
 var utils = require("./utils")
 var parser = require("./parser")
@@ -508,8 +510,8 @@ function macro(macroFns) {
     macroObject.meta.macro = {
         match: FunctionObjThatMatches(function(args) {
             var rawInput = utils.getProperty(this, args, zero)
-            var startLocation = utils.getProperty(this, args, NumberObj(1))
-            return macroFns.match.call(this, rawInput, startLocation)
+            var startColumn = utils.getProperty(this, args, NumberObj(1))
+            return macroFns.match.call(this, rawInput, startColumn)
         }),
         run: FunctionObjThatMatches(function(info) {
             return macroFns.run.call(this, info)
@@ -529,7 +531,7 @@ function macro(macroFns) {
                 bodyIndex: j
             }
         })
-        var functionContext = createFunctionContext(declarationContext.scope, callingContext, retPtr, contin)
+        var functionContext = createFunctionContext(declarationContext, callingContext, retPtr, contin)
 
         parameters.forEach(function(parameter, n) {
             var arg = args[n]
@@ -573,10 +575,10 @@ function macro(macroFns) {
         return callingContext.newStackContext(declarationScope.subScope(false))
     }
 
-    function createFunctionContext(declarationScope, callingContext, retPtr, continObj) {
-        var functionContext = createExecContext(declarationScope, callingContext)
+    function createFunctionContext(declarationContext, callingContext, retPtr, continObj) {
+        var functionContext = createExecContext(declarationContext.scope, callingContext)
         functionContext.scope.declare('ret', coreLevel1a.anyType, undefined, true)
-        functionContext.set('ret', createRetMacro(functionContext))
+        functionContext.set('ret', createRetMacro(functionContext.subLocation(declarationContext.startLocation)))
         functionContext.scope.declare('contin', coreLevel1a.anyType, undefined, true)
         functionContext.set('contin', continObj)
         return functionContext
@@ -605,7 +607,7 @@ function macro(macroFns) {
                     var parts = statementInfo.expression.parts
 //                    var consumed = statementInfo.consumed
                     closeExpression(statementInfo.expression)
-                    var consumed = findExpressionEndOffset(statementInfo.expression)
+                    var consumed = findExpressionEndOffset(functionContext, statementInfo.expression)
                 } else {
                     var parts = []
                     var consumed = 0
@@ -629,14 +631,14 @@ function macro(macroFns) {
 
 // expression - A superExpression node.
 // Returns the offset of the last part in the expression (taking into account objects in the expression).
-function findExpressionEndOffset(expression) {
+function findExpressionEndOffset(context, expression) {
     if(expression.parts.length > 0) {
         var expressionLength = expression.parts.length
         var lastPart = expression.parts[expressionLength-1]
         if(utils.isNodeType(lastPart, 'object')) {
-            return findExpressionEndOffset(lastPart.expressions[lastPart.expressions.length-1])
+            return findExpressionEndOffset(context, lastPart.expressions[lastPart.expressions.length-1])
         } else {
-            return lastPart.end.offset
+            return lastPart.end.offset - (context?.startLocation?.offset || 0)
         }
     } else {
         return 0
@@ -763,6 +765,7 @@ function closeExpressions(expressions) {
 }
 
 // The context passed into run is the context the macro was called in.
+// See the lima docs Conventions section for what conventions A, C, and D are.
 // run(ast) - A function to call when the macro matches.
 function macroWithConventionsACD(name, macroParser, run) {
     var macroObject = macro({
@@ -895,6 +898,7 @@ var ifMacro = macroWithConventionsACD('if', 'ifInner', function run(ast) {
     return nil
 })
 
+// A macro made with this uses conventions A, B, and D (See the Conventions section in the Lima docs).
 function functionLikeMacro(runFn) {
     return macro({
         match: function(rawInputLima, startLocationLima) {
@@ -907,7 +911,7 @@ function functionLikeMacro(runFn) {
             if(statementInfo !== undefined) {
                 var expressions = statementInfo.expressions
                 closeExpressions(statementInfo.expressions)
-                var consumed = findExpressionEndOffset(statementInfo.expressions[statementInfo.expressions.length-1])
+                var consumed = findExpressionEndOffset(this, statementInfo.expressions[statementInfo.expressions.length-1])
             } else {
                 var expressions = []
                 var consumed = 0
@@ -985,7 +989,7 @@ wout.name = 'wout'
 
 // Returns a new context that contains nothing (this is meant to be above the module context).
 var topLevelContext = exports.topLevelContext = function() {
-    return Context(Context.Scope(undefined, false), undefined, {filename: 'coreLevel2.lima', line: 1, column: 1, offset: 0})
+    return Context(Context.Scope(undefined, false), undefined, {filepath:__dirname+path.sep+'coreLevel2.lima', line: 1, column: 1, offset: 0})
 }
 
 // Returns a context with a new empty object value as `this`.

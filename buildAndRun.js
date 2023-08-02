@@ -1,4 +1,5 @@
 var fs = require("fs")
+var path = require("path")
 
 var limaInterpreter = require("./src/interpreter")
 
@@ -11,7 +12,7 @@ if(filename.slice(-5) !== '.lima') {
     filename+='.lima'
 }
 
-var filepath = __dirname+'/'+filename
+var filepath = __dirname+path.sep+filename
 var entrypointFileContents = fs.readFileSync(filepath, {encoding: 'utf8'}).toString()
     .replace(/\t/g, "    ") // lima doesn't accept tabs
 

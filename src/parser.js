@@ -87,15 +87,17 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
     // Returns a list of nodes where the first is always a value node and the second node is a macroConsumption node if it exists.
     expressionAtom: function() {
         return this.value().mark().chain(function(v) {
-            v.value.start = v.start
-            v.value.end = v.end
+            v.value.start = contextualizeLocation(v.start, this.state.context)
+            v.value.end = contextualizeLocation(v.end, this.state.context)
             if(this.state.consumeFirstlineMacros && v.value.type === 'variable') {
                 if(this.state.context.has(v.value.name)) {
                     var value = this.state.context.get(v.value.name)
                     if(value.meta.macro !== undefined) {
                         // Evaluate macro consumption.
                         //var startColumn = v.end.column-this.state.indent+1 // The +1 because the end.column is 1 behind the start column.
-                        return this.macro(value/*, startColumn*/).map(function(parts) {
+                        // Note the type: 'object' is fake just so it matches utils.isNode. Todo: fix end.
+                        const fakeNode = {type: 'object', start: this.state.context.startLocation, end: this.state.context.startLocation}
+                        return this.macro(value, fakeNode).map(function(parts) {
                             return [v.value].concat(parts)
                         })
                     }
@@ -132,7 +134,7 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
                 ['trailingWs', alt(seq(this.ws().many(), eof),
                     lookahead(this.indentedWs())
                 ).atMost(1)]
-            ).map(function(v) {
+            ).map(v => {
                 if(isBBPOperator(v.operator.value)) {
                     var opType = 'bbp'
                 } else if(isUnconditionallyBinary(v.operator.value)) {
@@ -152,7 +154,8 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
 
                 var result = {
                     type:'operator', operator:v.operator.value, opType: opType,
-                    start: v.operator.start, end: v.operator.end
+                    start: contextualizeLocation(v.operator.start, this.state.context), 
+                    end: contextualizeLocation(v.operator.end, this.state.context)
                 }
                 if(spaceAfter !== undefined) {
                     result.spaceAfter = spaceAfter
@@ -228,12 +231,13 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
 
     // macro - A lima macro value.
     // Returns a macroConsumption node.
-    macro: function(macro, startColumn) {
+    macro: function(macro, macroLocation) {
         return P(function(input, i) {
-            var startColumn = '??'    // todo: support startColumn
             // Create a new context with consumeFirstlineMacros potentially set to false (if the first line has passed)
             var newContext = this.state.context.newStackContext(this.state.context.scope, this.state.consumeFirstlineMacros)
-            var consumeResult = utils.consumeMacro(newContext, utils.valueNode(macro, 'todo'), input.slice(i), startColumn)
+            var consumeResult = utils.consumeMacro(
+                newContext, utils.valueNode(macro, macroLocation), input.slice(i)
+            )
             var consumedCharsLimaValue = utils.getProperty(this.state.context, consumeResult, coreLevel1.StringObj('consume'))
             var consumedChars = consumedCharsLimaValue.meta.primitive.numerator
             var consumedString = input.slice(i, i+consumedChars)
@@ -242,8 +246,9 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
             var nextIndex = i+consumedChars
             var macroConsumption = {type:"macroConsumption", consume:consumedChars}
             var rawExpression = {
-                type:"rawExpression", startColumn:startColumn, expression:input.slice(i, nextIndex),
-                start: {offset:i}, end: {offset:nextIndex-1}
+                type:"rawExpression", startColumn:newContext.startLocation.column, expression:input.slice(i, nextIndex),
+                start: {...newContext.startLocation, offset:newContext.startLocation.offset}, 
+                end: {...newContext.startLocation, offset:newContext.startLocation.offset + nextIndex-1}
             }
             return P.makeSuccess(nextIndex, [macroConsumption, rawExpression])
         }.bind(this))
@@ -272,7 +277,8 @@ var L = P.createLanguage({/*context:_, */consumeFirstlineMacros: false}, {
             var startColumn = v.start.column-this.state.indent
             return {
                 type:'rawExpression', startColumn: startColumn, expression: v.value,
-                start: v.start, end: v.end
+                start: contextualizeLocation(v.start, this.state.context), 
+                end: contextualizeLocation(v.end, this.state.context)
             }
         }.bind(this))
     },

@@ -14,6 +14,18 @@ P.none = function(chars) {
     return P.noneOf(chars+'\t')
 }
 
+// This is used for the locations output by `mark` to update them in comparison to the location of the passed context.
+P.contextualizeLocation = function(location, context) {
+    // Here to solve a circular dependency.
+    if(!context) return location
+    const startLocation = context.startLocation
+    return {
+        offset: startLocation.offset + location.offset,
+        column: (location.line > 1 ? 1 : startLocation.column) - 1 + location.column,
+        line: startLocation.line - 1 + location.line
+    }
+}
+
 // intended for making it easy to eval parsimmon's basic parsers (and some extras) into scope
 // use like this:
 /*

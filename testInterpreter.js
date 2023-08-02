@@ -1,9 +1,10 @@
-var fs = require("fs")
+var path = require("path")
 var colors = require("colors/safe")
 
 var limaInterpreter = require("./src/interpreter")
 var testUtils = require("./tests/testUtils")
 var tests = require('./tests/interpreterTests').tests
+var ExecutionError = require("./src/errors").ExecutionError
 
 var normalizedTests = normalizeTests(tests)
 
@@ -13,7 +14,7 @@ for(var name in normalizedTests) {
     console.log(colors.cyan(name+":\n"))
 
     try {
-        var module = limaInterpreter.coreLevel1Test(test.content, './tests/interpreterTests: '+name)
+        var module = limaInterpreter.coreLevel1Test(test.content, path.resolve('./tests/interpreterTests.js'))
         if(test.check) {
             if(test.check(module)) {
                 console.log(colors.green("success!"))
@@ -43,7 +44,12 @@ for(var name in normalizedTests) {
             failures++
             console.log(colors.red("Exception for:"))
             console.log(colors.red(test.content))
-            console.log(colors.red(e))
+            
+            let errorToPrint = e.stack
+            if (e instanceof ExecutionError) {
+                errorToPrint = e.toString()
+            }
+            console.log(colors.red(errorToPrint))
         }
     }
 

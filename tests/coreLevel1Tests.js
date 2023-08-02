@@ -63,11 +63,19 @@ var tests = exports.tests = {
 
             // =
 
-    //todo:
-    // assignToNil:  {content:'var? a=nil  a=3', check: function(module) {
-    //     var element0 = getFirstProperty(module).value
-    //     return isFalse(element0)
-    // }},
+    assignToNil:  {
+        content:
+            'a = nil\n' +
+            'f1 = rawFn\n' +
+            ' match: ret {arg: nil}\n' +
+            ' run:\n' +
+            '  a = 3\n' +
+            '  ret a\n' +
+            'f1[]', 
+        check: function(module) {
+        var element0 = getFirstProperty(module).value
+        return isSpecificInt(element0, 3)
+    }},
 
                 // should fail
 
@@ -1013,7 +1021,7 @@ var tests = exports.tests = {
             var element0 = getFirstProperty(module).value
             var rawInput = getPropertyOld({this:element0}, coreLevel1.StringObj("rawInput"))
             var startColumn = getPropertyOld({this:element0}, coreLevel1.StringObj("startColumn"))
-            return rawInput.meta.primitive.string === " hi" && isSpecificInt(startColumn, 1)
+            return rawInput.meta.primitive.string === " hi" && isSpecificInt(startColumn, 2)
         }
     },
     macroParamsTest2: {
@@ -1032,7 +1040,7 @@ var tests = exports.tests = {
             var rawInput = getPropertyOld({this:element0}, coreLevel1.StringObj("rawInput"))
             var startColumn = getPropertyOld({this:element0}, coreLevel1.StringObj("startColumn"))
             return rawInput.meta.primitive.string === " hi]" // <- This has more characters than were consumed because its the rawInput
-                   && isSpecificInt(startColumn, 3)          //    from the match block.
+                   && isSpecificInt(startColumn, 4)          //    from the match block.
         }
     },
     // Todo:

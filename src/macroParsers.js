@@ -45,9 +45,12 @@ module.exports = P.createLanguage({context:{}}, {
             parserState.indentedWs(2).many(),
             ":"
         )
-        return seqObj.apply(seqObj, sequence).chain(function(v) {
+        return seqObj.apply(seqObj, sequence).mark().chain(function(v) {
             return that.indentedBlock(2).map(function(indentedBlock) {
-                var newState = basicUtils.merge({}, this.state, {indent:0})
+                var newState = basicUtils.merge({}, this.state, {
+                    indent:0, 
+                    context: this.state.context.subLocation(P.contextualizeLocation(v.end, this.state.context))
+                })
                 var parserStateInner = getParser().withState(newState)
                 var adjustedIndentedBlock = indentedBlock.split('\n').map(function(line, n) {
                     // Add one space to each subsequent line of the indented block, so that subsequent statements are indented
@@ -65,8 +68,8 @@ module.exports = P.createLanguage({context:{}}, {
                         return v[1]
                     }).tryParse(adjustedIndentedBlock)
                 }
-                if(v.parameters) {
-                    result.parameters = v.parameters
+                if(v.value.parameters) {
+                    result.parameters = v.value.parameters
                 }
                 return result
             }.bind(this))
@@ -168,10 +171,13 @@ module.exports = P.createLanguage({context:{}}, {
                                                             // but any trailing whitespace won't have been.
             ['expression', parserState.superExpression().atMost(1).mark()],
             any.many() // Eat anything else, since parsimmon requires the whole input to be matched.
-        ).map(function(v) {
+        ).map(v => {
             if(v.expression.value.length > 0) {
+                var utils = require("./utils")
                 var node = v.expression.value[0]
-                return {expression: node}//, consumed: v.expression.end.offset- v.ws.start.offset}
+                const lineInfo = utils.getLineInfo(this.state.context, node)
+                var expression = {...node, start: lineInfo.start, end: lineInfo.end}
+                return {expression}//, consumed: v.expression.end.offset- v.ws.start.offset}
             }
         })
     },
@@ -197,9 +203,13 @@ module.exports = P.createLanguage({context:{}}, {
                 })
             ).mark()],
             any.many() // Eat anything else, since parsimmon requires the whole input to be matched.
-        ).map(function(v) {
+        ).map(v => {
             if(v.expressions.value.list.length > 0) {
-                var nodes = v.expressions.value.list
+                var utils = require("./utils")
+                var nodes = v.expressions.value.list.map(node => {
+                    const lineInfo = utils.getLineInfo(this.state.context, node)
+                    return {...node, start: lineInfo.start, end: lineInfo.end}
+                }) 
                 var needsClosingBracket = v.expressions.value.needsClosingBracket
                 return {
                     expressions: nodes,

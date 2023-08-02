@@ -1,9 +1,6 @@
 
 
 
-var z = 1
-wout[z]
-
 ;;[
 y = rawFn
  match: ret {arg: nil}
@@ -24,6 +21,7 @@ wout[ x[] ]
 if x[] == 5:
   wout['Hello']
 
-
+var z = 1
+wout[z]
 
 ;]

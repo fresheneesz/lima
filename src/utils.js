@@ -1,5 +1,6 @@
 
 var coreLevel1 = require("./coreLevel1b")
+var P = require("./limaParsimmon")
 var ExecutionError = require("./errors").ExecutionError
 
 // Utils for interacting with lima objects.
@@ -327,11 +328,11 @@ var getBinaryDispatch = exports.getBinaryDispatch = function(context, operand1, 
 // returns a lima object with the following properties:
     // consumed - a lima integer representing the number of characters consumed
     // run - a lima function to run when the macro is called
-var consumeMacro = exports.consumeMacro = function(context, obj, rawInput, startLocation) {
+var consumeMacro = exports.consumeMacro = function(context, obj, rawInput) {
     var rawInputLima = coreLevel1.StringObj(rawInput)
-    var startLocationLima = coreLevel1.LimaObject(startLocation)
+    var startColumnLima = coreLevel1.NumberObj(context.startLocation.column)
     try {
-        var matchArgs = coreLevel1.LimaObject([rawInputLima, startLocationLima])
+        var matchArgs = coreLevel1.LimaObject([rawInputLima, startColumnLima])
         var matchResult = callOperator(context, '[', [
             valueNode(getNodeValue(obj).meta.macro.match, getNode(obj)), internalValueNode(matchArgs)
         ], undefined)
@@ -620,6 +621,18 @@ var getNode = exports.getNode = function(node) {
         return node
     } else {
         return node.node
+    }
+}
+
+var getLineInfo = exports.getLineInfo = function(context, node) {
+    if(isNodeType(node, 'superExpression')) {
+        return getLineInfo(context, node.parts[0])
+    } else {
+        return {
+            filepath: context.startLocation.filepath, 
+            start: P.contextualizeLocation(node.start, context), 
+            end: P.contextualizeLocation(node.end, context)
+        }
     }
 }
 

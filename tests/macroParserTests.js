@@ -1,11 +1,12 @@
 
 var P = require("../src/limaParsimmon")
-var basicUtils = require("../src/basicUtils")
-var macroParsers = require("../src/macroParsers")
+var Context = require("../src/Context")
 var testUtils = require("./testUtils")
 
+const defaultContext = Context().subLocation({offset: 0, line: 1, column: 1})
+
 // the following are set like this so i can block comment out the tests below
-var innerBlockTests = {args: ['someName', P.str("param")], state: {}, inputs:{}}
+var innerBlockTests = {args: ['someName', P.str("param")], state: {context: defaultContext}, inputs:{}}
 var macroBlockTests=[]
 var rawFnInnerBlockTests=[], rawFnInnerTests = [], indentedBlockTests = []
 var retStatementTests=[]
@@ -84,13 +85,13 @@ macroBlockTests = [
 
 
 rawFnInnerBlockTests = [
-    {args:['name'], state: {indent: 0}, inputs: [
+    {args:['name'], state: {indent: 0, context: defaultContext}, inputs: [
         "name: whatever"
     ]}
 ]
 
 
-rawFnInnerTests = {inputs: {}, state: {indent: 0}}
+rawFnInnerTests = {inputs: {}, state: {indent: 0, context: defaultContext}}
 rawFnInnerTests.inputs[
     "match: whatever\n"+ // on the first line of the macro
     " run: whatever"
@@ -139,13 +140,15 @@ indentedBlockTests = [
 
 
 retStatementTests = [
-    {inputs: [
+    { inputs: [
         " true"
-    ]}
+      ],
+      state: {context: defaultContext}
+    }
 ]
 
 
-macroInnerTests = {inputs: {}, state: {indent: 0}}
+macroInnerTests = {inputs: {}, state: {indent: 0, context: defaultContext}}
 macroInnerTests.inputs[
     "\n match a b: whatever"+
     "\n run a: whatever"

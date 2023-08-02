@@ -1,5 +1,6 @@
 
 var fs = require("fs")
+var path = require("path")
 var parser = require('./parser')
 var evaluate = require('./evaluate')
 var coreLevel1 = require('./coreLevel1b')
@@ -17,15 +18,8 @@ module.exports = function(sourceString, filepath, args) {
         return moduleContext.get('this')
     } catch(e) {
         if (e instanceof ExecutionError) {
-            if (e.info && e.info.start) {
-                var startLine = ` in ${e.info.filename} on line ${e.info.start.line}`
-            }
-
-            var errorSource = fs.readFileSync(__dirname+"/"+e.info.filename).toString()
-            console.log(`${e.message}${startLine}:`)
-            console.log(getLine(errorSource, e.info.start.line))
-            console.log(multchar(' ', e.info.start.column - 1)+'^')
-            if (e.causeStack) console.log(e.causeStack)
+            const basePath = path.dirname(filepath)
+            console.log(e.toString(basePath))
         } else {
             throw e
         }
@@ -49,17 +43,7 @@ function evaluateModuleWithParentContext(sourceString, parentContext) {
     return moduleContext
 }
 
-function multchar(char, num) {
-    const result = []
-    for (var n=0; n<num; n++) {
-        result.push(char)
-    }
-    return result.join('')
-}
 
-function getLine(source, line) {
-    return source.split('\n')[line-1]
-}
 
 function createStartLocation(filepath) {
     return {filepath, line: 1, column: 1, offset: 0}

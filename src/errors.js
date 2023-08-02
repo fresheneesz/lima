@@ -1,5 +1,6 @@
-const proto = require('proto');
-const utils = require('./utils');
+var fs = require("fs")
+const proto = require('proto')
+const utils = require('./utils')
 
 exports.ExecutionError = proto(Error, function(superclass) {
 	this.name = 'ExecutionError'
@@ -10,21 +11,40 @@ exports.ExecutionError = proto(Error, function(superclass) {
 		} else {
 			superclass.call(this, error)
 		}
-		this.info = getLineInfo(context, utils.getNode(stateNode))
+		this.info = utils.getLineInfo(context, utils.getNode(stateNode))
+	}
+	this.toString = function(basePath) {
+		if (this.info && this.info.start) {
+			let filepath = this.info.filepath
+			if (basePath) {
+				const index = filepath.indexOf(basePath)
+				if (index !== -1) {
+					filepath = filepath.slice(basePath.length+1)
+				}
+			}
+			var startLine = ` in ${filepath} on line ${this.info.start.line}`
+		}
+
+		var errorSource = fs.readFileSync(this.info.filepath).toString()
+		let errorTrace =
+				`${this.message}${startLine}:`+'\n'+
+				getLine(errorSource, this.info.start.line)+'\n'+
+				multchar(' ', this.info.start.column - 1)+'^'
+		if (this.causeStack) errorTrace += this.causeStack
+		return errorTrace
 	}
 })
 
-function getLineInfo(context, node) {
-	if(utils.isNodeType(node, 'superExpression')) {
-		return getLineInfo(context, node.parts[0])
-	} else {
-		var startColumn = context?.startLocation?.column || 0
-		// Note that the end is not correct, since it would need the equivalent of a startOffset. TODO
-		var startLocation = {
-			column: context.startLocation.column - 1 + node.start.column,
-			line: context.startLocation.line - 1 + node.start.line,
-			offset: context.startLocation.offset + node.start.offset,
-		}
-		return {filename: context.startLocation.filename, start: startLocation, end: node.end}
+
+
+function multchar(char, num) {
+	const result = []
+	for (var n=0; n<num; n++) {
+		result.push(char)
 	}
+	return result.join('')
+}
+
+function getLine(source, line) {
+	return source.split('\n')[line-1]
 }

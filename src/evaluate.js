@@ -1,6 +1,7 @@
 var utils = require("./utils")
 var basicUtils = require("./basicUtils")
 var coreLevel1 = require("./coreLevel1b")
+var P = require("./limaParsimmon")
 var ExecutionError = require("./errors").ExecutionError
 
 // CONVENTIONS:
@@ -249,7 +250,7 @@ function resolveBinaryOperations(context, curState, options) {
             throw new ExecutionError("Couldn't execute all binary operators in this expression : (", operand1, context)
 
         function undeclaredError(operand) {
-            throw new ExecutionError("Variable '"+utils.getNodeValue(operand).name+"' not declared.", operand, context)
+            throw new ExecutionError("Variable '"+utils.getNodeValue(operand).name+"' not declared", operand, context)
         }
     }
 }
@@ -371,7 +372,8 @@ function resolveBinaryOperandFrom(context, curState, index, options) {
 }
     function resolveNonmacroRawExpression(context, curState, n) {
         var parser = require("./parser") // here to resolve a circular dependency
-        var state = {indent:0, context:context, consumeFirstlineMacros: context.consumeFirstlineMacros}
+        var subcontext = context.subLocation(P.contextualizeLocation(utils.getNode(curState[n]).start, context))
+        var state = {indent:0, context:subcontext, consumeFirstlineMacros: subcontext.consumeFirstlineMacros}
         var continuation = parser.withState(state).nonMacroExpressionContinuation().tryParse(curState[n].expression)
         curState.splice.apply(curState, [n, 1].concat(continuation)) // todo: deal with rawExprssion metaData
     }
@@ -452,13 +454,12 @@ function resolveBinaryOperandFrom(context, curState, index, options) {
         var rawExpression = curState[rawExpressionIndex]
         var macroInput = rawExpression.expression // For any item that is a macro, its expected that a rawExpression follows it.
 
-        var startLocation = rawExpression.start
-        var macroContext = context.subLocation(startLocation)
-        var consumeResult = utils.consumeMacro(macroContext, macroObject, macroInput, startLocation)
+        var macroContext = context.subLocation(P.contextualizeLocation(rawExpression.start, context))
+        var consumeResult = utils.consumeMacro(macroContext, macroObject, macroInput)
         var consumedCharsLimaValue = utils.getProperty(macroContext, consumeResult, coreLevel1.StringObj('consume'))
         var consumedChars = consumedCharsLimaValue.meta.primitive.numerator
         if(expectedConsumption !== undefined && consumedChars !== expectedConsumption) {
-            throw new ExecutionError("Macro "+macroObject.name+" had an inconsistent number of consumed characters between parsing ("+expectedConsumption+" characters) and dynamic execution ("+consumedChars+" characters). Make sure that any macro that needs to be known at parse time (eg a macro within the first line of another macro like `fn` or `if`) is known before that outer macro executes (at very least, some macro of the same name that consumes the exact same number of characters must be in scope before that outer macro executes).", macroObject, context)
+            throw new ExecutionError("Macro `"+utils.getNodeValue(macroObject).name+"` had an inconsistent number of consumed characters between parsing ("+expectedConsumption+" characters) and dynamic execution ("+consumedChars+" characters). Make sure that any macro that needs to be known at parse time (eg a macro within the first line of another macro like `fn` or `if`) is known before that outer macro executes (at very least, some macro of the same name that consumes the exact same number of characters must be in scope before that outer macro executes).", macroObject, context)
         }
 
         if(utils.hasProperty(macroContext, consumeResult, coreLevel1.StringObj('arg'))) {
