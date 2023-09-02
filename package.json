@@ -1,6 +1,6 @@
 {
  "name": "limaCompiler",
- "version": "0.0.21",
+ "version": "0.0.22",
  "main": "buildAndPrint.js",
  "description": "",
  "keywords": [],
@@ -9,7 +9,8 @@
   "colors": "^1.3.2",
   "deep-equal": "^1.0.1",
   "parsimmon": "https://github.com/fresheneesz/parsimmon/archive/1522c3b9cac2ced1fa894001f04c0d36f4c13dc0.tar.gz",
-  "proto": "*"
+  "proto": "*",
+  "parsinator.js": "1.5.5"
  },
  "devDependencies": {},
  "repository": {

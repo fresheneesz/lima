@@ -1,7 +1,8 @@
 
 var coreLevel1 = require("./coreLevel1b")
-var P = require("./limaParsimmon")
+var {contextualizeLocation} = require("./parser/utils")
 var ExecutionError = require("./errors").ExecutionError
+var basicUtils = require("./basicUtils")
 
 // Utils for interacting with lima objects.
 
@@ -10,9 +11,7 @@ var ExecutionError = require("./errors").ExecutionError
     // callingContext - A Context object.
     // operator - A string representing the operator.
     // operands - Will have one element for unary operations, and two for binary operations.
-        // Each element is a valueNode lima object, with the following exception:
-            // For non-macro bracket operators, the first operand should be the main object, and the second operand should be
-                // an `arguments` object of the same type `getOperatorDispatch` takes.
+    //            Each element is a valueNode lima object.
     // operatorType - Either 'prefix', 'postfix', or undefined (for binary, bracket, and else operators)
 var callOperator = exports.callOperator = function(callingContext, operator, inputOperands, operatorType) {
     try {
@@ -22,30 +21,24 @@ var callOperator = exports.callOperator = function(callingContext, operator, inp
         else if (operatorType === 'postfix') operatorsKey = 'postOperators'
 
         // Unbox if necessary.
-        function unboxOperand(operand, unboxedOperands) {
-            if (operand === undefined) return
-
-            var operandMeta = getNodeValue(operand).meta
-            if (operandMeta.primitive && operandMeta.primitive.boxed) {
-                unboxedOperands.push(valueNode(operandMeta.primitive.boxed, getNode(operand)))
-            } else {
-                unboxedOperands.push(operand)
-            }
-        }
-
-        var unboxedOperands = []
-        unboxOperand(inputOperands[0], unboxedOperands)
-        unboxOperand(inputOperands[1], unboxedOperands)
-        let operands = unboxedOperands
+        let operands = [unboxOperand(inputOperands[0]), unboxOperand(inputOperands[1])]
 
         var operatorInfo1 = getNodeValue(operands[0]).meta[operatorsKey][operator]
         // If operator is already else, avoid an infinite loop.
         if (operatorInfo1 === undefined && operator !== 'else') {
-            operands = [operands[0], internalValueNode(coreLevel1.jsArrayToLimaObj([operator, operands.slice(1)]))]
-            var proxyObject = callOperator(callingContext, 'else', operands)
-            if (proxyObject !== coreLevel1.nil) {
-                operands = [proxyObject].concat(operands.slice(1))
-                operatorInfo1 = proxyObject.meta[operatorsKey][operator]
+            operands = [operands[0], valueNode(coreLevel1.jsArrayToLimaObj([operator, operands.slice(1)]), getNode(inputOperands[0]))]
+            try {
+              var proxyObject = callOperator(callingContext, 'else', operands)
+              if (proxyObject !== coreLevel1.nil) {
+                  operands = [proxyObject].concat(operands.slice(1))
+                  operatorInfo1 = proxyObject.meta[operatorsKey][operator]
+              }
+            } catch(e) {
+              if (e.cause?.message === `Can't execute 'else' operation`) {
+                const newError = new ExecutionError(`Can't execute '${operator}' operation`, operands[0], callingContext)
+                newError.cause = e
+                throw newError
+              } else throw e
             }
         }
 
@@ -61,7 +54,7 @@ var callOperator = exports.callOperator = function(callingContext, operator, inp
             if (operatorInfo1 === undefined)
                 throw new ExecutionError("Object " + getName(operands[0]) + " doesn't have a '" + operator + "' operator", operands[0], callingContext)
 
-            var name = coreLevel1.StringObj(getPrimitiveStr(callingContext, getNodeValue(operands[1])))
+            var name = coreLevel1.StringObj(getNodeValue(operands[1]).name)
             var args = coreLevel1.LimaObject([name])
             var match = operatorInfo1.dispatch.match
             var run = operatorInfo1.dispatch.run
@@ -102,7 +95,7 @@ var callOperator = exports.callOperator = function(callingContext, operator, inp
             } else { // normal binary operator
                 var dispatchInfo = getBinaryDispatch(callingContext, getNodeValue(operands[0]), operator, getNodeValue(operands[1]))
                 if (!dispatchInfo) {
-                    throw new Error(`Can't execute '${operator}' operation`)
+                    throw new ExecutionError(`Can't execute '${operator}' operation`, operands[0], callingContext)
                 }
 
                 if (dispatchInfo.operatorInfo === getNodeValue(operands[0]).meta.operators[operator]) {
@@ -128,9 +121,9 @@ var callOperator = exports.callOperator = function(callingContext, operator, inp
 
         return applyOperator(run, lvalueContext, runArgs)
     } catch(e) {
-        // Need to respect return value throws (See createRetMacro for example).
-        if (e.returnValue) throw e
-        throw ensureExecutionError(e, getNode(inputOperands[0]), callingContext)
+        // Need to respect return value and continutation throws (See createRetMacro for example).
+        if (e.returnValue || e.contin) throw e
+        throw ensureExecutionError(e, inputOperands[0], callingContext)
     }
 }
     function applyOperator(run, context, args) {
@@ -142,6 +135,18 @@ var callOperator = exports.callOperator = function(callingContext, operator, inp
         }
     }
 
+
+const unboxOperand = exports.unboxOperand = function(operand) {
+    if (operand === undefined) return undefined
+
+    var operandMeta = getNodeValue(operand).meta
+    if (operandMeta.primitive && operandMeta.primitive.boxed) {
+        return valueNode(operandMeta.primitive.boxed, getNode(operand))
+    } else {
+        return operand
+    }
+}
+    
 function ensureExecutionError(e, node, context) {
     if (!(e instanceof ExecutionError) || e.info.start === 'internal') {
         return new ExecutionError(e, node, context)
@@ -239,7 +244,7 @@ var getBinaryDispatch = exports.getBinaryDispatch = function(context, operand1, 
             }
             if(!hasProperty(context, matchResult, coreLevel1.StringObj('arg'))) {
                 throw new Error("No `arg` property found in non-nil return value from `match` in the '"+operator
-                                +"' operator of "+context.get('this').name+""
+                                +"' operator of `"+context.get('this').name+"`"
                 )
             }
 
@@ -324,7 +329,7 @@ var getBinaryDispatch = exports.getBinaryDispatch = function(context, operand1, 
 
 // Evaluates the consumption of a lima macro object
 // rawInput - a javascript string containing the raw input to the macro
-// startLocation - A javascript object like {line, column, offset}
+// obj - The macro object value.
 // returns a lima object with the following properties:
     // consumed - a lima integer representing the number of characters consumed
     // run - a lima function to run when the macro is called
@@ -332,6 +337,7 @@ var consumeMacro = exports.consumeMacro = function(context, obj, rawInput) {
     var rawInputLima = coreLevel1.StringObj(rawInput)
     var startColumnLima = coreLevel1.NumberObj(context.startLocation.column)
     try {
+        // rawInput and startColumn
         var matchArgs = coreLevel1.LimaObject([rawInputLima, startColumnLima])
         var matchResult = callOperator(context, '[', [
             valueNode(getNodeValue(obj).meta.macro.match, getNode(obj)), internalValueNode(matchArgs)
@@ -365,7 +371,7 @@ var setProperty = exports.setProperty = function(context, key, value) {
 var getProperty = exports.getProperty = function(context, object, key) {
     var property = getPropertyInternal(context, object, key)
     if(property === undefined) {
-        throw new Error("Object `"+getName(object)+"` doesn't have a property for key "+getName(key))
+        throw new Error("Object `"+getName(object)+"` doesn't have a property for key "+getValueString(key))
     }
     return property
 }
@@ -431,8 +437,11 @@ var getValueString = exports.getValueString = function(value, isKey) {
             })
         }
         for(var key in value.meta.privileged) {
+          // This guard is to block inaccessible scopes that would otherwise error on being accessed.
+          if (value.meta.scopes[0].has(key)) {
             var privilegedProperty = value.meta.scopes[0].get(key)
             propertyStrings.push(key+"="+getValueString(privilegedProperty))
+          }
         }
 
         return '{'+propertyStrings.join(' ')+'}'
@@ -459,7 +468,9 @@ var limaEquals = exports.limaEquals = function(context, a,b) {
 // gets a privileged member as if it was accessed like this.member
 // thisObj and memberName must both be lima objects
 var getThisPrivilegedMember = exports.getThisPrivilegedMember = function(callingContext, thisObj, memberName) {
-    return callOperator(callingContext, '.', [internalValueNode(thisObj), internalValueNode(memberName)])
+    var memberNameLima = basicUtils.copyValue(coreLevel1.nil)
+    memberNameLima.name = memberName
+    return callOperator(callingContext, '.', [internalValueNode(thisObj), internalValueNode(memberNameLima)])
 }
 
 // gets the primitive hashcode for a lima object
@@ -473,7 +484,7 @@ var getHashCode = exports.getHashCode = function(context, obj) {
             }
         }
 
-        var hashcodeFunction = getThisPrivilegedMember(context, obj, coreLevel1.StringObj('hashcode'))
+        var hashcodeFunction = getThisPrivilegedMember(context, obj, 'hashcode')
         obj = callOperator(context, '[', [internalValueNode(hashcodeFunction)])
     }
 
@@ -494,32 +505,36 @@ var getJsStringKeyHash = exports.getJsStringKeyHash = function(string) {
 
 // gets the primitive string representation of an object, via the 'str' member if its not a primitive
 var getPrimitiveStr = exports.getPrimitiveStr = function(context, obj) {
-    while(true) {
-        if(obj.meta.primitive !== undefined && 'string' in obj.meta.primitive) {
-            if(obj.meta.primitive.string === undefined) throw new Error("undefined primitive string : (")
-            return obj.meta.primitive.string
-        }
-
-        var hashcodeFunction = getThisPrivilegedMember(context, obj, coreLevel1.StringObj('str'))
-        obj = callOperator(context, '[', [internalValueNode(hashcodeFunction)])
+  while(true) {
+    if(obj.meta.primitive !== undefined && 'string' in obj.meta.primitive) {
+      if(obj.meta.primitive.string === undefined) throw new Error("undefined primitive string : (")
+      return obj.meta.primitive.string
     }
+
+    var hashcodeFunction = getThisPrivilegedMember(context, obj, 'str')
+    obj = callOperator(context, '[', [internalValueNode(hashcodeFunction)])
+  }
 }
 
 // returns true of the obj's primitive representation equals the passed in integer
 function primitiveEqualsInteger(obj, integer) {
-    return obj.meta.primitive && obj.meta.primitive.numerator === integer && obj.meta.primitive.denominator === 1
+  return obj.meta.primitive?.numerator === integer && obj.meta.primitive.denominator === 1
 }
 
 var isNil = exports.isNil = function(x) {
-    return x.meta.primitive !== undefined && x.meta.primitive.nil === true
+  return x.meta.primitive?.nil === true
+}
+
+var isVoid = exports.isVoid = function(x) {
+  return x.meta.primitive?.void === true
 }
 
 exports.isMacro = function(x) {
-    return getNodeValue(x).meta.macro !== undefined
+  return getNodeValue(x).meta.macro !== undefined
 }
 
 exports.hasProperties = function(obj) {
-    return Object.keys(obj.meta.properties).length > obj.meta.elements
+  return Object.keys(obj.meta.properties).length > obj.meta.elements
 }
 
 
@@ -595,7 +610,7 @@ var isNodeType = exports.isNodeType = function isNodeType(x, type) { // returns 
     return isNode(x) && x.type === type
 }
 var isNode = exports.isNode = function(x) { // returns true if the expression item is an AST node
-    return x.type in {superExpression:1, rawExpression:1, operator:1,number:1,string:1,variable:1,object:1}
+    return x.type in {expression:1, rawSuperExpression:1, operator:1,number:1,string:1,variable:1,object:1}
 }
 
 // Returns a wrapped lima value that contains its ast node.
@@ -625,15 +640,21 @@ var getNode = exports.getNode = function(node) {
 }
 
 var getLineInfo = exports.getLineInfo = function(context, node) {
-    if(isNodeType(node, 'superExpression')) {
-        return getLineInfo(context, node.parts[0])
-    } else {
-        return {
-            filepath: context.startLocation.filepath, 
-            start: P.contextualizeLocation(node.start, context), 
-            end: P.contextualizeLocation(node.end, context)
-        }
+  if(isNodeType(node, 'superExpression')) {
+    return getLineInfo(context, node.parts[0])
+  } else if (node.start === 'internal') {
+    return {
+        filepath: context.startLocation?.filepath, 
+        start: 'internal', 
+        end: 'internal'
     }
+  } else {
+    return {
+        filepath: context.startLocation.filepath, 
+        start: contextualizeLocation(node.start, context), 
+        end: contextualizeLocation(node.end, context)
+    }
+  }
 }
 
 

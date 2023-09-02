@@ -18,7 +18,6 @@ var = coreLevel1['var']~
 ;[ requires a subset of lima to run:
     * nil with:
         * operators ~> = ~ ??
-        *
     * object literals with:
         * operator overloading constructs
         * mix
@@ -30,13 +29,13 @@ var = coreLevel1['var']~
     * meta
 ;]
 
+while = macro charsBefore charsInside:
+    ; ...
+
 var private = rawMacro chars:
     ; ...
 
 var access = rawMacro chars:
-    ; ...
-
-var while = macro charsBefore charsInside:
     ; ...
 
 private:

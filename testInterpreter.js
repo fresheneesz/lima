@@ -31,25 +31,26 @@ for(var name in normalizedTests) {
         }
     } catch(e) {
         if(test.shouldFail) {
-            if(test.shouldFail === true || e.message.indexOf(test.shouldFail) !== -1) {
-                console.log(colors.green("Correctly failed!"))
-            } else {
-                failures++
-                console.log(colors.red(
-                    "Didn't correctly fail for:\n"+test.content+'\n'+
-                    "Expected an exception containing: '"+test.shouldFail+"'\nbut got the exception:"
-                ))
-            }
-        } else {
+          if(test.shouldFail === true || e.message.includes(test.shouldFail) || e.cause?.message && e.cause?.message.includes(test.shouldFail)) {
+            console.log(colors.green("Correctly failed!"))
+          } else {
             failures++
-            console.log(colors.red("Exception for:"))
-            console.log(colors.red(test.content))
-            
-            let errorToPrint = e.stack
-            if (e instanceof ExecutionError) {
-                errorToPrint = e.toString()
-            }
-            console.log(colors.red(errorToPrint))
+            console.log(colors.red(
+              "Didn't correctly fail for:\n"+test.content+'\n'+
+              "Expected an exception containing: '"+test.shouldFail+"'\nbut got the exception:"+
+              e.toString()
+            ))
+          }
+        } else {
+          failures++
+          console.log(colors.red("Exception for:"))
+          console.log(colors.red(test.content))
+          
+          let errorToPrint = e.stack
+          if (e instanceof ExecutionError) {
+            errorToPrint = e.toString()
+          }
+          console.log(colors.red(errorToPrint))
         }
     }
 

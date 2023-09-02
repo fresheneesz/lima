@@ -19,7 +19,14 @@ var overwriteValue = exports.overwriteValue = function(destinationObject, source
     var source = sourceObject.meta
 
     //destination.interfaces = value.interfaces
-    destination.primitive = source.primitive
+    if (source.primitive instanceof Object && Object.keys(source.primitive).length > 0) {
+      destination.primitive = {}
+      for(var name in source.primitive) {
+          destination.primitive[name] = source.primitive[name] 
+      }
+    } else {
+      destination.primitive = source.primitive
+    }
     destination.elements = source.elements
     destination.macro = source.macro
     destination.destructors = source.destructors.slice(0)

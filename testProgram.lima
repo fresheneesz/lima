@@ -1,7 +1,10 @@
+if 543 == 5:
+  wout['Hello'] 
+ else:
+  wout['moos']
 
+;[
 
-
-;;[
 y = rawFn
  match: ret {arg: nil}
  run:
@@ -23,5 +26,14 @@ if x[] == 5:
 
 var z = 1
 wout[z]
+
+;[ Not possible yet
+a = {
+  hello = macro
+   match: ret {consume:3 arg:nil}
+   run: ret 5
+}
+wout[a.hello   ]
+;]
 
 ;]

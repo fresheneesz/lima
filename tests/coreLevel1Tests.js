@@ -14,9 +14,9 @@ var tests = exports.tests = {
     
     //*
     emptySource:                    "",
-    hello:                          "wout['hello world']\r\n",
-    printInt:                       "wout[3]\r\n",
-    printReal:                      "wout[3.3]\r\n",
+    hello:                          "wout['hello world']\n",
+    printInt:                       "wout[3]\n",
+    printReal:                      "wout[3.3]\n",
     twoStatements:                  "wout['hello world']\n" +
                                     "wout[3]",
     threeStatements:                "wout[3]\n" +     // This was failing for some unknown reason.
@@ -194,37 +194,37 @@ var tests = exports.tests = {
     tripleSingleQuoteContainingTripleQuotes:
         {content:"#'''a'''", check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.meta.primitive.string === "'''a"
+            return element0.meta.primitive.string === "'a"
         }
     },
     tripleSingleQuoteContainingTripleQuotes2:
         {content:"'''a'''#", check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.meta.primitive.string === "a'''"
+            return element0.meta.primitive.string === "a'"
         }
     },
     tripleDoubleQuoteContainingTripleQuotes:
         {content:'#"""a"""', check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.meta.primitive.string === '"""a'
+            return element0.meta.primitive.string === '"a'
         }
     },
     tripleDoubleQuoteContainingTripleQuotes2:
         {content:'"""a"""#', check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.meta.primitive.string === 'a"""'
+            return element0.meta.primitive.string === 'a"'
         }
     },
     tripleGraveQuoteContainingTripleQuotes:
         {content:'#```a```', check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.meta.primitive.string === '```a'
+            return element0.meta.primitive.string === '`a'
         }
     },
     tripleGraveQuoteContainingTripleQuotes2:
         {content:'```a```#', check: function(module) {
             var element0 = getFirstProperty(module).value
-            return element0.meta.primitive.string === 'a```'
+            return element0.meta.primitive.string === 'a`'
         }
     },
 
@@ -246,74 +246,6 @@ var tests = exports.tests = {
             return element0.meta.primitive.string === "'''a'''"
         }
     },
-
-            // todo
-            // String # pseudo-operator concatenation
-
-//    singleQuoteContainingSingleQuotesConcatenation:
-//        {content:"'a'#'b'", check: function(module) {
-//            var element0 = getFirstProperty(module).value
-//            return element0.meta.primitive.string === "a'b"
-//        }
-//    },
-//    doubleQuoteContainingDoubleQuotesConcatenation:
-//        {content:'"a"#"b"', check: function(module) {
-//            var element0 = getFirstProperty(module).value
-//            return element0.meta.primitive.string === 'a"b'
-//        }
-//    },
-//    graveQuoteContainingGraveQuotesConcatenation:
-//        {content:'`a`#`b`', check: function(module) {
-//            var element0 = getFirstProperty(module).value
-//            return element0.meta.primitive.string === 'a`b'
-//        }
-//    },
-//    singleTripleQuoteContainingSingleTripleQuotesConcatenation:
-//        {content:"'''a'''#'''b'''", check: function(module) {
-//            var element0 = getFirstProperty(module).value
-//            return element0.meta.primitive.string === "a'''b"
-//        }
-//    },
-//    doubleQuoteContainingDoubleQuotesConcatenation:
-//        {content:'"""a"""#"""b"""', check: function(module) {
-//            var element0 = getFirstProperty(module).value
-//            return element0.meta.primitive.string === 'a"""b'
-//        }
-//    },
-//    graveTripleQuoteContainingGraveTripleQuotesConcatenation:
-//        {content:'```a```#```b```', check: function(module) {
-//            var element0 = getFirstProperty(module).value
-//            return element0.meta.primitive.string === 'a```b'
-//        }
-//    },
-//
-//    singleQuoteContainingMultipleSingleQuotesConcatenation:
-//        {content:"'a'###'b'", check: function(module) {
-//            var element0 = getFirstProperty(module).value
-//            return element0.meta.primitive.string === "a'''b"
-//        }
-//    },
-//    singleQuoteContainingMultipleSingleQuotesConcatenation:
-//        {content:"#'a'###'b'#'c'#", check: function(module) {
-//            var element0 = getFirstProperty(module).value
-//            return element0.meta.primitive.string === "'a'''b'c'"
-//        }
-//    },
-
-            // todo
-        // # pseudo-operator concatenation errors
-
-//    quoteConcatenationError1: {content:"'a'#\"b\"", shouldFail: true},
-//    quoteConcatenationError2: {content:"\"a\"#'b'", shouldFail: true},
-//    quoteConcatenationError3: {content:"'a'#`b`", shouldFail: true},
-//    quoteConcatenationError4: {content:"`a`#\"b\"", shouldFail: true},
-//    quoteConcatenationError5: {content:"'''a'''#\"b\"", shouldFail: true},
-//    quoteConcatenationError6: {content:"'''a'''#'b'", shouldFail: true},
-//    quoteConcatenationError7: {content:"'''a'''#`b`", shouldFail: true},
-//    quoteConcatenationError8: {content:'\'a\'#"""b"""', shouldFail: true},
-//    quoteConcatenationError9: {content:'\'a\'#```b```', shouldFail: true},
-//
-//    quoteConcatenationError10: {content:"'a'##\"b\"", shouldFail: true},
 
         // triple quotes with extra non-triple quotes
 
@@ -530,12 +462,6 @@ var tests = exports.tests = {
         return  isSpecificInt(b, 1)
                 && a2.meta.primitive.string === 'b'
     }},
-    nestedObjectsWithWeirdParens: {content:'{a:{(b:"c")}}', check: function(module) {
-        var object = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
-        var a = getPropertyOld({this:object}, coreLevel1.StringObj("a"))
-        var b = getPropertyOld({this:a}, coreLevel1.StringObj("b"))
-        return b.meta.primitive.string === 'c'
-    }},
     objectWithAllTheAs: {content:'a=5 {a:a}', check: function(module) {
         var object = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
         var a = getPropertyOld({this:object}, coreLevel1.StringObj("a"))
@@ -657,19 +583,7 @@ var tests = exports.tests = {
             return isSpecificInt(element0, 6)
         }
     },
-
-        // should fail:
-    basicRawFunctionValueFail1: {
-        shouldFail:true,
-        content:'a = rawFn\n'+
-                ' match: \n' +
-                '  ret {arg:true}\n'+
-                ' run:   \n' +
-                ' ret 5\n'+
-                'a[]',
-    },
-    basicRawFunctionValueFail2: {     // From convention A.
-        shouldFail:true,
+    basicRawFunctionValue6: {     // From convention A.
         content:'a = rawFn \n' +
                 ' match: \n' +
                 '  ret {arg:true}\n'+
@@ -680,6 +594,40 @@ var tests = exports.tests = {
             var element0 = getFirstProperty(module).value
             return isSpecificInt(element0, 5)
         }
+    },
+    basicRawFunctionValue7: {     // From convention A.
+        content:'a = rawFn \n' +
+                ' match: \n' +
+                '   ret {arg:true}\n'+
+                '  run:\n' +
+                '    ret 5\n'+
+                'a[]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 5)
+        }
+    },
+    rawFunctionWithFirstlineParamAndParam4Indented: {    // From convention A.
+        content:'a = rawFn match: \n' +
+                '     ret {arg:true}\n'+
+                '    run:\n' +
+                '     ret 5\n'+
+                'a[]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 5)
+        }
+    },
+
+        // should fail:
+    basicRawFunctionValueFail1: {
+        shouldFail:true,
+        content:'a = rawFn\n'+
+                ' match: \n' +
+                '  ret {arg:true}\n'+
+                ' run:   \n' +
+                ' ret 5\n'+
+                'a[]',
     },
     basicRawFunctionValueFail3: {     // From convention A.
         shouldFail:true,
@@ -694,34 +642,9 @@ var tests = exports.tests = {
             return isSpecificInt(element0, 5)
         }
     },
-    basicRawFunctionValueFail4: {     // From convention A.
+    basicRawFunctionValueFail5: {    
         shouldFail:true,
-        content:'a = rawFn \n' +
-                ' match: \n' +
-                '   ret {arg:true}\n'+
-                '  run:\n' +
-                '    ret 5\n'+
-                'a[]',
-        check: function(module) {
-            var element0 = getFirstProperty(module).value
-            return isSpecificInt(element0, 5)
-        }
-    },
-    rawFunctionWithFirstlineParamAndParam4Indented: {    // From convention A.
-        shouldFail:true,
-        content:'a = rawFn match: \n' +
-                '     ret {arg:true}\n'+
-                '    run:\n' +
-                '     ret 5\n'+
-                'a[]',
-        check: function(module) {
-            var element0 = getFirstProperty(module).value
-            return isSpecificInt(element0, 5)
-        }
-    },
-    basicRawFunctionValueFail5: {     // From convention C.
-        shouldFail:true,
-        content:'a = rawFn match: ret true  run:   ret 5\n'+
+        content:'a = rawFn match: ret {consume:5 arg:true}  run:   ret 5\n'+
                 'a[]'
     },
 
@@ -763,13 +686,27 @@ var tests = exports.tests = {
             return isSpecificInt(element0, 5)
         }
     },
-    // doubly nested macro on first-line
+    // nested macro
     rawFunctionValueWithNestedMacros: {
-        content:'nilMacro5 = macro match: ret {consume:5 arg:nil}\n' +
+        content:'m3 = macro match: ret {consume:3 arg:nil}\n' +
+                ' run: ret nil\n' +
+                'a = rawFn[match: ret {weak:true arg: m3 23 }\n'+
+                ' run:   ret 5\n' +
+                ']\n'+
+                'a[]',
+        check: function(module) {
+            var element0 = getFirstProperty(module).value
+            return isSpecificInt(element0, 5)
+        }
+    },
+    // doubly nested macro on first-line
+    rawFunctionValueWithNestedMacros2: {
+        content:'nilMacro6 = macro match: ret {consume:6 arg:nil}\n' +
                 ' run: ret nil\n' +
                 'm3 = macro match: ret {consume:3 arg:nil}\n' +
                 ' run: ret nil\n' +
-                'a = rawFn[match: ret {weak:true arg: nilMacro5 m3 2}}\n'+
+                // The extra brace is consumed by the m3 macro
+                'a = rawFn[match: ret {weak:true arg: nilMacro6 m3 2}}\n'+
                 ' run:   ret 5\n' +
                 ']\n'+
                 'a[]',
@@ -779,7 +716,7 @@ var tests = exports.tests = {
         }
     },
     //todo: make this work
-//    rawFunctionValueWithNestedMacros2: {
+//    rawFunctionValueWithNestedMacros3: {
 //        content:'a = rawFn[match: ret {weak:true arg: if[true: {0:if[true:x]}]}\n'+
 //                ' run:   ret 5\n' +
 //                ']\n' +
@@ -847,10 +784,10 @@ var tests = exports.tests = {
 
     basicRawFunctionValue1p: {
         content:'a = rawFn\n'+
-                ' match a: ' +
-                '  ret {arg:a[0]}\n'+
-                ' run a:   \n' +
-                '  ret a+4\n'+
+                ' match b: ' +
+                '  ret {arg:b[0]}\n'+
+                ' run c:   \n' +
+                '  ret c+4\n'+
                 'a[1]',
         check: function(module) {
             var element0 = getFirstProperty(module).value
@@ -860,10 +797,10 @@ var tests = exports.tests = {
     basicRawFunctionValue1p2: {                // From convention A.
         content:'a = rawFn\n'+
                 ' match \n' +
-                '  a: \n' +
-                '  ret {arg:a[0]}\n'+
-                ' run a:   \n' +
-                '  ret a+4\n'+
+                '  b: \n' +
+                '  ret {arg:b[0]}\n'+
+                ' run c:   \n' +
+                '  ret c+4\n'+
                 'a[1]',
         check: function(module) {
             var element0 = getFirstProperty(module).value
@@ -1039,7 +976,7 @@ var tests = exports.tests = {
             var element0 = getFirstProperty(module).value
             var rawInput = getPropertyOld({this:element0}, coreLevel1.StringObj("rawInput"))
             var startColumn = getPropertyOld({this:element0}, coreLevel1.StringObj("startColumn"))
-            return rawInput.meta.primitive.string === " hi]" // <- This has more characters than were consumed because its the rawInput
+            return rawInput.meta.primitive.string === " hi" // <- This has more characters than were consumed because its the rawInput
                    && isSpecificInt(startColumn, 4)          //    from the match block.
         }
     },
@@ -1144,28 +1081,46 @@ var tests = exports.tests = {
             var element0 = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
             return isSpecificInt(element0, 1)
         }
-    },
-    ifConditionalProperty1: {
-        content:'if true: a:1',
+    },  
+    // todo:
+    ifConditionalMember: {
+        content:'if true: a = 9',
         check: function(module) {
-            var element0 = getProperty(module, coreLevel1.StringObj('a'))
-            return isSpecificInt(element0, 1)
+          var member = module.meta.scopes[0].get('a')
+          return module.meta.privileged['a'] === member
+            && isSpecificInt(member, 9)
         }
     },
-    ifElse: {
-        content:'if false: a:1 else: a:2',
+    ifElseConditionalMember: {
+        content:'if false: a=1 else: a=2',
         check: function(module) {
-            var element0 = getPropertyOld({this:module}, coreLevel1.StringObj('a'))
-            return isSpecificInt(element0, 2)
+          var member = module.meta.scopes[0].get('a')
+          return module.meta.privileged['a'] === member
+            && isSpecificInt(member, 2)
         }
     },
+    // ifConditionalProperty1: {
+    //     content:'if true: this["a"] = 1',
+    //     check: function(module) {
+    //         var element0 = getProperty(module, coreLevel1.StringObj('a'))
+    //         return isSpecificInt(element0, 1)
+    //     }
+    // },
+    // ifElse: {
+    //     content:'if false: this.a=1 else: this.a=2',
+    //     check: function(module) {
+    //         var element0 = getPropertyOld({this:module}, coreLevel1.StringObj('a'))
+    //         return isSpecificInt(element0, 2)
+    //     }
+    // },
     ifWithBrackets: {
         content:'if[true:44]',
         check: function(module) {
             var element0 = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
             return isSpecificInt(element0, 44)
         }
-    },ifWithBracketsMultipleConditions: {
+    },
+  ifWithBracketsMultipleConditions: {
         content:'if[\n' +
             ' false:34\n' +
             ' true:44\n' +
@@ -1177,11 +1132,10 @@ var tests = exports.tests = {
     },
 
     basicIfInsideFunction: {
-        shouldFail:true,
-        content:'a = rawFn match a: \n' + // Because this isn't indented from the start of the parameter set.
-                '  ret {arg:a}\n'+
-                ' run a:   \n' +
-                '  if a==true: ret true' +
+        content:'a = rawFn match x: \n' +
+                '  ret {arg:x}\n'+
+                ' run x:   \n' +
+                '  if x[0]==true: ret true\n' +
                 '   else:      ret false\n'+
                 'a[1]',
         check: function(module) {
@@ -1214,8 +1168,8 @@ var tests = exports.tests = {
                 '\n' +
                 'y = f[]',
         check: function(module) {
-            var x = utils.getThisPrivilegedMember(Context.inaccessibleContext, module, coreLevel1.StringObj("x"))
-            var y = utils.getThisPrivilegedMember(Context.inaccessibleContext, module, coreLevel1.StringObj("y"))
+            var x = utils.getThisPrivilegedMember(Context.inaccessibleContext, module, "x")
+            var y = utils.getThisPrivilegedMember(Context.inaccessibleContext, module, "y")
             return isSpecificInt(x, 0) && y.meta.primitive.string === 'hi'
         }
     },
@@ -1230,6 +1184,24 @@ var tests = exports.tests = {
 //            var element0 = getPropertyOld({this:module}, coreLevel1.NumberObj(0))
 //            return isSpecificInt(element0, 1)
 //        }
+    },
+    fnAlreadyDeclaredVariableInParameters: {
+        shouldFail:"Can't redeclare variable",
+        content:'a = rawFn match a: \n' +
+                '  ret {arg:a}\n'+
+                ' run x:   \n' +
+                '  if x[0]==true: ret true\n' +
+                '   else:      ret false\n'+
+                'a[1]'
+    },
+    fnAlreadyDeclaredVariableInParameters2: {
+        shouldFail:"Can't redeclare variable",
+        content:'a = rawFn match x: \n' +
+                '  ret {arg:x}\n'+
+                ' run a:   \n' +
+                '  if a[0]==true: ret true\n' +
+                '   else:      ret false\n'+
+                'a[1]'
     },
     basicIfInsideFunctionUndeclaredVariable: {
         shouldFail:true,
@@ -1246,7 +1218,7 @@ var tests = exports.tests = {
 //        }
     },
     undefinedVariableInIfCondition: {
-        shouldFail:"Undefined variable",
+        shouldFail:"Variable 'x' not declared",
         content:'if x:\n'+
                 '  wout["Hello"]',
 //        check: function(module) {
@@ -1297,8 +1269,8 @@ var tests = exports.tests = {
                 '\n' +
                 'f[]',
         check: function(module) {
-            var element0 = getFirstProperty(module).value
-            return isFalse(element0)
+          var element1 = getProperty(module, coreLevel1.NumberObj(0))
+          return isFalse(element1)
         }
     },
 

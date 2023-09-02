@@ -16,10 +16,8 @@ These are all under the `src/` directory.
 * **evaluate.js** - Contains the logic around evaluating operators on lima objects, and evaluating superExpressions and objects.
 * **utils.js** - Contains utility functions mostly around interacting with lima objects, composing lima objects, and higher-level functions for evaluating lima objects.
 * **basicUtils.js** - Utilities that don't depend on any other module. Currently only contains `copyValue`. Exists to avoid a circular dependency.
-* **parser.js** - Contains the tokenization parser that parses a lima file into AST nodes (described below). During the first pass, usually this will only partially parse the file since the parser won't have scope context to figure out if variables (and other values) are macros or not. Parser functions can also be called with scope context at later points (from evalute.js) in order to further parse `rawExpression`s.
-	* **statefulParsimmon.js** - A hack over [Parsimmon](https://github.com/jneen/parsimmon) that allows using state.
-	* **limaParsimmon.js** - Some additional convenience parsers over *statefulParsimmon.js* and a convenience method.
-* **macroParsers.js** - Contains parsers for core macros, which are defined using the parsers in *parser.js*.
+* **parser/** - Contains several files with parser combinators that parse a lima file into AST nodes (described below). During the first pass, the parser simply splits top level commands up into rawSuperExpression strings. A second pass will parse each rawSuperExpression into individual expressions that can be then evaluated with execution context including scope to figure out if variables (and other values) are macros or not. 
+  * **parser/macros.js** - Contains parsers for core macros, which are defined using the parsers in *parser.js*.
 
 #### Test files
 
@@ -34,10 +32,10 @@ These are all under the `src/` directory.
 * **lima.bat** - Windows batch script that runs the lima program at the path passed in. Eg. `lima yourProgram`
 
 #### Level 1 Interpreter
-1. Parse the source with `parser.js` into an AST
+1. Parse the source into rawSuperExpression nodes.
 2. `evaluate`
 	* Evaluate uses coreLevel1b to construct values that end up in the evaluation result.
-	* Evaluate also uses `parser.js` to parse rawExpressions still in the AST if they're not evaluated by a macro.
+	* Evaluate parses each `rawSuperExpression` into `expression` AST nodes.
 3. Turn the result of that evaluation into an object with `coreLevel1b`.
 
 #### Level 2 Interpreter
@@ -48,25 +46,27 @@ These are all under the `src/` directory.
 
 ##### Value Nodes:
 
-**`{type:"number", numerator:_, denominator:_, postfix:_, start:_, end:_}`** - Represents a number literal. The `postfix` property is optional, but if exists contains a string starting with a letter from a-z
+**`{type:"number", numerator, denominator, postfix, start, end}`** - Represents a number literal. The `postfix` property is optional, but if exists contains a string starting with a letter from a-z
 
-**`{type:"string", string:_, start:_, end:_}`** - Represents a string literal.
+**`{type:"string", string, start, end}`** - Represents a string literal.
 
-**`{type:"variable", name:_, start:_, end:_}`**   Represents a basic variable.
+**`{type:"variable", name, start, end}`**   Represents a basic variable.
 
-**`{type:"object", expressions:_, start:_}`** - Represents an object literal. The `expressions` is a list of superExpression nodes.
+**`{type:"object", members, start}`** - Represents an object literal. The `members` is a list of object-specific nodes of the form **{memberType, key, valueExpression}** where `memberType` can either be `:`, `::`, `=`, or `element`, `key` is an ast node representing the key, and `valueExpression` is an `expression` ast node representing the value.
 
-**`{type:"superExpression", parts:_}`** - Represents a block of code that may contain one or more actual expressions. The `parts` is a list of values nodes, operator nodes, or rawExpressions.
-* **`{type:"rawExpression", startColumn:_, expression:_, start:_, end:_}`** - Represents a block of code that may contain one or more actual expressions. `expression` is the raw expression string. `startColumn` is the 0-indexed column the rawExpression starts at relative to the indent of the expression that contains it. `meta` contains an object with an `index` representing the index in the source code the rawExpression starts at. `index` . *Note: this isn't a value node.*
-* **`{type:"macroConsumption", consume:_, start:_, end:_}`** - Indicates that the previous value is expected to consumes `consume` number of characters (eg because its consumption was evaluated as part of the first line of a block macro). Can also be inserted after values not expected to be a macro (with `consume:0`). This is intended to be used in evaluation to double-check that the macro consumes the expected number of characters when run for real, and facilitate throwing an error if the consumption doesn't match when run.
+**`{type:"expression", parts:_}`** - Represents an expression. The `parts` is a list of values nodes and operator nodes.
+
+**`{type:"rawSuperExpression", startColumn, expression, start, end}`** - Represents a block of code that may contain one or more actual expressions. `expression` is the raw expression string. `startColumn` is the 0-indexed column the rawSuperExpression starts at relative to the indent of the expression that contains it. `meta` contains an object with an `index` representing the index in the source code the rawSuperExpression starts at. `index` . *Note: this isn't a value node.*
+
+**`{type:"macroConsumption", consumedChars, rawSuperExpression, start, end}`** - Represents a macro call that consumes `consumedChars` characters. The rawSuperExpression will contain the exact characters consume. The `consumedChars` number is intended to be used in evaluation to double-check that the macro consumes the expected number of characters when run for real, and facilitate throwing an error if the consumption doesn't match when run.
 
 ##### Operator Nodes:
 
-**`{type:"operator", operator:_, opType:_, start:_, end:_}`** - Represents an operator that might be a binary, prefix, or postfix operator. In addition to normal lima operators, `operator` can contain `}`, `)`, which will be used in cases where a possible macro makes it unclear where an object literal or paren statement ends. `opType` can either be "binary", "prefix", "postfix", or "bbp" (which stands for brace, bracket, or paren).
+**`{type:"operator", operator, opType, start, end}`** - Represents an operator that might be a binary, prefix, or postfix operator. In addition to normal lima operators, `operator` can contain `}`, `)`, which will be used in cases where a possible macro makes it unclear where an object literal or paren statement ends. `opType` can either be "binary", "prefix", "postfix", or "bracket". The 'bracket' operator will additionally have an **expression** property containing the list of expression nodes contained within the brackets.
 
 ##### The `start` and `end` ast properties
 
-`start` represents where the construct starts, and `end` represents where that construct ends. The `start` and `end` properties both have the structure `{ offset: _, line: _, column: _ }`. Note that an `object` ast node only has `start`.
+`start` represents where the construct starts, and `end` represents where that construct ends. The `start` and `end` properties both have the structure `{ index: _, line: _, column: _ }`. Note that an `object` ast node only has `start`.
 
 ## Core Level 1 Roadmap
 
@@ -75,7 +75,7 @@ Core level 1 are all the constructs required for implementing the rest of the li
 #### Step 1: A raw interpreter
 
 1. Parse the source with `parser.js` into an AST
-2. Run each `superExpression` of the module, sequentially. `evalute.js` will further parse remaining rawExpressions as they come up.
+2. Run each `superExpression` of the module, sequentially. `evaluate.js`rawSuperExpression as they come up.
 3. After every top-level statement in the module has run, run the module's entrypoint if there is one.
 
 
@@ -93,7 +93,7 @@ Core level 1 are all the constructs required for implementing the rest of the li
 
 #### Step 4: Compile into LLVM IR, use a standard LLVM backend to create the final output
 
-#### Step 5: Translate optimizers from step 2 into LLVM optimizers
+#### Step 5: Translate optimizers from step 3 into LLVM optimizers
 
 ## Core Level 2 Roadmap
 
@@ -103,9 +103,6 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 
 #### Core Level 1 Todo
 
-* variable declaration with a type
-* Const hoisting - Add a new initial step for each function scope, which looks for any hoistable const expressions to evaluate first.
-* destructuring assignment
 * operators
   * Operator overloading
     * fallback operator (`operator[else]`)
@@ -113,7 +110,6 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * resolveOperatorConflict
   * resolveWeakOperatorConflict
 * nil
-  * `=`  (created, but can't be tested until `var?` exists and is usable)
   * `~>`
 * general operators
   * `~>` (etc)
@@ -125,8 +121,6 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * error
   * number postfixes
   * operators
-    * `+`
-    * `-`
     * `*`
     * `/`
     * `%`
@@ -169,6 +163,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
     * target
   * methods
     * tslice
+* Stack traces
 * functions
     * destructuring assignment in parameters
 	* ==
@@ -186,9 +181,13 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 * macro
   * `startColumn` parameter for nested macros.
   * Validate consumption for nested macros.
+  * Allow macros to be returned from dot operator and bracket operators as long as those operations don't mutate state. 
 * interfaces
   * automatic interface promotion
   * cast
+* variable declaration with a type
+* hoisting - Add a new initial step for each function scope, which looks for any hoistable expressions to evaluate first.
+* destructuring assignment
 * attributes
   * attributes crossing asynchronous boundaries
 * C bindings
@@ -276,6 +275,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
 
 #### Core Level 1 Done:
 
+* basic exception printing (prints the error message, the filename, the line number, and the line itself with the token pointing to it. 
 * variable declarations with var
 * basic token parser
 * Built core structure for operator and macro evaluation
@@ -289,6 +289,7 @@ Core level 2 completes the core of lima left incomplete by core level 1 by imple
   * ??
 * nil
   * ==
+  * `=` 
 * numbers
   * operators
     * `==`

@@ -1,28 +1,28 @@
-;; raw variables
+; raw variables
 
 moose cat
 awef
 
-;; variable declarations
+; variable declarations
 
 var[x]
 var y
 
-;; functions
+; functions
 
 var x = fn: 
   ret 4
 
-;; string custom function operators
+; string custom function operators
 
 "A character: "![5B]
 "Some characters: "![51 A7 3E2 E6]
 "character made from multiple codepoints: "![B4F5FC93]
 
-;; weird custom function whitespace
+; weird custom function whitespace
 
 var main = fn:
     customFunc: 
      something
-;;weird comment - this should be turned into spaces
+;weird comment - this should be turned into spaces
      something else

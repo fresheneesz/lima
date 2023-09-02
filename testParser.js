@@ -2,41 +2,16 @@ var fs = require("fs")
 var util = require("util")
 var deepEqual = require("deep-equal")
 var colors = require("colors/safe")
+var {ser, eof, ok, displayResult} = require("parsinator.js")
 
-var limaParser = require("./src/parser")
-var macroParsers = require("./src/macroParsers")
-var basicUtils = require("./src/basicUtils")
 var parserTests = require("./tests/parserTests")
-var macroParserTests = require("./tests/macroParserTests")
 var testUtils = require("./tests/testUtils")
-
-var tests = {
-
-    indentedWs: parserTests.indentedWsTests,
-    indent: parserTests.indentTests,
-    comment: parserTests.commentTests,
-    validNumerals: parserTests.validNumeralsTests,
-    real: parserTests.realTests,
-    number: parserTests.numberTests,
-    rawString: parserTests.stringTests,
-    operator: parserTests.operatorTests,
-    rawExpression: parserTests.rawExpressionTests,
-    superExpression: parserTests.superExpressionTests,
-    nonMacroExpressionContinuation: parserTests.nonMacroExpressionContinuationTests,
-    objectDefinitionSpace: parserTests.objectDefinitionSpaceTests,
-    object: parserTests.objectTests,
-    module: parserTests.moduleTests,
-    macro: parserTests.macroTests,
-    ...basicUtils.objMap(macroParserTests, function(key, value) {
-        return {key:'macroParsers.'+key, value:value}
-    })
-}
-
+var {debug} = require("./src/parser/debug")
 
 
 var normalizedTests = []
-for(var method in tests) {
-    var test = tests[method]
+for(var method in parserTests) {
+    var test = parserTests[method]
     if(!(test instanceof Array)) {
         test = [test]
     }
@@ -53,6 +28,7 @@ for(var method in tests) {
                         args: subtest.args,
                         state:subtest.state,
                         shouldFail:subtest.shouldFail,
+                        exception:subtest.exception,
                         content: input,
                         expectedResult: testUtils.anything
                     })
@@ -65,6 +41,7 @@ for(var method in tests) {
                         args: subtest.args,
                         state:subtest.state,
                         shouldFail:subtest.shouldFail,
+                        exception:subtest.exception,
                         content: input,
                         expectedResult: expectedResult
                     })
@@ -77,7 +54,7 @@ for(var method in tests) {
                     method: method,
                     args: subtest.args,
                     content:fs.readFileSync(__dirname+'/tests/testModules/'+file+'.test.lima', {encoding: 'utf8'}).toString()
-                        .replace(/\t/g, "    "), // lima doesn't accept tabs
+                        .replace(/\t/g, "    ").replace(/\r/g, ""), // Lima doesn't accept tabs or carriage returns.
                     expectedResult: testUtils.anything
                 })
 
@@ -110,42 +87,79 @@ normalizedTests.forEach(function(testItem) {
             }
 
             if(parser === 'parser') {
-                var parserState = limaParser
-            } else if(parser === 'macroParsers') {
-                var parserState = macroParsers
+                // var parserState = limaParser
+              var parserState = {
+                ...require("./src/parser/whitespace"), 
+                ...require("./src/parser/strings"), 
+                ...require("./src/parser/numbers"),
+                ...require("./src/parser/values"),
+                ...require("./src/parser/expressions"),
+                ...require("./src/parser/macros"),
+              }
             } else throw new Error(parser+" isn't a parser")
+          
+            var parser = parserState[method](...(testItem.args || []))
+            const rawParser = parser
+            parser = ok('').chain(function() {
+              if(testItem.state !== undefined) {
+                for (var key in testItem.state) {
+                  this.set(key, testItem.state[key])
+                }
+              }
+              return ser(rawParser, eof).value(v => v[0])
+            })
 
-            if(testItem.state !== undefined)
-                parserState = parserState.withState(testItem.state)
+            if (debug) {
+              parser = parser.debug()
+            }
+          
+            var result = parser.parse(testItem.content)
 
-            var result = parserState[method].apply(limaParser,testItem.args).tryParse(testItem.content)
-            if(testItem.shouldFail) {
+            if (debug) {
+              console.log(displayResult(result))
+            }
+            
+            // var result = parserState[method].apply(parserState,testItem.args).tryParse(testItem.content)
+            if(testItem.shouldFail || testItem.exception) {
+              if (result.ok) {
                 failures++
                 console.log(colors.red(JSON.stringify(testItem.content)+" incorrectly did not fail! Instead returned:\n"
-                                        +util.inspect(result, {depth: null})
+                                        +util.inspect(result.value, {depth: null})
                 ))
+              } else if(testItem.exception) {
+                console.log(colors.red(JSON.stringify(testItem.content)+" incorrectly did not get an exception! Instead failed with the expectation:\n"
+                                        +util.inspect(result.expected, {depth: null})))
+              } else {
+                console.log(colors.green("Correctly failed!"))
+              }
             } else {
-                if('expectedResult' in testItem && testItem.expectedResult !== testUtils.anything) {
-                    var normalizedExpectedResult = normalizeExpectedResult(testItem.expectedResult, result)
-                    if(deepEqual(result,normalizedExpectedResult, {strict:true})) {
-                        console.log(colors.green('./ - '+util.inspect(result, {depth:null})))
+                if (!result.ok) {
+                  failures++
+                  console.log(colors.red("Unsuccessful parse for: "+JSON.stringify(testItem.content)))
+                  if (!debug) {
+                    console.error(colors.red(displayResult(result)))
+                  }
+                } else if('expectedResult' in testItem && testItem.expectedResult !== testUtils.anything) {
+                    var normalizedExpectedResult = normalizeExpectedResult(testItem.expectedResult, result.value)
+                    if(deepEqual(result.value, normalizedExpectedResult, {strict:true})) {
+                        console.log(colors.green('./ - '+util.inspect(result.value, {depth:null})))
                     } else {
                         failures++
                         console.log(colors.red("X - Got unexpected result for "+JSON.stringify(testItem.content)+"!!!"))
                         console.log(colors.magenta("Expected: "+util.inspect(normalizedExpectedResult, {depth:null})))
                         console.log(colors.red("Got: "))
-                        console.log(colors.red(util.inspect(result, {depth:null})))
+                        console.log(colors.red(util.inspect(result.value, {depth:null})))
                     }
                 } else {
-                    console.log(colors.green(util.inspect(result, {depth: null})))
+                    console.log(colors.green(util.inspect(result.value, {depth: null})))
                 }
             }
         } catch(e) {
-            if(testItem.shouldFail) {
-                if(testItem.shouldFail !== true && e.toString().indexOf(testItem.shouldFail) === -1) {
+            if(testItem.exception) {
+                if(testItem.exception !== true && !e.toString().includes(testItem.exception)) {
                     failures++
                     console.log(colors.red("X - Got unexpected result for "+JSON.stringify(testItem.content)+"!!!"))
-                    console.log(colors.magenta("Expected an error containing: "+util.inspect(testItem.shouldFail, {depth:null})))
+                    console.log(colors.magenta("Expected an error containing: "+util.inspect(testItem.exception, {depth:null})))
                     console.log(colors.red("Instead got: "))
                     console.log(colors.red(e.toString()))
                 } else {

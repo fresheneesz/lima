@@ -1,13 +1,14 @@
 var path = require("path")
 
+var {displayResult, ser, eof} = require("parsinator.js")
 var basicUtils = require("./basicUtils")
 var utils = require("./utils")
-var parser = require("./parser")
-var macroParsers = require("./macroParsers")
+var macros = require("./parser/macros") // Done this way to resolve a circular dependency.
 var evaluate = require("./evaluate")
 var coreLevel1a = require("./coreLevel1a")
 var Context = require("./Context")
 var ExecutionError = require("./errors").ExecutionError
+var {debug, printIfDebug} = require("./parser/debug")
 
 var anyType = exports.anyType = coreLevel1a.anyType
 var nil = exports.nil = coreLevel1a.nil
@@ -35,7 +36,7 @@ var dotOperator = {
         if(exists)
             return this.get('this').meta.privileged[name.meta.primitive.string]
         else // Todo: support friend modules.
-            throw new Error(this.name+" has no public member '"+name+"'.")
+            throw new Error(this.get('this').name+" has no public member '"+name+"'.")
     }}])
 }
 
@@ -193,6 +194,7 @@ nil.meta.operators['='] = {
             if(this.get('this').meta.const)
                 throw new Error("Can't assign to a constant.")
             basicUtils.overwriteValue(this.get('this'), rvalue)
+            return limaVoid
         }},
         {params: [], fn: function() { // copy operator
             return basicUtils.copyValue(this.get('this'))
@@ -213,6 +215,11 @@ nil.meta.postOperators['~'] = {
 //         }}
 //     ]
 // }
+
+var limaVoid = exports.void = basicUtils.copyValue(nil)
+limaVoid.name = 'void'
+limaVoid.meta.primitive.void = true
+
 
 
 var zero = exports.zero = basicUtils.copyValue(nil)
@@ -337,7 +344,7 @@ function FunctionObj(/*boundObject=undefined, bracketOperatorDispatch*/) {
 }
 
 // Returns a lima function object that always matches.
-function FunctionObjThatMatches(runFn) {
+const FunctionObjThatMatches = exports.FunctionObjThatMatches = function FunctionObjThatMatches(runFn) {
     return FunctionObj({
         match: function(args) {
             return LimaObject({arg: args})
@@ -452,7 +459,7 @@ function jsArrayToLimaObj(jsArray) {
 exports.jsArrayToLimaObj = jsArrayToLimaObj
 
 // Transforms a js string or number to a Lima value, or returns the passed value (which can be a lima value).
-function jsValueToLimaValue(value) {
+const jsValueToLimaValue = exports.jsValueToLimaValue = function(value) {
     var type = typeof(value)
     if(type === 'string') {
         return StringObj(value)
@@ -498,7 +505,7 @@ False.name = 'false'
     // match(rawInput, startColumn) - A javascript function that:
         // has parameters:
             // rawInput - A lima string of input.
-            // startLocation - A lima object like {offset, line, column}.
+            // startColumn - A lima number representing the start column.
         // returns a lima object with the properties:
             // consume
             // arg
@@ -524,45 +531,37 @@ function macro(macroFns) {
     return macroObject
 }
 
+    // body - Should be a list of expressions.
     function runFunctionStatements(declarationContext, callingContext, body, parameters, args) {
-        var retPtr = {}, parts, j
-        var contin = createContinObject(function getContinInfo() {
-            return {
-                bodyIndex: j
-            }
-        })
-        var functionContext = createFunctionContext(declarationContext, callingContext, retPtr, contin)
-
-        parameters.forEach(function(parameter, n) {
-            var arg = args[n]
-            var param = basicUtils.copyValue(nil)
-            param.name = parameter
-            param.meta = arg.meta
-            functionContext.declare(parameter, param)
-            functionContext.set(parameter, param)
-        })
-
-        for(j=0; j<body.length; j++) {
-            var node = body[j]
-            if(utils.isNodeType(node, 'superExpression')) {
-                parts = node.parts
-            } else {
-                parts = node
-            }
-
-            while(parts.length > 0) {
-                try {
-                    var result = evaluate.superExpression(functionContext, parts)
-                    parts = result.remainingParts
-                } catch(e) {
-                    if(e.contin !== undefined) {
-                        j = e.contin.bodyIndex
-                    } else if(e.returnValue !== undefined) {
-                        return e.returnValue
-                    } else throw e
-                }
-            }
+      var retPtr = {}, j
+      var contin = createContinObject(function getContinInfo() {
+        return {
+          bodyIndex: j
         }
+      })
+      var functionContext = createFunctionContext(declarationContext, callingContext, retPtr, contin)
+
+      parameters.forEach(function(parameter, n) {
+        var arg = args[n]
+        var param = basicUtils.copyValue(nil)
+        param.name = parameter
+        param.meta = arg.meta
+        functionContext.declare(parameter, coreLevel1a.anyType)
+        functionContext.set(parameter, param)
+      })
+
+      for(j=0; j<body.length; j++) {
+        var expression = body[j]
+        try {
+          evaluate.superExpression(functionContext, expression.parts)
+        } catch(e) {
+          if(e.contin !== undefined) {
+            j = e.contin.bodyIndex
+          } else if(e.returnValue !== undefined) {
+            return e.returnValue
+          } else throw e
+        }
+      }
     }
 
     function createContinObject(getContinInfo) {
@@ -577,6 +576,7 @@ function macro(macroFns) {
 
     function createFunctionContext(declarationContext, callingContext, retPtr, continObj) {
         var functionContext = createExecContext(declarationContext.scope, callingContext)
+        // The given scope allows shadowing because there may be another ret and contin defined in a scope for an upper function.
         functionContext.scope.declare('ret', coreLevel1a.anyType, undefined, true)
         functionContext.set('ret', createRetMacro(functionContext.subLocation(declarationContext.startLocation)))
         functionContext.scope.declare('contin', coreLevel1a.anyType, undefined, true)
@@ -595,335 +595,200 @@ function macro(macroFns) {
     }
 
     function createRetMacro(functionContext) {
-        var retMacro = macro({
-            match: function(rawInputLima) {
-                var rawInput = utils.getPrimitiveStr(this, rawInputLima)
-                var statementInfo = macroParsers.withState({
-                    context:functionContext,
-                    consumeFirstlineMacros: true
-                }).retStatement().tryParse(rawInput)
-
-                if(statementInfo !== undefined) {
-                    var parts = statementInfo.expression.parts
-//                    var consumed = statementInfo.consumed
-                    closeExpression(statementInfo.expression)
-                    var consumed = findExpressionEndOffset(functionContext, statementInfo.expression)
-                } else {
-                    var parts = []
-                    var consumed = 0
-                }
-
-                return LimaObject({
-                    consume: NumberObj(consumed),
-                    arg:  createJsPrimitive(parts)
-                })
-            },
-            run: function(infoObject) {
-                var parts = getFromJsPrimitive(infoObject)
-                var result = evaluate.superExpression(functionContext, parts)
-                throw {returnValue: result.value}
+      var retMacro = macro({
+        match: function(rawInputLima) {
+          var rawInput = utils.getPrimitiveStr(this, rawInputLima)
+          var statementInfo = macros.modifierLikeMacro(functionContext).debug(debug).parse(rawInput)
+          if (debug && printIfDebug) console.log(displayResult(statementInfo))
+          if (!statementInfo.ok) {
+            throw new Error("Failed to parse ret: \n"+displayResult(statementInfo))
+          }
+          if(statementInfo.value !== undefined) {
+            if (statementInfo.value.length > 1) {
+              throw new Error("Ret can only be called on a single expression.")
             }
-        })
-        retMacro.name = 'ret'
-        return retMacro
+            var statement = statementInfo.value[0]
+            var parts = statement.parts
+            var consumed = findNodeEndIndex(functionContext, statement)
+          } else {
+            var parts = []
+            var consumed = 0
+          }
+
+          return LimaObject({
+            consume: NumberObj(consumed),
+            arg:  createJsPrimitive(parts)
+          })
+        },
+        run: function(infoObject) {
+          var parts = getFromJsPrimitive(infoObject)
+          var result = evaluate.superExpression(functionContext, parts)
+          throw {returnValue: result}
+        }
+      })
+      retMacro.name = 'ret'
+      return retMacro
     }
 
 
-// expression - A superExpression node.
+// expression - An expression node.
 // Returns the offset of the last part in the expression (taking into account objects in the expression).
-function findExpressionEndOffset(context, expression) {
-    if(expression.parts.length > 0) {
-        var expressionLength = expression.parts.length
-        var lastPart = expression.parts[expressionLength-1]
-        if(utils.isNodeType(lastPart, 'object')) {
-            return findExpressionEndOffset(context, lastPart.expressions[lastPart.expressions.length-1])
-        } else {
-            return lastPart.end.offset - (context?.startLocation?.offset || 0)
-        }
+function findNodeEndIndex(context, node) {
+  return node.end.index - (context?.startLocation?.index || 0)
+}
+
+// A macro with convention A and either convention B or convention C. See the lima docs Conventions section for more info.
+// run(ast) - A function to call when the macro matches. The context passed into run is the context the macro was called in.
+function macroWithConventionA(name, run, convention='B') {
+  var macroObject = macro({
+    match: function(rawInput) {
+      var javascriptRawInput = utils.getPrimitiveStr(this, rawInput)
+      var macroContext = createMacroConsumptionContext(this.callingContext())
+      if (convention === 'C') {
+        var fnLikeMacroOptions = {maxFirstlineParameters: 1, maxFirstlineStatements: Infinity}
+      }
+      var ast = macros.fnLikeMacro(macroContext, fnLikeMacroOptions).debug(debug).parse(javascriptRawInput)
+      if (debug && printIfDebug) console.log(displayResult(ast))
+      
+      if (!ast.ok) {
+        throw new Error("Failed to parse ret: \n"+displayResult(ast))
+      }
+    
+      return LimaObject({
+          consume: NumberObj(ast.context.index),
+          arg: createJsPrimitive(ast.value)
+      })
+    },
+    run: function(astLimaObject) {
+      var ast = getFromJsPrimitive(astLimaObject)
+      return run.call(this.callingContext(), ast)
+    }
+  })
+  macroObject.name = name
+  return macroObject
+}
+
+
+var rawFn = macroWithConventionA('rawFn', function run(ast) {
+  var functionDeclarationContext = this
+  var {matchParameters, matchBlock, runParameters, runBlock} = getMatchRunArgs(ast)
+  return FunctionObj({
+    match: function(args) {
+      return runFunctionStatements(
+          functionDeclarationContext, this.callingContext(), matchBlock, matchParameters, [args]
+      )
+    },
+    run: function(callInfo) {
+      return runFunctionStatements(
+          functionDeclarationContext, this.callingContext(), runBlock, runParameters, [callInfo]
+      )
+    }
+  })
+})
+
+var macroMacro = macroWithConventionA('macro', function run(ast) {
+  var macroDeclarationContext = this
+  var {matchParameters, matchBlock, runParameters, runBlock} = getMatchRunArgs(ast)
+  var rawMacroObject = macro({
+    match: function(rawInput, startLocation) {
+      return runFunctionStatements(
+        macroDeclarationContext, this.callingContext(), matchBlock, matchParameters,
+        [rawInput, startLocation]
+      )
+    },
+    run: function(arg) {
+      return runFunctionStatements(
+        macroDeclarationContext, this.callingContext(), runBlock, runParameters, [arg]
+      )
+    }
+  })
+
+  return Boxed(rawMacroObject)
+})
+
+function getMatchRunArgs(ast) {
+  if (ast[0].parameters[0].parts[0].name !== 'match') {
+    throw new Error("Match block not found as first inner block for rawFn")
+  }
+  if (ast[1].parameters[0].parts[0].name !== 'run') {
+    throw new Error("Run block not found as second inner block for rawFn")
+  }
+  for (const parameterExpression of [...ast[0].parameters, ...ast[1].parameters]) {
+    if (parameterExpression.type !== 'expression') throw new Error('wrong') // Shouldn't ever get this.
+    if (parameterExpression.parts.length > 1 || parameterExpression.parts[0].type !== 'variable') {
+      throw new Error('rawFn written with non-variable in parameter section: '+JSON.stringify(parameterExpression))
+    }
+  }
+  
+  return {
+    matchParameters: ast[0].parameters.slice(1).map(v => v.parts[0].name),
+    matchBlock: ast[0].statements,
+    runParameters: ast[1].parameters.slice(1).map(v => v.parts[0].name),
+    runBlock: ast[1].statements
+  }
+}
+
+var ifMacro = macroWithConventionA('if', function run(ast) {
+  for (const conditionBlock of ast) {
+    if (conditionBlock.parameters.length !== 1) {
+      throw new Error("If condition must have one and only one expression")
+    }
+
+    const conditionExpressionParts = conditionBlock.parameters[0].parts
+    const isElse = conditionExpressionParts.length === 1 && conditionExpressionParts[0].type === 'variable' && conditionExpressionParts[0].name === 'else'
+    if (isElse) {
+      var conditionPasses = true
     } else {
-        return 0
+      var conditionContext = this.newStackContext(this.scope, false)
+      var conditionResult = evaluate.superExpression(conditionContext, conditionBlock.parameters[0].parts)
+      var conditionPasses = utils.limaEquals(conditionContext, conditionResult, True)
     }
-}
-
-// Takes a superExpression node and mutates it so that any expression parts that are not part of the expression are removed.
-// Returns the removed items in the form of a list of superExpressions, where the first superExpression will always contain parts if it exists.
-// Assumes that macros in the expressions in the object have been consumption-evaluated.
-// Todo: consider moving this logic into evaluate.js when consumeFirstlineMacros is on.
-function closeExpression(expression) {
-    var counts = {paren:0, bracket:0}
-    var trailingExpressions = [], lastItemType, curItemType=undefined
-    for(var n=0; n<expression.parts.length;n++) {
-        var part = expression.parts[n]
-        if(utils.isNodeType(part, 'object')) {
-            var remainingExpressions = closeObject(part)
-            if(remainingExpressions.length > 0) {
-                expression.parts.splice.apply(expression.parts, [n+1,0].concat(remainingExpressions[0].parts))
-            }
-            if(remainingExpressions.length > 1) {
-                // Push the rest of the expressions onto the front of trailingExpressions
-                trailingExpressions.splice.apply(trailingExpressions, [0, 0].concat(remainingExpressions.slice(1)))
-            }
-        } else if(utils.isSpecificOperator(part, '}')) {
-            // We don't have to worry about situations where the opening brace of an object is inside a rawExpression, because
-            // the consumption of all the macros should have been evaluated before the node was passed to this function. Also
-            // the opening and closing brace should always be in the same rawExpression (so I guess that wouldn't be an issue anyway).
-            return buildReturnValue(n)
-        } else if(utils.isSpecificOperator(part, '(')) {
-            counts.paren++
-        } else if(utils.isSpecificOperator(part, ')')) {
-            counts.paren--
-        } else if(utils.isBracketOperator(part, '[')) {
-            counts.bracket += part.operator.length
-        } else if(utils.isBracketOperator(part, ']')) {
-            counts.bracket -= part.operator.length
-        }
-
-        if(counts.paren < 0 || counts.bracket < 0) {
-            return buildReturnValue(n)
-        }
-
-        lastItemType = curItemType
-        if(part.type in {number:1, string:1, object:1, variable:1}) {
-            curItemType = 'value'
-        } else if(part.type === 'rawExpression') {
-            curItemType = 'rawExpression'
-        } else if(utils.isNodeType(part, 'operator')) {
-            curItemType = utils.getOperatorType(part)
-        } else {
-            curItemType = undefined
-        }
-
-
-        if(lastItemType === 'rawExpression') {
-            lastItemType = 'value' // Makes the condition logic below easier.
-        }
-        if(counts.paren === 0 && counts.bracket === 0                       // If the expression is at its top level,
-           && (   lastItemType === 'value' && curItemType === 'value'       // and there's no way the expression could continue.
-               || lastItemType === 'postfix' && curItemType === 'value'
-               || lastItemType === 'value' && curItemType === 'prefix'
-           )
-        ) {
-            return buildReturnValue(n)
-        }
+    
+    if(conditionPasses) {
+      if(conditionBlock.statements.length === 0) {
+        return nil
+      }
+      
+      let bodyResult
+      // Todo: care whether you're in an object context or function context (re allowProperties and implicitDeclarations)?
+      var bodyContext = this.newStackContext(this.scope, false)
+      for (const statement of conditionBlock.statements) {
+        bodyResult = evaluate.superExpression(bodyContext, statement.parts)
+      }
+      
+      return bodyResult
     }
-
-    return [].concat(trailingExpressions)
-
-
-    function buildReturnValue(n) {
-        var result = []
-        var remainingParts = expression.parts.splice(n)
-        if(remainingParts.length > 0) {
-            result.push({type:'superExpression', parts:remainingParts})
-        }
-        return result.concat(trailingExpressions)
-    }
-}
-
-// Takes an object node and mutates it so that any expressions and expression parts that are not part of the object are removed.
-// Returns the removed items in the form of a list of superExpressions.
-// Assumes that macros in the expressions in the object have been consumption-evaluated.
-function closeObject(objectNode) {
-    for(var n=0; n<objectNode.expressions.length; n++) {
-        var expr = objectNode.expressions[n]
-        if(utils.isSpecificOperator(expr.parts[0], '}')) {
-            var remainingParts = expr.parts.splice(1) // Remove everything except the end brace.
-            var remainingObjectExpressions = objectNode.expressions.splice(n+1) // Remove rest of the expressions.
-
-            var result = []
-            if(remainingParts.length > 0) {
-                result.push({type:'superExpression', parts:remainingParts})
-            }
-            result = result.concat(remainingObjectExpressions)
-            return result
-        } else {
-            var remainingExprExpressions = closeExpression(expr)
-            objectNode.expressions.splice.apply(objectNode.expressions, [n+1, 0].concat(remainingExprExpressions))
-        }
-    }
-
-    return []
-}
-    function findEndBrace(expression) {
-        for(var n=0; n<expression.parts.length;n++) {
-            var part = expression.parts[n]
-            if(utils.isSpecificOperator(part, '}')) {
-                return n
-            }
-        }
-    }
-
-function closeExpressions(expressions) {
-    for(var n=0; n<expressions.length;) {
-        var remainingExpressions = closeExpression(expressions[n])
-        if(remainingExpressions.length > 0) {
-            expressions.splice.apply(expressions, [n, 0].concat(remainingExpressions))
-        } else {
-            n++
-        }
-    }
-}
-
-// The context passed into run is the context the macro was called in.
-// See the lima docs Conventions section for what conventions A, C, and D are.
-// run(ast) - A function to call when the macro matches.
-function macroWithConventionsACD(name, macroParser, run) {
-    var macroObject = macro({
-        match: function(rawInput) {
-            var javascriptRawInput = utils.getPrimitiveStr(this, rawInput)
-            var macroContext = createMacroConsumptionContext(this.callingContext())
-            var ast = macroParsers.macroBlock(macroContext, {language: macroParsers, parser: macroParser}).tryParse(javascriptRawInput)
-
-            /* Plan:
-                If its possible the macro is a one-liner, parse the macro with an option that indicates that words on the first
-                line should be evaluated for macro consumption.
-                The parser should insert a `macroConsumption` ast node after any first-line value to mark how many characters
-                each is expected to consume.
-             */
-            // todo: ast.openingBracket needs to be passed up somehow so if there's a parsing error, the runtime can tell you
-            //       it might be macro weirdness in the function's first line. This would happen either if a macro was expected
-            //       to consume input and didn't, or if it was expected not to consume some output and did.
-            // todo: ast should possibly contain a whole map of macroConsumption information to use with all nested macros in
-            //       a first-line situation.
-            // todo: startColumn (and maybe the indent) needs to be passed somehow so inner macros get the right column.
-
-            return LimaObject({
-                consume: NumberObj(javascriptRawInput.length),
-                arg: createJsPrimitive(ast)
-            })
-        },
-        run: function(astLimaObject) {
-            var ast = getFromJsPrimitive(astLimaObject)
-            return run.call(this.callingContext(), ast)
-        }
-    })
-    macroObject.name = name
-    return macroObject
-}
-
-
-var rawFn = macroWithConventionsACD('rawFn', 'rawFnInner', function run(ast) {
-    var functionDeclarationContext = this
-    var astMatch = ast.result.match, astRun = ast.result.run
-    return FunctionObj({
-        match: function(args) {
-            return runFunctionStatements(
-                functionDeclarationContext, this.callingContext(), astMatch.body, astMatch.parameters, [args]
-            )
-        },
-        run: function(callInfo) {
-            return runFunctionStatements(
-                functionDeclarationContext, this.callingContext(), astRun.body, astRun.parameters, [callInfo]
-            )
-        }
-    })
-})
-
-
-var macroMacro = macroWithConventionsACD('macro', 'macroInner', function run(ast) {
-    var macroDeclarationContext = this
-    var astMatch = ast.result.match, astRun = ast.result.run
-    var rawMacroObject = macro({
-        match: function(rawInput, startLocation) {
-            return runFunctionStatements(
-                macroDeclarationContext, this.callingContext(), astMatch.body, astMatch.parameters,
-                [rawInput, startLocation]
-            )
-        },
-        run: function(arg) {
-            return runFunctionStatements(
-                macroDeclarationContext, this.callingContext(), astRun.body, astRun.parameters, [arg]
-            )
-        }
-    })
-
-    return Boxed(rawMacroObject)
-})
-
-
-var ifMacro = macroWithConventionsACD('if', 'ifInner', function run(ast) {
-    for(var n=0; n<ast.result.length; n++) {
-        var blockItem = ast.result[n]
-
-        // Create a temp-read scope with 'else' defined in it.
-        var tempReadScope = this.scope.tempReadScope()
-        tempReadScope.tempRead = false
-        tempReadScope.declare('else', coreLevel1a.anyType, undefined, true)
-        tempReadScope.set('else', True) // Treat "else" like true so it always matches.
-        tempReadScope.tempRead = true
-
-        var conditionContext = this.newStackContext(tempReadScope, false)
-        var conditionResult = evaluate.superExpression(conditionContext, blockItem.expressionBlock.parts, {endStatementAtColon:true})
-        if(conditionResult.remainingParts.length === 0) {
-            if(!blockItem.foundTrailingColon)
-                throw new Error("Invalid `if` statement, didn't find any conditional block.")
-        } else if(utils.isNode(conditionResult.value)) {
-            if(utils.isNodeType(conditionResult.value, 'variable')) {
-                throw new ExecutionError("Undefined variable '"+conditionResult.value.name+"'.", blockItem.expressionBlock.parts[0], conditionContext)
-            } else {
-                throw new Error("Unevaluated expression '"+conditionResult.value+"'. This might be a bug in the interpreter.")
-            }
-        }
-        // I don't think this is necessary:
-//        else if(utils.isSpecificOperator(conditionResult.remainingParts[0], ':')) {
-//            if(blockItem.foundTrailingColon)
-//                throw new Error("Invalid `if` block, found invalid trailing colon in the body of a conditional block.")
-//        }
-
-        // superExpression without the colon.
-        var conditionalBody = {type:'superExpression', parts:conditionResult.remainingParts.slice(1)}
-        var remainingSuperExpressions = closeExpression(conditionalBody)
-        if(remainingSuperExpressions.length > 0) {
-            // Add any remaining parts as the next expression block.
-            ast.result.splice.apply(ast.result, [n+1, 0].concat(
-                remainingSuperExpressions.map(function(remainingSuperExpression) {
-                    return {expressionBlock: remainingSuperExpression}
-                })
-            ))
-        }
-
-        if(utils.limaEquals(conditionContext, conditionResult.value, True)) {
-            if(conditionalBody.parts.length === 0) {
-                return nil
-            }
-
-            // Todo: care whether you're in an object context or function context (re allowProperties and implicitDeclarations)?
-            var bodyContext = this.newStackContext(this.scope.tempReadScope(), false)
-            var bodyResult = evaluate.superExpression(bodyContext, conditionalBody.parts)
-
-            return bodyResult.value
-        }
-    }
-    // else
-    return nil
-})
+  }
+  // else
+  return nil
+}, 'C')
 
 // A macro made with this uses conventions A, B, and D (See the Conventions section in the Lima docs).
-function functionLikeMacro(runFn) {
-    return macro({
-        match: function(rawInputLima, startLocationLima) {
-            var rawInput = utils.getPrimitiveStr(this, rawInputLima)
-            var statementInfo = macroParsers.withState({
-                context: this,
-                consumeFirstlineMacros: true
-            }).functionLikeMacro().tryParse(rawInput)
+function modifierLikeMacro(runFn) {
+  return macro({
+    match: function(rawInputLima, startLocationLima) {
+      var rawInput = utils.getPrimitiveStr(this, rawInputLima)
+      var statementInfo = macros.modifierLikeMacro(this).debug(debug).parse(rawInput)
+      if (debug && printIfDebug) console.log(displayResult(statementInfo))
+      if (!statementInfo.ok) {
+        throw new Error("Couldn't parse modifierLikeMacro\n"+displayResult(statementInfo))
+      }
+      
+      if(statementInfo.value !== undefined) {
+          var expressions = statementInfo.value
+          var consumed = findNodeEndIndex(this, statementInfo.value[statementInfo.value.length-1])
+      } else {
+          var expressions = []
+          var consumed = 0
+      }
 
-            if(statementInfo !== undefined) {
-                var expressions = statementInfo.expressions
-                closeExpressions(statementInfo.expressions)
-                var consumed = findExpressionEndOffset(this, statementInfo.expressions[statementInfo.expressions.length-1])
-            } else {
-                var expressions = []
-                var consumed = 0
-            }
-
-            return LimaObject({
-                consume: NumberObj(consumed),
-                arg:  createJsPrimitive({expressions, startLocation: startLocationLima})
-            })
-        },
-        run: runFn
-    })
+      return LimaObject({
+          consume: NumberObj(consumed),
+          arg:  createJsPrimitive({expressions, startLocation: startLocationLima})
+      })
+    },
+    run: runFn
+  })
 }
 
 function createDeclarationModifiers(context) {
@@ -936,7 +801,7 @@ function createDeclarationModifiers(context) {
     return newDeclarationModifiers
 }
 
-var varMacro = functionLikeMacro(function(infoObject) {
+var varMacro = modifierLikeMacro(function(infoObject) {
     var callingContext = this.callingContext()
     var args = getFromJsPrimitive(infoObject)
     
@@ -989,7 +854,7 @@ wout.name = 'wout'
 
 // Returns a new context that contains nothing (this is meant to be above the module context).
 var topLevelContext = exports.topLevelContext = function() {
-    return Context(Context.Scope(undefined, false), undefined, {filepath:__dirname+path.sep+'coreLevel2.lima', line: 1, column: 1, offset: 0})
+    return Context(Context.Scope(undefined, false), undefined, {filepath:__dirname+path.sep+'coreLevel2.lima', line: 1, column: 1, index: 0})
 }
 
 // Returns a context with a new empty object value as `this`.
