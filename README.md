@@ -1,6 +1,6 @@
 lima
 ====
-A highly expressive C-family general purpose programming language that frees the programmer from hand-written optimizations by being built around DSLs and modular optimizers. You can find the [specification of Lima here](http://www.tetrud.com/Billys/Lima/Lima-Documentation.html) and the [source for that spec here](https://github.com/fresheneesz/limaDocs).
+A highly expressive C-family general purpose programming language that frees the programmer from hand-written optimizations by being built around DSLs and modular optimizers. You can find the [specification of Lima here](http://btetrud.com/Lima/Lima-Documentation.html) and the [source for that spec here](https://github.com/fresheneesz/limaDocs).
 
 ## High Level Design
 
